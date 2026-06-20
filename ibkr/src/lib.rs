@@ -17,6 +17,8 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
     let mut trades: HashMap<String, Vec<Transaction>> = HashMap::new();
     // symbol -> (quantity, value, cost_basis, close_price)
     let mut positions: HashMap<String, (f64, f64, f64, f64)> = HashMap::new();
+    // symbol -> prior_quantity
+    let mut prior_quantities: HashMap<String, f64> = HashMap::new();
 
     for result in rdr.records() {
         let record = match result {
@@ -51,6 +53,13 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
                     }
                 }
             }
+            (Some("Mark-to-Market Performance Summary"), Some("Data"), _) => {
+                let symbol = record.get(3).unwrap_or("").to_string();
+                let prior_qty: f64 = record.get(4).unwrap_or("0").parse().unwrap_or(0.0);
+                if !symbol.is_empty() && symbol != "Total" && symbol != "Total (All Assets)" {
+                    prior_quantities.insert(symbol, prior_qty);
+                }
+            }
             (Some("Open Positions"), Some("Data"), Some("Summary")) => {
                 if record.get(3) == Some("Stocks") {
                     let symbol = record.get(5).unwrap_or("").to_string();
@@ -69,6 +78,7 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
                     let symbol = record.get(5).unwrap_or("").to_string();
                     let date = record.get(6).unwrap_or("").to_string();
                     let quantity: f64 = record.get(7).unwrap_or("0").parse().unwrap_or(0.0);
+                    let t_price: f64 = record.get(8).unwrap_or("0").parse().unwrap_or(0.0);
                     let proceeds: f64 = record.get(10).unwrap_or("0").parse().unwrap_or(0.0);
                     let comm_fee: f64 = record.get(11).unwrap_or("0").parse().unwrap_or(0.0);
 
@@ -81,8 +91,8 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
                             tx_type,
                             amount: amount.abs(),
                             units: quantity.abs(),
-                            nav: None, // usually trade price, but not directly requested
-                            balance: None,
+                            nav: if t_price != 0.0 { Some(t_price) } else { None },
+                            balance: None, // Will be calculated after sorting
                             fee: Some(comm_fee),
                         };
 
@@ -103,6 +113,17 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
         
         // Sort transactions by date (simple string sort for now, might need datetime parsing)
         txs.sort_by(|a, b| a.date.cmp(&b.date));
+
+        // Calculate running balance
+        let mut current_balance = prior_quantities.get(&symbol).cloned().unwrap_or(0.0);
+        for tx in txs.iter_mut() {
+            if tx.tx_type == "BUY" {
+                current_balance += tx.units;
+            } else if tx.tx_type == "SELL" {
+                current_balance -= tx.units;
+            }
+            tx.balance = Some(current_balance);
+        }
 
         assets.push(Asset {
             name: desc,
