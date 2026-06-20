@@ -230,9 +230,9 @@ const formatDateLocal = (dateStr) => {
                      </div>
                    </div>
                    
-                   <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                   <div class="grid grid-cols-1 md:grid-cols-5 lg:grid-cols-6 gap-4">
                      <!-- Period Activity -->
-                     <div class="flex flex-col border-b md:border-b-0 md:border-r pb-4 md:pb-0 pr-0 md:pr-4">
+                     <div class="flex flex-col md:col-span-2 lg:col-span-2 border-b md:border-b-0 md:border-r pb-4 md:pb-0 pr-0 md:pr-4">
                        <span class="text-xs text-muted-foreground font-semibold mb-1 uppercase tracking-wider">Period Activity</span>
                        <div class="grid grid-cols-2 gap-4 mt-1">
                          <div class="flex flex-col">
@@ -251,7 +251,7 @@ const formatDateLocal = (dateStr) => {
                      </div>
                      
                      <!-- Overall Balance -->
-                     <div class="flex flex-col col-span-1 md:col-span-2 lg:col-span-4 pl-0 md:pl-2">
+                     <div class="flex flex-col md:col-span-3 lg:col-span-4 pl-0 md:pl-2">
                        <span class="text-xs text-muted-foreground font-semibold mb-1 uppercase tracking-wider">Overall Balance</span>
                        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-1">
                          <div class="flex flex-col">
