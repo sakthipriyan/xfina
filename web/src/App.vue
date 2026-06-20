@@ -92,19 +92,18 @@ const formatNumber = (val) => {
     <div class="max-w-6xl mx-auto space-y-8">
       
       <!-- Header -->
-      <div class="flex justify-between items-center">
+      <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div class="space-y-2">
           <h1 class="text-3xl font-bold tracking-tight">extract.sakthipriyan.com</h1>
-          <p class="text-muted-foreground flex items-center mt-2">
-            <span class="inline-flex items-center rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary ring-1 ring-inset ring-primary/20 mr-3">Open Source</span>
+          <p class="text-muted-foreground mt-2">
             High-performance Rust/WebAssembly parser for financial statements
           </p>
         </div>
-        <div class="flex items-center space-x-2">
-          <a href="https://github.com/sakthipriyan/financial-extract" target="_blank" rel="noopener noreferrer">
-            <Button variant="outline" size="icon">
-              <Github class="h-[1.2rem] w-[1.2rem] text-foreground" />
-              <span class="sr-only">GitHub Repo</span>
+        <div class="flex items-center space-x-3">
+          <a href="https://github.com/sakthipriyan/financial-extract" target="_blank" rel="noopener noreferrer" class="no-underline">
+            <Button variant="outline" class="flex items-center gap-2 px-3">
+              <Github class="h-[1.2rem] w-[1.2rem]" />
+              <span class="font-medium">Open Source</span>
             </Button>
           </a>
           <Button variant="outline" size="icon" @click="toggleDark()">
