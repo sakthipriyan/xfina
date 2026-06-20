@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
 import init, { parse_ibkr } from './wasm/financial_extract_wasm.js';
-import { Sun, Moon, Github } from 'lucide-vue-next';
+import { Sun, Moon, Github, HelpCircle } from 'lucide-vue-next';
 
 // Shadcn components
 import { Button } from '@/components/ui/button';
@@ -250,22 +250,24 @@ const formatDateLocal = (dateStr) => {
                      <!-- Overall Balance -->
                      <div class="flex flex-col col-span-1 md:col-span-2 lg:col-span-4 pl-0 md:pl-2">
                        <span class="text-xs text-muted-foreground font-semibold mb-1 uppercase tracking-wider">Overall Balance</span>
-                       <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mt-1">
+                       <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-1">
+                         <div class="flex flex-col">
+                           <span class="text-muted-foreground text-xs flex items-center gap-1 cursor-help" title="Total Cost Basis">
+                             Invested
+                             <HelpCircle class="w-3 h-3 text-muted-foreground/70" />
+                           </span>
+                           <span class="font-medium font-mono">{{ formatCurrency(asset.total_cost_basis) }}</span>
+                         </div>
                          <div class="flex flex-col">
                            <span class="text-muted-foreground text-xs">Total Units</span>
                            <span class="font-medium font-mono">{{ formatNumber(asset.total_units) }}</span>
                          </div>
                          <div class="flex flex-col">
-                           <span class="text-muted-foreground text-xs">Total Cost Basis</span>
-                           <span class="font-medium font-mono">{{ formatCurrency(asset.total_cost_basis) }}</span>
-                         </div>
-                         <div class="flex flex-col">
-                           <span class="text-muted-foreground text-xs">Current NAV</span>
-                           <span class="font-medium font-mono">{{ formatCurrency(asset.current_nav) }}</span>
-                         </div>
-                         <div class="flex flex-col">
-                           <span class="text-muted-foreground text-xs">NAV Date</span>
-                           <span class="font-medium font-mono">{{ asset.current_nav_date ? formatDateLocal(asset.current_nav_date) : '-' }}</span>
+                           <span class="text-muted-foreground text-xs">NAV / Price</span>
+                           <div class="flex flex-col sm:flex-row sm:items-baseline gap-x-1">
+                             <span class="font-medium font-mono">{{ formatCurrency(asset.current_nav) }}</span>
+                             <span v-if="asset.current_nav_date" class="text-[10px] text-muted-foreground">on {{ formatDateLocal(asset.current_nav_date) }}</span>
+                           </div>
                          </div>
                          <div class="flex flex-col">
                            <span class="text-muted-foreground text-xs">Market Value</span>
