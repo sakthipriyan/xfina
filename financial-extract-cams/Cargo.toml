@@ -1,0 +1,8 @@
+[package]
+name = "financial-extract-cams"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+financial-extract-models = { path = "../financial-extract-models" }
+pdf-extract = "0.7" # using pdf-extract for text extraction

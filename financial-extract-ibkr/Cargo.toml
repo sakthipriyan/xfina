@@ -1,0 +1,8 @@
+[package]
+name = "financial-extract-ibkr"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+financial-extract-models = { path = "../financial-extract-models" }
+csv = "1.3"
