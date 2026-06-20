@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use financial_extract_models::{Portfolio, Asset, Transaction};
+use financial_extract_models::{Portfolio, Asset, Transaction, InvestorInfo};
 use csv::ReaderBuilder;
 
 pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
@@ -9,7 +9,8 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
         .from_reader(csv_content.as_bytes());
 
     let mut _account_no = String::from("IBKR");
-    let mut _investor_name = None;
+    let mut investor_name = None;
+    let mut statement_date = None;
 
     // symbol -> (description, isin)
     let mut instruments: HashMap<String, (String, String)> = HashMap::new();
@@ -38,7 +39,15 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
             }
             (Some("Account Information"), Some("Data"), Some("Name")) => {
                 if let Some(name) = record.get(3) {
-                    _investor_name = Some(name.to_string());
+                    investor_name = Some(name.to_string());
+                }
+            }
+            (Some("Statement"), Some("Data"), Some("Period")) => {
+                if let Some(period) = record.get(3) {
+                    let parts: Vec<&str> = period.split('-').collect();
+                    if parts.len() == 2 {
+                        statement_date = Some(parts[1].trim().to_string());
+                    }
                 }
             }
             (Some("Financial Instrument Information"), Some("Data"), _) => {
@@ -107,32 +116,56 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
     let mut assets = Vec::new();
 
     // Assemble Portfolio
-    for (symbol, _pos) in positions {
+    for (symbol, pos) in positions {
         let (desc, isin) = instruments.get(&symbol).cloned().unwrap_or_else(|| (symbol.clone(), "".to_string()));
         let mut txs = trades.remove(&symbol).unwrap_or_default();
         
         // Sort transactions by date (simple string sort for now, might need datetime parsing)
         txs.sort_by(|a, b| a.date.cmp(&b.date));
 
-        // Calculate running balance
+        // Calculate running balance and invested value
         let mut current_balance = prior_quantities.get(&symbol).cloned().unwrap_or(0.0);
+        let mut invested = 0.0;
+        
         for tx in txs.iter_mut() {
             if tx.tx_type == "BUY" {
                 current_balance += tx.units;
+                invested += tx.amount;
             } else if tx.tx_type == "SELL" {
                 current_balance -= tx.units;
             }
             tx.balance = Some(current_balance);
         }
 
+        let total_units = pos.0;
+        let current_value = pos.1;
+        let close_price = pos.3;
+
         assets.push(Asset {
             name: desc,
             isin: if isin.is_empty() { None } else { Some(isin) },
             symbol: Some(symbol),
             category: None,
+            total_units,
+            invested_value: invested,
+            current_nav: if close_price != 0.0 { Some(close_price) } else { None },
+            current_nav_date: statement_date.clone(),
+            current_value: if current_value != 0.0 { Some(current_value) } else { None },
             transactions: txs,
         });
     }
 
-    Ok(Portfolio { assets })
+    let investor_info = InvestorInfo {
+        name: investor_name,
+        email: None,
+        pan: None,
+        contact: None,
+        address: None,
+    };
+
+    Ok(Portfolio { 
+        investor_info,
+        generated_date: statement_date,
+        assets 
+    })
 }

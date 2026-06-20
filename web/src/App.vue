@@ -158,22 +158,76 @@ const formatNumber = (val) => {
       <div v-else class="text-muted-foreground animate-pulse">Loading WebAssembly module...</div>
       
       <!-- Results Table -->
-      <Card v-if="portfolio && portfolio.assets && portfolio.assets.length > 0" class="bg-card border-border shadow-md">
-        <CardHeader>
-          <CardTitle>Extracted Portfolio</CardTitle>
-          <CardDescription>Successfully parsed {{ portfolio.assets.length }} assets.</CardDescription>
-        </CardHeader>
-        <CardContent>
-           <Accordion type="multiple" class="w-full space-y-4">
-             <AccordionItem v-for="asset in portfolio.assets" :key="asset.symbol || asset.name" :value="asset.symbol || asset.name" class="border border-border rounded-md px-4 bg-background">
-               <AccordionTrigger class="hover:no-underline">
-                 <div class="flex justify-between items-center w-full pr-4">
-                   <div class="flex flex-col items-start text-left">
-                     <span class="font-medium text-foreground">{{ asset.name }}</span>
-                     <span class="text-sm text-muted-foreground">{{ asset.symbol || '-' }} <span v-if="asset.isin">| ISIN: {{ asset.isin }}</span></span>
+      <div v-if="portfolio" class="space-y-6">
+        
+        <!-- Investor Info Card -->
+        <Card v-if="portfolio.investor_info">
+          <CardHeader>
+            <CardTitle>Investor Profile</CardTitle>
+            <CardDescription v-if="portfolio.generated_date">Statement Date: {{ portfolio.generated_date }}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <p class="text-muted-foreground text-xs mb-1">Name</p>
+                <p class="font-medium">{{ portfolio.investor_info.name || '-' }}</p>
+              </div>
+              <div>
+                <p class="text-muted-foreground text-xs mb-1">Email</p>
+                <p class="font-medium">{{ portfolio.investor_info.email || '-' }}</p>
+              </div>
+              <div>
+                <p class="text-muted-foreground text-xs mb-1">PAN</p>
+                <p class="font-medium font-mono uppercase">{{ portfolio.investor_info.pan || '-' }}</p>
+              </div>
+              <div>
+                <p class="text-muted-foreground text-xs mb-1">Contact</p>
+                <p class="font-medium">{{ portfolio.investor_info.contact || '-' }}</p>
+              </div>
+              <div class="sm:col-span-2 md:col-span-4">
+                <p class="text-muted-foreground text-xs mb-1">Address</p>
+                <p class="font-medium">{{ portfolio.investor_info.address || '-' }}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Accordion type="multiple" class="w-full space-y-4">
+           <AccordionItem 
+             v-for="(asset, index) in portfolio.assets" 
+             :key="index" 
+             :value="`item-${index}`"
+             class="border rounded-lg bg-card text-card-foreground shadow-sm overflow-hidden"
+           >
+               <AccordionTrigger class="hover:no-underline px-4 py-4 data-[state=open]:border-b border-border">
+                 <div class="flex flex-col w-full text-left pr-4 space-y-3">
+                   <div class="flex justify-between items-start w-full">
+                     <div class="flex flex-col items-start">
+                       <span class="font-medium text-foreground text-lg">{{ asset.name }}</span>
+                       <span class="text-sm text-muted-foreground mt-0.5">{{ asset.symbol || '-' }} <span v-if="asset.isin">| ISIN: {{ asset.isin }}</span></span>
+                     </div>
+                     <div class="text-xs font-mono bg-primary/10 text-primary px-2 py-1 rounded">
+                       {{ asset.transactions ? asset.transactions.length : 0 }} Txns
+                     </div>
                    </div>
-                   <div class="text-sm font-mono text-muted-foreground">
-                     {{ asset.transactions ? asset.transactions.length : 0 }} Txns
+                   
+                   <div class="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm pt-2">
+                     <div class="flex flex-col">
+                       <span class="text-muted-foreground text-xs">Total Units</span>
+                       <span class="font-medium font-mono">{{ formatNumber(asset.total_units) }}</span>
+                     </div>
+                     <div class="flex flex-col">
+                       <span class="text-muted-foreground text-xs">Invested</span>
+                       <span class="font-medium font-mono">{{ formatCurrency(asset.invested_value) }}</span>
+                     </div>
+                     <div class="flex flex-col">
+                       <span class="text-muted-foreground text-xs">Current NAV <span v-if="asset.current_nav_date" class="font-normal">({{ asset.current_nav_date }})</span></span>
+                       <span class="font-medium font-mono">{{ formatCurrency(asset.current_nav) }}</span>
+                     </div>
+                     <div class="flex flex-col">
+                       <span class="text-muted-foreground text-xs">Market Value</span>
+                       <span class="font-medium font-mono text-primary">{{ formatCurrency(asset.current_value) }}</span>
+                     </div>
                    </div>
                  </div>
                </AccordionTrigger>
@@ -206,9 +260,8 @@ const formatNumber = (val) => {
                  </div>
                </AccordionContent>
              </AccordionItem>
-           </Accordion>
-        </CardContent>
-      </Card>
+            </Accordion>
+      </div>
       
     </div>
   </div>
