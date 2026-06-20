@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
 import init, { parse_ibkr } from './wasm/financial_extract_wasm.js';
-import { Sun, Moon } from 'lucide-vue-next';
+import { Sun, Moon, Github } from 'lucide-vue-next';
 
 // Shadcn components
 import { Button } from '@/components/ui/button';
@@ -94,14 +94,22 @@ const formatNumber = (val) => {
       <!-- Header -->
       <div class="flex justify-between items-center">
         <div class="space-y-2">
-          <h1 class="text-3xl font-bold tracking-tight">financial-extract</h1>
+          <h1 class="text-3xl font-bold tracking-tight">extract.sakthipriyan.com</h1>
           <p class="text-muted-foreground">High-performance Rust WebAssembly parser for broker statements</p>
         </div>
-        <Button variant="outline" size="icon" @click="toggleDark()">
-          <Sun v-if="isDark" class="h-[1.2rem] w-[1.2rem] text-foreground" />
-          <Moon v-else class="h-[1.2rem] w-[1.2rem] text-foreground" />
-          <span class="sr-only">Toggle theme</span>
-        </Button>
+        <div class="flex items-center space-x-2">
+          <a href="https://github.com/sakthipriyan/financial-extract" target="_blank" rel="noopener noreferrer">
+            <Button variant="outline" size="icon">
+              <Github class="h-[1.2rem] w-[1.2rem] text-foreground" />
+              <span class="sr-only">GitHub Repo</span>
+            </Button>
+          </a>
+          <Button variant="outline" size="icon" @click="toggleDark()">
+            <Sun v-if="isDark" class="h-[1.2rem] w-[1.2rem] text-foreground" />
+            <Moon v-else class="h-[1.2rem] w-[1.2rem] text-foreground" />
+            <span class="sr-only">Toggle theme</span>
+          </Button>
+        </div>
       </div>
       
       <!-- Error Message -->
