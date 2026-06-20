@@ -3,7 +3,7 @@
     <h1>financial-extract WebAssembly PoC</h1>
     
     <div class="upload-zone" v-if="wasmLoaded">
-      <Dropdown v-model="selectedSource" :options="sources" optionLabel="label" placeholder="Select Source" class="w-full md:w-14rem mb-3" />
+      <Select v-model="selectedSource" :options="sources" optionLabel="label" placeholder="Select Source" class="w-full md:w-14rem mb-3" />
       <br />
       <FileUpload mode="basic" name="demo[]" accept=".csv" :maxFileSize="10000000" @select="onFileSelect" customUpload auto chooseLabel="Select IBKR CSV" />
     </div>
@@ -34,7 +34,7 @@ import { ref, onMounted } from 'vue';
 import init, { parse_ibkr } from './wasm/financial_extract_wasm.js';
 
 // PrimeVue components
-import Dropdown from 'primevue/dropdown';
+import Select from 'primevue/select';
 import FileUpload from 'primevue/fileupload';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
