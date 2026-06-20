@@ -232,15 +232,17 @@ const formatDateLocal = (dateStr) => {
                    
                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                      <!-- Period Activity -->
-                     <div class="flex flex-col border-r pr-4">
+                     <div class="flex flex-col border-b md:border-b-0 md:border-r pb-4 md:pb-0 pr-0 md:pr-4">
                        <span class="text-xs text-muted-foreground font-semibold mb-1 uppercase tracking-wider">Period Activity</span>
-                       <div class="flex flex-col mt-1">
-                         <span class="text-muted-foreground text-xs">Invested</span>
-                         <span class="font-medium font-mono">{{ formatCurrency(asset.period_invested_value) }}</span>
-                       </div>
-                       <div class="flex flex-col mt-2">
-                         <span class="text-muted-foreground text-xs">Units Added</span>
-                         <span class="font-medium font-mono">{{ formatNumber(asset.period_units) }}</span>
+                       <div class="grid grid-cols-2 gap-4 mt-1">
+                         <div class="flex flex-col">
+                           <span class="text-muted-foreground text-xs">Invested</span>
+                           <span class="font-medium font-mono">{{ formatCurrency(asset.period_invested_value) }}</span>
+                         </div>
+                         <div class="flex flex-col">
+                           <span class="text-muted-foreground text-xs">Units Added</span>
+                           <span class="font-medium font-mono">{{ formatNumber(asset.period_units) }}</span>
+                         </div>
                        </div>
                        <div v-if="asset.period_realized_value > 0" class="flex flex-col mt-2">
                          <span class="text-muted-foreground text-xs">Realized / Sold</span>
