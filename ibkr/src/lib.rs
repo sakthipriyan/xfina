@@ -66,10 +66,10 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
                     }
                 }
             }
-            (Some("Mark-to-Market Performance Summary"), Some("Data"), _) => {
+            (Some("Mark-to-Market Performance Summary"), Some("Data"), Some("Stocks")) => {
                 let symbol = record.get(3).unwrap_or("").to_string();
                 let prior_qty: f64 = record.get(4).unwrap_or("0").parse().unwrap_or(0.0);
-                if !symbol.is_empty() && symbol != "Total" && symbol != "Total (All Assets)" {
+                if !symbol.is_empty() {
                     prior_quantities.insert(symbol, prior_qty);
                 }
             }
