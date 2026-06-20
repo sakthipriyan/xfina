@@ -95,7 +95,10 @@ const formatNumber = (val) => {
       <div class="flex justify-between items-center">
         <div class="space-y-2">
           <h1 class="text-3xl font-bold tracking-tight">extract.sakthipriyan.com</h1>
-          <p class="text-muted-foreground">High-performance Rust WebAssembly parser for broker statements</p>
+          <p class="text-muted-foreground flex items-center mt-2">
+            <span class="inline-flex items-center rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary ring-1 ring-inset ring-primary/20 mr-3">Open Source</span>
+            High-performance Rust/WebAssembly parser for financial statements
+          </p>
         </div>
         <div class="flex items-center space-x-2">
           <a href="https://github.com/sakthipriyan/financial-extract" target="_blank" rel="noopener noreferrer">
