@@ -95,8 +95,9 @@ const formatNumber = (val) => {
       <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div class="space-y-2">
           <h1 class="text-3xl font-bold tracking-tight">extract.sakthipriyan.com</h1>
-          <p class="text-muted-foreground mt-2">
-            Parse financial statements entirely in your browser with Rust/Wasm — fast, private, and without uploading your files to any server.
+          <p class="text-muted-foreground mt-2 leading-relaxed">
+            Parse financial statements entirely in your browser with Rust/Wasm<br />
+            Fast, private, zero-setup, and without uploading your files to any server.
           </p>
         </div>
         <div class="flex items-center space-x-3">
