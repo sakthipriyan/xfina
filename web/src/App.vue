@@ -65,7 +65,13 @@ const onFileSelect = async (event) => {
     portfolio.value = null;
     try {
         const text = await file.text();
+        
+        const start = performance.now();
         const jsonString = parse_ibkr(text);
+        const end = performance.now();
+        
+        console.log(`🚀 Rust WASM Processing Time: ${(end - start).toFixed(2)} ms`);
+        
         portfolio.value = JSON.parse(jsonString);
     } catch (e) {
         error.value = "Error parsing file: " + e;
