@@ -1,11 +1,10 @@
 use std::collections::HashMap;
 use financial_extract_models::{Portfolio, Asset, Transaction, InvestorInfo};
 use csv::ReaderBuilder;
-use chrono::{NaiveDate, NaiveDateTime, TimeZone, LocalResult};
+use chrono::{NaiveDate, NaiveDateTime, TimeZone, LocalResult, Utc};
 use chrono_tz::America::New_York;
-use chrono_tz::Asia::Kolkata;
 
-fn format_date_ist(date_str: &str) -> String {
+fn format_date_iso(date_str: &str) -> String {
     let clean_str = date_str.replace(" EDT", "").replace(" EST", "");
     
     if let Ok(dt) = NaiveDateTime::parse_from_str(&clean_str, "%Y-%m-%d, %H:%M:%S") {
@@ -14,16 +13,15 @@ fn format_date_ist(date_str: &str) -> String {
             LocalResult::Single(t) => t,
             LocalResult::Ambiguous(t, _) => t,
         };
-        let ist_dt = ny_dt.with_timezone(&Kolkata);
-        return ist_dt.format("%d %b %Y, %I:%M:%S %p").to_string();
+        return ny_dt.with_timezone(&Utc).to_rfc3339();
     }
     
     if let Ok(d) = NaiveDate::parse_from_str(&clean_str, "%B %d, %Y") {
-        return d.format("%d %b %Y").to_string();
+        return d.format("%Y-%m-%d").to_string();
     }
 
     if let Ok(d) = NaiveDate::parse_from_str(&clean_str, "%Y-%m-%d") {
-        return d.format("%d %b %Y").to_string();
+        return d.format("%Y-%m-%d").to_string();
     }
     
     date_str.to_string()
@@ -75,14 +73,14 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
                 if let Some(period) = record.get(3) {
                     let parts: Vec<&str> = period.split('-').collect();
                     if parts.len() == 2 {
-                        statement_start_date = Some(format_date_ist(parts[0].trim()));
-                        statement_end_date = Some(format_date_ist(parts[1].trim()));
+                        statement_start_date = Some(format_date_iso(parts[0].trim()));
+                        statement_end_date = Some(format_date_iso(parts[1].trim()));
                     }
                 }
             }
             (Some("Statement"), Some("Data"), Some("WhenGenerated")) => {
                 if let Some(generated) = record.get(3) {
-                    generated_date = Some(format_date_ist(generated.trim()));
+                    generated_date = Some(format_date_iso(generated.trim()));
                 }
             }
             (Some("Financial Instrument Information"), Some("Data"), _) => {
@@ -135,7 +133,7 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
                     if !symbol.is_empty() && !date.is_empty() && amount != 0.0 {
                         let tx_type = if quantity > 0.0 { "BUY".to_string() } else { "SELL".to_string() };
                         let tx = Transaction {
-                            date: format_date_ist(&date),
+                            date: format_date_iso(&date),
                             tx_type,
                             amount: amount.abs(),
                             units: quantity.abs(),

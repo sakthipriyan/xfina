@@ -85,6 +85,33 @@ const formatNumber = (val) => {
     if (val === null || val === undefined) return '-';
     return Number(val).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 4 });
 };
+
+const formatDateLocal = (dateStr) => {
+    if (!dateStr) return '-';
+    
+    // Check if it's a date only YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        const d = new Date(dateStr + "T00:00:00");
+        if (isNaN(d)) return dateStr;
+        return new Intl.DateTimeFormat(undefined, { 
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric' 
+        }).format(d);
+    }
+
+    const d = new Date(dateStr);
+    if (isNaN(d)) return dateStr;
+
+    return new Intl.DateTimeFormat(undefined, { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric',
+        hour: '2-digit', 
+        minute: '2-digit', 
+        second: '2-digit'
+    }).format(d);
+};
 </script>
 
 <template>
@@ -170,8 +197,8 @@ const formatNumber = (val) => {
               </div>
             </CardTitle>
             <CardDescription class="flex flex-col sm:flex-row gap-2 sm:gap-4 mt-1">
-              <span v-if="portfolio.statement_start_date && portfolio.statement_end_date">Period: {{ portfolio.statement_start_date }} to {{ portfolio.statement_end_date }}</span>
-              <span v-if="portfolio.generated_date">Generated: {{ portfolio.generated_date }}</span>
+              <span v-if="portfolio.statement_start_date && portfolio.statement_end_date">Period: {{ formatDateLocal(portfolio.statement_start_date) }} to {{ formatDateLocal(portfolio.statement_end_date) }}</span>
+              <span v-if="portfolio.generated_date">Generated: {{ formatDateLocal(portfolio.generated_date) }}</span>
             </CardDescription>
           </CardHeader>
         </Card>
@@ -205,7 +232,7 @@ const formatNumber = (val) => {
                        <span class="font-medium font-mono">{{ formatCurrency(asset.invested_value) }}</span>
                      </div>
                      <div class="flex flex-col">
-                       <span class="text-muted-foreground text-xs">Current NAV <span v-if="asset.current_nav_date" class="font-normal">({{ asset.current_nav_date }})</span></span>
+                       <span class="text-muted-foreground text-xs">Current NAV <span v-if="asset.current_nav_date" class="font-normal">({{ formatDateLocal(asset.current_nav_date) }})</span></span>
                        <span class="font-medium font-mono">{{ formatCurrency(asset.current_nav) }}</span>
                      </div>
                      <div class="flex flex-col">
@@ -231,7 +258,7 @@ const formatNumber = (val) => {
                      </TableHeader>
                      <TableBody>
                        <TableRow v-for="(txn, idx) in asset.transactions" :key="idx" class="hover:bg-muted/50 transition-colors">
-                         <TableCell class="text-foreground whitespace-nowrap">{{ txn.date || '-' }}</TableCell>
+                         <TableCell class="text-foreground whitespace-nowrap">{{ formatDateLocal(txn.date) }}</TableCell>
                          <TableCell class="text-foreground">{{ txn.tx_type || '-' }}</TableCell>
                          <TableCell class="text-right font-mono text-foreground">{{ formatCurrency(txn.amount) }}</TableCell>
                          <TableCell class="text-right font-mono text-foreground">{{ formatNumber(txn.units) }}</TableCell>
