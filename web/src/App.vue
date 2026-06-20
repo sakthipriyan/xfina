@@ -76,9 +76,16 @@ const onFileSelect = async (event) => {
     }
 };
 
+const getCurrencySymbol = () => {
+    if (portfolio.value?.investor_info?.account_number?.includes('IBKR')) {
+        return '$';
+    }
+    return ''; // Can default to ₹ later
+};
+
 const formatCurrency = (val) => {
     if (val === null || val === undefined) return '-';
-    return Number(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return getCurrencySymbol() + Number(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
 const formatNumber = (val) => {
@@ -243,7 +250,7 @@ const formatDateLocal = (dateStr) => {
                      <!-- Overall Balance -->
                      <div class="flex flex-col col-span-1 md:col-span-2 lg:col-span-4 pl-0 md:pl-2">
                        <span class="text-xs text-muted-foreground font-semibold mb-1 uppercase tracking-wider">Overall Balance</span>
-                       <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-1">
+                       <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mt-1">
                          <div class="flex flex-col">
                            <span class="text-muted-foreground text-xs">Total Units</span>
                            <span class="font-medium font-mono">{{ formatNumber(asset.total_units) }}</span>
@@ -253,8 +260,12 @@ const formatDateLocal = (dateStr) => {
                            <span class="font-medium font-mono">{{ formatCurrency(asset.total_cost_basis) }}</span>
                          </div>
                          <div class="flex flex-col">
-                           <span class="text-muted-foreground text-xs">Current NAV <span v-if="asset.current_nav_date" class="font-normal">({{ formatDateLocal(asset.current_nav_date) }})</span></span>
+                           <span class="text-muted-foreground text-xs">Current NAV</span>
                            <span class="font-medium font-mono">{{ formatCurrency(asset.current_nav) }}</span>
+                         </div>
+                         <div class="flex flex-col">
+                           <span class="text-muted-foreground text-xs">NAV Date</span>
+                           <span class="font-medium font-mono">{{ asset.current_nav_date ? formatDateLocal(asset.current_nav_date) : '-' }}</span>
                          </div>
                          <div class="flex flex-col">
                            <span class="text-muted-foreground text-xs">Market Value</span>
@@ -286,7 +297,7 @@ const formatDateLocal = (dateStr) => {
                          <TableCell class="text-right font-mono text-foreground">{{ formatCurrency(txn.amount) }}</TableCell>
                          <TableCell class="text-right font-mono text-foreground">{{ formatNumber(txn.units) }}</TableCell>
                          <TableCell class="text-right font-mono text-foreground">{{ formatCurrency(txn.nav) }}</TableCell>
-                         <TableCell class="text-right font-mono text-destructive text-sm">{{ formatCurrency(txn.fee) }}</TableCell>
+                         <TableCell class="text-right font-mono text-foreground">{{ txn.fee ? formatCurrency(Math.abs(txn.fee)) : '-' }}</TableCell>
                          <TableCell class="text-right font-mono text-foreground">{{ formatNumber(txn.balance) }}</TableCell>
                        </TableRow>
                      </TableBody>
