@@ -96,7 +96,7 @@ const formatNumber = (val) => {
         <div class="space-y-2">
           <h1 class="text-3xl font-bold tracking-tight">extract.sakthipriyan.com</h1>
           <p class="text-muted-foreground mt-2">
-            High-performance Rust/WebAssembly parser for financial statements
+            Parse financial statements entirely in your browser with Rust/Wasm — fast, private, and without uploading your files to any server.
           </p>
         </div>
         <div class="flex items-center space-x-3">
