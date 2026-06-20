@@ -77,7 +77,7 @@ const onFileSelect = async (event) => {
 };
 
 const getCurrencySymbol = () => {
-    if (portfolio.value?.investor_info?.account_number?.includes('IBKR')) {
+    if (selectedSource.value === 'IBKR') {
         return '$';
     }
     return ''; // Can default to ₹ later
