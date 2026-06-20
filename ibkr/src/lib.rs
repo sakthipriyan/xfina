@@ -203,20 +203,27 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
 
         // Calculate running balance and invested value
         let mut current_balance = merged_prior.get(&symbol).cloned().unwrap_or(0.0);
-        let mut invested = 0.0;
+        
+        let mut period_units = 0.0;
+        let mut period_invested = 0.0;
+        let mut period_realized = 0.0;
         
         for tx in txs.iter_mut() {
             if tx.tx_type == "BUY" {
                 current_balance += tx.units;
-                invested += tx.amount;
+                period_units += tx.units;
+                period_invested += tx.amount;
             } else if tx.tx_type == "SELL" {
                 current_balance -= tx.units;
+                period_units -= tx.units;
+                period_realized += tx.amount;
             }
             tx.balance = Some(current_balance);
         }
 
         let total_units = pos.0;
         let current_value = pos.1;
+        let total_cost_basis = pos.2;
         let close_price = pos.3;
 
         assets.push(Asset {
@@ -224,8 +231,11 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
             isin: if isin.is_empty() { None } else { Some(isin) },
             symbol: Some(symbol),
             category: None,
+            period_units,
+            period_invested_value: period_invested,
+            period_realized_value: period_realized,
             total_units,
-            invested_value: invested,
+            total_cost_basis,
             current_nav: if close_price != 0.0 { Some(close_price) } else { None },
             current_nav_date: statement_end_date.clone(),
             current_value: if current_value != 0.0 { Some(current_value) } else { None },

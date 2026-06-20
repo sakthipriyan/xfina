@@ -16,8 +16,12 @@ pub struct Asset {
     pub isin: Option<String>,
     pub symbol: Option<String>,
     pub category: Option<String>,
+    pub period_units: f64,
+    pub period_invested_value: f64,
+    pub period_realized_value: f64,
+
     pub total_units: f64,
-    pub invested_value: f64,
+    pub total_cost_basis: f64,
     pub current_nav: Option<f64>,
     pub current_nav_date: Option<String>,
     pub current_value: Option<f64>,
