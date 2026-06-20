@@ -3,6 +3,14 @@ import { ref, onMounted } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
 import init, { parse_ibkr } from './wasm/financial_extract_wasm.js';
 import { Sun, Moon, Github } from 'lucide-vue-next';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+import customParseFormat from 'dayjs/plugin/customParseFormat';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.extend(customParseFormat);
 
 // Shadcn components
 import { Button } from '@/components/ui/button';
@@ -85,6 +93,20 @@ const formatNumber = (val) => {
     if (val === null || val === undefined) return '-';
     return Number(val).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 4 });
 };
+
+const formatDateIST = (dateStr) => {
+    if (!dateStr) return '-';
+    let cleanStr = dateStr.replace(/\s(EDT|EST)$/, '');
+    
+    if (/^\d{4}-\d{2}-\d{2}, \d{2}:\d{2}:\d{2}$/.test(cleanStr)) {
+        let d = dayjs.tz(cleanStr, "YYYY-MM-DD, HH:mm:ss", "America/New_York");
+        return d.tz("Asia/Kolkata").format("DD MMM YYYY, hh:mm:ss A [IST]");
+    }
+    
+    let d = dayjs(cleanStr);
+    if (!d.isValid()) return dateStr;
+    return d.format("DD MMM YYYY");
+};
 </script>
 
 <template>
@@ -164,38 +186,16 @@ const formatNumber = (val) => {
         <Card v-if="portfolio.investor_info">
           <CardHeader>
             <CardTitle class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-              <span>Investor Profile</span>
-              <span v-if="portfolio.investor_info.account_number" class="text-lg font-mono text-muted-foreground">Account: {{ portfolio.investor_info.account_number }}</span>
+              <div class="flex items-center gap-3">
+                <span class="text-xl">{{ portfolio.investor_info.name || 'Investor' }}</span>
+                <span v-if="portfolio.investor_info.account_number" class="text-sm font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">{{ portfolio.investor_info.account_number }}</span>
+              </div>
             </CardTitle>
             <CardDescription class="flex flex-col sm:flex-row gap-2 sm:gap-4 mt-1">
-              <span v-if="portfolio.statement_start_date && portfolio.statement_end_date">Period: {{ portfolio.statement_start_date }} to {{ portfolio.statement_end_date }}</span>
-              <span v-if="portfolio.generated_date">Generated: {{ portfolio.generated_date }}</span>
+              <span v-if="portfolio.statement_start_date && portfolio.statement_end_date">Period: {{ formatDateIST(portfolio.statement_start_date) }} to {{ formatDateIST(portfolio.statement_end_date) }}</span>
+              <span v-if="portfolio.generated_date">Generated: {{ formatDateIST(portfolio.generated_date) }}</span>
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              <div>
-                <p class="text-muted-foreground text-xs mb-1">Name</p>
-                <p class="font-medium">{{ portfolio.investor_info.name || '-' }}</p>
-              </div>
-              <div>
-                <p class="text-muted-foreground text-xs mb-1">Email</p>
-                <p class="font-medium">{{ portfolio.investor_info.email || '-' }}</p>
-              </div>
-              <div>
-                <p class="text-muted-foreground text-xs mb-1">PAN</p>
-                <p class="font-medium font-mono uppercase">{{ portfolio.investor_info.pan || '-' }}</p>
-              </div>
-              <div>
-                <p class="text-muted-foreground text-xs mb-1">Contact</p>
-                <p class="font-medium">{{ portfolio.investor_info.contact || '-' }}</p>
-              </div>
-              <div class="sm:col-span-2 md:col-span-4">
-                <p class="text-muted-foreground text-xs mb-1">Address</p>
-                <p class="font-medium">{{ portfolio.investor_info.address || '-' }}</p>
-              </div>
-            </div>
-          </CardContent>
         </Card>
 
         <Accordion type="multiple" class="w-full space-y-4">
@@ -227,7 +227,7 @@ const formatNumber = (val) => {
                        <span class="font-medium font-mono">{{ formatCurrency(asset.invested_value) }}</span>
                      </div>
                      <div class="flex flex-col">
-                       <span class="text-muted-foreground text-xs">Current NAV <span v-if="asset.current_nav_date" class="font-normal">({{ asset.current_nav_date }})</span></span>
+                       <span class="text-muted-foreground text-xs">Current NAV <span v-if="asset.current_nav_date" class="font-normal">({{ formatDateIST(asset.current_nav_date) }})</span></span>
                        <span class="font-medium font-mono">{{ formatCurrency(asset.current_nav) }}</span>
                      </div>
                      <div class="flex flex-col">
@@ -253,7 +253,7 @@ const formatNumber = (val) => {
                      </TableHeader>
                      <TableBody>
                        <TableRow v-for="(txn, idx) in asset.transactions" :key="idx" class="hover:bg-muted/50 transition-colors">
-                         <TableCell class="text-foreground whitespace-nowrap">{{ txn.date || '-' }}</TableCell>
+                         <TableCell class="text-foreground whitespace-nowrap">{{ formatDateIST(txn.date) }}</TableCell>
                          <TableCell class="text-foreground">{{ txn.tx_type || '-' }}</TableCell>
                          <TableCell class="text-right font-mono text-foreground">{{ formatCurrency(txn.amount) }}</TableCell>
                          <TableCell class="text-right font-mono text-foreground">{{ formatNumber(txn.units) }}</TableCell>
