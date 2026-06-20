@@ -4,5 +4,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-financial-extract-models = { path = "../financial-extract-models" }
+financial-extract-models = { path = "../models" }
 pdf-extract = "0.7" # using pdf-extract for text extraction

@@ -4,5 +4,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-financial-extract-models = { path = "../financial-extract-models" }
+financial-extract-models = { path = "../models" }
 csv = "1.3"

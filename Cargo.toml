@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "financial-extract-models",
-    "financial-extract-cams",
-    "financial-extract-ibkr"
+    "models",
+    "cams",
+    "ibkr"
 ]
