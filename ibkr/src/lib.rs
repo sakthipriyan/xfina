@@ -8,9 +8,11 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
         .flexible(true)
         .from_reader(csv_content.as_bytes());
 
-    let mut _account_no = String::from("IBKR");
+    let mut account_no = String::from("IBKR");
     let mut investor_name = None;
-    let mut statement_date = None;
+    let mut statement_start_date = None;
+    let mut statement_end_date = None;
+    let mut generated_date = None;
 
     // symbol -> (primary_symbol, description, isin)
     let mut instruments: HashMap<String, (String, String, String)> = HashMap::new();
@@ -34,7 +36,7 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
         match (record.get(0), record.get(1), record.get(2)) {
             (Some("Account Information"), Some("Data"), Some("Account")) => {
                 if let Some(acc) = record.get(3) {
-                    _account_no = acc.to_string();
+                    account_no = acc.to_string();
                 }
             }
             (Some("Account Information"), Some("Data"), Some("Name")) => {
@@ -46,8 +48,14 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
                 if let Some(period) = record.get(3) {
                     let parts: Vec<&str> = period.split('-').collect();
                     if parts.len() == 2 {
-                        statement_date = Some(parts[1].trim().to_string());
+                        statement_start_date = Some(parts[0].trim().to_string());
+                        statement_end_date = Some(parts[1].trim().to_string());
                     }
+                }
+            }
+            (Some("Statement"), Some("Data"), Some("WhenGenerated")) => {
+                if let Some(generated) = record.get(3) {
+                    generated_date = Some(generated.trim().to_string());
                 }
             }
             (Some("Financial Instrument Information"), Some("Data"), _) => {
@@ -194,13 +202,14 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
             total_units,
             invested_value: invested,
             current_nav: if close_price != 0.0 { Some(close_price) } else { None },
-            current_nav_date: statement_date.clone(),
+            current_nav_date: statement_end_date.clone(),
             current_value: if current_value != 0.0 { Some(current_value) } else { None },
             transactions: txs,
         });
     }
 
     let investor_info = InvestorInfo {
+        account_number: Some(account_no),
         name: investor_name,
         email: None,
         pan: None,
@@ -210,7 +219,9 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
 
     Ok(Portfolio { 
         investor_info,
-        generated_date: statement_date,
+        statement_start_date,
+        statement_end_date,
+        generated_date,
         assets 
     })
 }

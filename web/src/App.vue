@@ -163,8 +163,14 @@ const formatNumber = (val) => {
         <!-- Investor Info Card -->
         <Card v-if="portfolio.investor_info">
           <CardHeader>
-            <CardTitle>Investor Profile</CardTitle>
-            <CardDescription v-if="portfolio.generated_date">Statement Date: {{ portfolio.generated_date }}</CardDescription>
+            <CardTitle class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+              <span>Investor Profile</span>
+              <span v-if="portfolio.investor_info.account_number" class="text-lg font-mono text-muted-foreground">Account: {{ portfolio.investor_info.account_number }}</span>
+            </CardTitle>
+            <CardDescription class="flex flex-col sm:flex-row gap-2 sm:gap-4 mt-1">
+              <span v-if="portfolio.statement_start_date && portfolio.statement_end_date">Period: {{ portfolio.statement_start_date }} to {{ portfolio.statement_end_date }}</span>
+              <span v-if="portfolio.generated_date">Generated: {{ portfolio.generated_date }}</span>
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -238,7 +244,7 @@ const formatNumber = (val) => {
                        <TableRow class="hover:bg-transparent">
                          <TableHead class="text-muted-foreground whitespace-nowrap">Date</TableHead>
                          <TableHead class="text-muted-foreground whitespace-nowrap">Description / Type</TableHead>
-                         <TableHead class="text-right text-muted-foreground whitespace-nowrap">Amount</TableHead>
+                         <TableHead class="text-right text-muted-foreground whitespace-nowrap">Total Amount</TableHead>
                          <TableHead class="text-right text-muted-foreground whitespace-nowrap">Units / Qty</TableHead>
                          <TableHead class="text-right text-muted-foreground whitespace-nowrap">NAV / Price</TableHead>
                          <TableHead class="text-right text-muted-foreground whitespace-nowrap">Duty / STT / Fee</TableHead>

@@ -5,6 +5,8 @@ pub fn parse_cams_pdf(bytes: &[u8], password: Option<&str>) -> Result<Portfolio,
     // and parse CAMS mutual fund transactions.
     Ok(Portfolio {
         investor_info: InvestorInfo::default(),
+        statement_start_date: None,
+        statement_end_date: None,
         generated_date: None,
         assets: vec![],
     })

@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct InvestorInfo {
+    pub account_number: Option<String>,
     pub name: Option<String>,
     pub email: Option<String>,
     pub pan: Option<String>,
@@ -37,6 +38,8 @@ pub struct Transaction {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Portfolio {
     pub investor_info: InvestorInfo,
+    pub statement_start_date: Option<String>,
+    pub statement_end_date: Option<String>,
     pub generated_date: Option<String>,
     pub assets: Vec<Asset>,
 }
