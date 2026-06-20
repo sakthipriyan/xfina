@@ -15,7 +15,7 @@ fn format_date_ist(date_str: &str) -> String {
             LocalResult::Ambiguous(t, _) => t,
         };
         let ist_dt = ny_dt.with_timezone(&Kolkata);
-        return ist_dt.format("%d %b %Y, %I:%M:%S %p IST").to_string();
+        return ist_dt.format("%d %b %Y, %I:%M:%S %p").to_string();
     }
     
     if let Ok(d) = NaiveDate::parse_from_str(&clean_str, "%B %d, %Y") {
