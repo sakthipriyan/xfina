@@ -5,6 +5,7 @@ use csv::ReaderBuilder;
 pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
     let mut rdr = ReaderBuilder::new()
         .has_headers(false)
+        .flexible(true)
         .from_reader(csv_content.as_bytes());
 
     let mut _account_no = String::from("IBKR");
