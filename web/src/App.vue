@@ -264,9 +264,9 @@ const formatDateLocal = (dateStr) => {
                          </div>
                          <div class="flex flex-col">
                            <span class="text-muted-foreground text-xs">NAV / Price</span>
-                           <div class="flex flex-col sm:flex-row sm:items-baseline gap-x-1">
+                           <div class="flex flex-col">
                              <span class="font-medium font-mono">{{ formatCurrency(asset.current_nav) }}</span>
-                             <span v-if="asset.current_nav_date" class="text-[10px] text-muted-foreground">on {{ formatDateLocal(asset.current_nav_date) }}</span>
+                             <span v-if="asset.current_nav_date" class="font-medium font-mono">on {{ formatDateLocal(asset.current_nav_date) }}</span>
                            </div>
                          </div>
                          <div class="flex flex-col">
