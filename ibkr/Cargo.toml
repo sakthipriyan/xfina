@@ -4,5 +4,5 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-financial-extract-models = { path = "../models" }
-csv = "1.3"
+financial-extract-models.workspace = true
+csv.workspace = true

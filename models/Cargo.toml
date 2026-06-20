@@ -4,4 +4,4 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-serde = { version = "1.0", features = ["derive"] }
+serde = { workspace = true, features = ["derive"] }

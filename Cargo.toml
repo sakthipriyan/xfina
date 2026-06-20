@@ -8,3 +8,9 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
+
+[workspace.dependencies]
+financial-extract-models = { path = "models" }
+serde = "1.0"
+pdf-extract = "0.7"
+csv = "1.3"

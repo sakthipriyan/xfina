@@ -4,5 +4,5 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-financial-extract-models = { path = "../models" }
-pdf-extract = "0.7" # using pdf-extract for text extraction
+financial-extract-models.workspace = true
+pdf-extract.workspace = true
