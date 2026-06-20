@@ -235,12 +235,12 @@ const formatDateLocal = (dateStr) => {
                      <div class="flex flex-col border-r pr-4">
                        <span class="text-xs text-muted-foreground font-semibold mb-1 uppercase tracking-wider">Period Activity</span>
                        <div class="flex flex-col mt-1">
-                         <span class="text-muted-foreground text-xs">Units Added</span>
-                         <span class="font-medium font-mono">{{ formatNumber(asset.period_units) }}</span>
-                       </div>
-                       <div class="flex flex-col mt-2">
                          <span class="text-muted-foreground text-xs">Invested</span>
                          <span class="font-medium font-mono">{{ formatCurrency(asset.period_invested_value) }}</span>
+                       </div>
+                       <div class="flex flex-col mt-2">
+                         <span class="text-muted-foreground text-xs">Units Added</span>
+                         <span class="font-medium font-mono">{{ formatNumber(asset.period_units) }}</span>
                        </div>
                        <div v-if="asset.period_realized_value > 0" class="flex flex-col mt-2">
                          <span class="text-muted-foreground text-xs">Realized / Sold</span>
