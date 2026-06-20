@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 const isDark = useDark();
@@ -252,10 +253,17 @@ const formatDateLocal = (dateStr) => {
                        <span class="text-xs text-muted-foreground font-semibold mb-1 uppercase tracking-wider">Overall Balance</span>
                        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-1">
                          <div class="flex flex-col">
-                           <span class="text-muted-foreground text-xs flex items-center gap-1 cursor-help" title="Total Cost Basis">
-                             Invested
-                             <HelpCircle class="w-3 h-3 text-muted-foreground/70" />
-                           </span>
+                           <TooltipProvider>
+                             <Tooltip>
+                               <TooltipTrigger class="text-muted-foreground text-xs flex items-center gap-1 cursor-help justify-start">
+                                 Invested
+                                 <HelpCircle class="w-3 h-3 text-muted-foreground/70" />
+                               </TooltipTrigger>
+                               <TooltipContent>
+                                 <p>Total Cost Basis</p>
+                               </TooltipContent>
+                             </Tooltip>
+                           </TooltipProvider>
                            <span class="font-medium font-mono">{{ formatCurrency(asset.total_cost_basis) }}</span>
                          </div>
                          <div class="flex flex-col">
