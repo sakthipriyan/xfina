@@ -12,8 +12,8 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
     let mut investor_name = None;
     let mut statement_date = None;
 
-    // symbol -> (description, isin)
-    let mut instruments: HashMap<String, (String, String)> = HashMap::new();
+    // symbol -> (primary_symbol, description, isin)
+    let mut instruments: HashMap<String, (String, String, String)> = HashMap::new();
     // symbol -> Vec<Transaction>
     let mut trades: HashMap<String, Vec<Transaction>> = HashMap::new();
     // symbol -> (quantity, value, cost_basis, close_price)
@@ -55,10 +55,14 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
                 let description = record.get(4).unwrap_or("").to_string();
                 let isin = record.get(6).unwrap_or("").to_string();
 
-                for sym in symbols_str.split(',') {
+                let mut primary_sym = String::new();
+                for (i, sym) in symbols_str.split(',').enumerate() {
                     let sym = sym.trim();
+                    if i == 0 {
+                        primary_sym = sym.to_string();
+                    }
                     if !sym.is_empty() {
-                        instruments.insert(sym.to_string(), (description.clone(), isin.clone()));
+                        instruments.insert(sym.to_string(), (primary_sym.clone(), description.clone(), isin.clone()));
                     }
                 }
             }
@@ -115,16 +119,57 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
 
     let mut assets = Vec::new();
 
+    let get_primary = |sym: &str| -> String {
+        if let Some((primary, _, _)) = instruments.get(sym) {
+            primary.clone()
+        } else {
+            sym.to_string()
+        }
+    };
+
+    let mut merged_positions: HashMap<String, (f64, f64, f64, f64)> = HashMap::new();
+    for (sym, pos) in positions {
+        let primary = get_primary(&sym);
+        let entry = merged_positions.entry(primary).or_insert((0.0, 0.0, 0.0, 0.0));
+        entry.0 += pos.0;
+        entry.1 += pos.1;
+        entry.2 += pos.2;
+        entry.3 = pos.3; // Just take the last close price
+    }
+
+    let mut merged_trades: HashMap<String, Vec<Transaction>> = HashMap::new();
+    for (sym, mut txs) in trades {
+        let primary = get_primary(&sym);
+        merged_trades.entry(primary).or_default().append(&mut txs);
+    }
+
+    let mut merged_prior: HashMap<String, f64> = HashMap::new();
+    for (sym, qty) in prior_quantities {
+        let primary = get_primary(&sym);
+        *merged_prior.entry(primary).or_insert(0.0) += qty;
+    }
+
+    let mut all_symbols = std::collections::HashSet::new();
+    for sym in merged_positions.keys() { all_symbols.insert(sym.clone()); }
+    for sym in merged_trades.keys() { all_symbols.insert(sym.clone()); }
+    for sym in merged_prior.keys() { all_symbols.insert(sym.clone()); }
+
     // Assemble Portfolio
-    for (symbol, pos) in positions {
-        let (desc, isin) = instruments.get(&symbol).cloned().unwrap_or_else(|| (symbol.clone(), "".to_string()));
-        let mut txs = trades.remove(&symbol).unwrap_or_default();
+    for symbol in all_symbols {
+        let (desc, isin) = if let Some((_, d, i)) = instruments.get(&symbol) {
+            (d.clone(), i.clone())
+        } else {
+            (symbol.clone(), "".to_string())
+        };
+        
+        let pos = merged_positions.get(&symbol).cloned().unwrap_or((0.0, 0.0, 0.0, 0.0));
+        let mut txs = merged_trades.remove(&symbol).unwrap_or_default();
         
         // Sort transactions by date (simple string sort for now, might need datetime parsing)
         txs.sort_by(|a, b| a.date.cmp(&b.date));
 
         // Calculate running balance and invested value
-        let mut current_balance = prior_quantities.get(&symbol).cloned().unwrap_or(0.0);
+        let mut current_balance = merged_prior.get(&symbol).cloned().unwrap_or(0.0);
         let mut invested = 0.0;
         
         for tx in txs.iter_mut() {
