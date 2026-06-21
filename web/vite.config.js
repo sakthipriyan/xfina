@@ -10,7 +10,7 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
-  base: '/financial-extract/',
+  base: '/',
   build: {
     outDir: '../docs',
     emptyOutDir: true
