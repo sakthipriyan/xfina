@@ -1,0 +1,14 @@
+[package]
+name = "financial-extract-wasm"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen.workspace = true
+serde_json.workspace = true
+financial-extract-models.workspace = true
+financial-extract-ibkr = { path = "../ibkr" }
+financial-extract-cams = { path = "../cams" }

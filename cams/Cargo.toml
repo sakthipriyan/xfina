@@ -1,0 +1,8 @@
+[package]
+name = "financial-extract-cams"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+financial-extract-models.workspace = true
+pdf-extract.workspace = true
