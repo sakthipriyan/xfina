@@ -6,3 +6,6 @@ edition.workspace = true
 [dependencies]
 financial-extract-models.workspace = true
 pdf-extract.workspace = true
+regex.workspace = true
+clap = { version = "4.4", features = ["derive"] }
+serde_json.workspace = true

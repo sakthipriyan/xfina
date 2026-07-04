@@ -135,6 +135,7 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
                         let tx = Transaction {
                             date: format_date_iso(&date),
                             tx_type,
+                            description: None,
                             amount: amount.abs(),
                             units: quantity.abs(),
                             nav: if t_price != 0.0 { Some(t_price) } else { None },
@@ -228,6 +229,7 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
 
         assets.push(Asset {
             name: desc,
+            folio_number: None,
             isin: if isin.is_empty() { None } else { Some(isin) },
             symbol: Some(symbol),
             category: None,

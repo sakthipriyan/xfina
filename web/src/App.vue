@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
-import init, { parse_ibkr } from './wasm/financial_extract_wasm.js';
+import init, { parse_ibkr, parse_cams } from './wasm/financial_extract_wasm.js';
 import { Sun, Moon, Github, HelpCircle } from 'lucide-vue-next';
 
 // Shadcn components
@@ -41,6 +41,7 @@ const sources = ref([
     { label: 'CAMS (Mutual Funds)', value: 'CAMS' }
 ]);
 const selectedSource = ref('IBKR');
+const password = ref('');
 
 onMounted(async () => {
     try {
@@ -55,20 +56,22 @@ const onFileSelect = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
-    if (selectedSource.value !== 'IBKR') {
-        error.value = "Only IBKR is currently supported in this WebAssembly PoC.";
-        return;
-    }
-
     error.value = null;
     portfolio.value = null;
     try {
-        const text = await file.text();
-        
+        let jsonString;
         const start = performance.now();
-        const jsonString = parse_ibkr(text);
-        const end = performance.now();
         
+        if (selectedSource.value === 'IBKR') {
+            const text = await file.text();
+            jsonString = parse_ibkr(text);
+        } else if (selectedSource.value === 'CAMS') {
+            const arrayBuffer = await file.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+            jsonString = parse_cams(uint8Array, password.value ? password.value : null);
+        }
+        
+        const end = performance.now();
         console.log(`🚀 Rust WASM Processing Time: ${(end - start).toFixed(2)} ms`);
         
         portfolio.value = JSON.parse(jsonString);
@@ -81,7 +84,7 @@ const getCurrencySymbol = () => {
     if (selectedSource.value === 'IBKR') {
         return '$';
     }
-    return ''; // Can default to ₹ later
+    return '₹'; // Default to Rupee for CAMS
 };
 
 const formatCurrency = (val) => {
@@ -97,28 +100,35 @@ const formatNumber = (val) => {
 const formatDateLocal = (dateStr) => {
     if (!dateStr) return '-';
     
-    // Check if it's a date only YYYY-MM-DD
+    // Convert dd-MMM-yyyy (e.g. 19-Jun-2026) to standard format if needed, but Date() can usually parse it.
+    let parseStr = dateStr;
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-        const d = new Date(dateStr + "T00:00:00");
-        if (isNaN(d)) return dateStr;
+        parseStr = dateStr + "T00:00:00";
+    }
+
+    const d = new Date(parseStr);
+    if (isNaN(d)) return dateStr;
+
+    // Check if original string implies a specific time.
+    // 'T' is usually present in ISO strings with time.
+    const hasTime = dateStr.includes('T') && !dateStr.endsWith('T00:00:00.000Z') && !dateStr.endsWith('T00:00:00Z');
+
+    if (hasTime) {
+        return new Intl.DateTimeFormat(undefined, { 
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric',
+            hour: '2-digit', 
+            minute: '2-digit', 
+            second: '2-digit'
+        }).format(d);
+    } else {
         return new Intl.DateTimeFormat(undefined, { 
             year: 'numeric', 
             month: 'short', 
             day: 'numeric' 
         }).format(d);
     }
-
-    const d = new Date(dateStr);
-    if (isNaN(d)) return dateStr;
-
-    return new Intl.DateTimeFormat(undefined, { 
-        year: 'numeric', 
-        month: 'short', 
-        day: 'numeric',
-        hour: '2-digit', 
-        minute: '2-digit', 
-        second: '2-digit'
-    }).format(d);
 };
 </script>
 
@@ -178,11 +188,20 @@ const formatDateLocal = (dateStr) => {
                  </SelectContent>
                </Select>
             </div>
-            <div class="space-y-2 w-full flex-1">
+             <div class="space-y-2 w-full md:w-64" v-if="selectedSource === 'CAMS'">
+               <Label>PDF Password</Label>
+               <Input 
+                  type="password" 
+                  v-model="password"
+                  placeholder="Enter password" 
+                  class="bg-background border-border"
+                />
+             </div>
+             <div class="space-y-2 w-full flex-1">
                <Label>Upload File</Label>
                <Input 
                   type="file" 
-                  accept=".csv" 
+                  :accept="selectedSource === 'IBKR' ? '.csv' : '.pdf'"
                   @change="onFileSelect" 
                   class="cursor-pointer bg-background border-border text-foreground file:bg-secondary file:text-secondary-foreground file:border-0 file:mr-4 file:px-4 file:py-2 file:rounded hover:file:bg-secondary/80 transition-colors" 
                 />
@@ -297,7 +316,8 @@ const formatDateLocal = (dateStr) => {
                      <TableHeader class="bg-muted/50">
                        <TableRow class="hover:bg-transparent">
                          <TableHead class="text-muted-foreground whitespace-nowrap">Date</TableHead>
-                         <TableHead class="text-muted-foreground whitespace-nowrap">Description / Type</TableHead>
+                         <TableHead class="text-muted-foreground whitespace-nowrap">Type</TableHead>
+                         <TableHead class="text-muted-foreground whitespace-nowrap">Description</TableHead>
                          <TableHead class="text-right text-muted-foreground whitespace-nowrap">Total Amount</TableHead>
                          <TableHead class="text-right text-muted-foreground whitespace-nowrap">Units / Qty</TableHead>
                          <TableHead class="text-right text-muted-foreground whitespace-nowrap">NAV / Price</TableHead>
@@ -308,7 +328,12 @@ const formatDateLocal = (dateStr) => {
                      <TableBody>
                        <TableRow v-for="(txn, idx) in asset.transactions" :key="idx" class="hover:bg-muted/50 transition-colors">
                          <TableCell class="text-foreground whitespace-nowrap">{{ formatDateLocal(txn.date) }}</TableCell>
-                         <TableCell class="text-foreground">{{ txn.tx_type || '-' }}</TableCell>
+                         <TableCell class="text-foreground">
+                            <span :class="{'text-emerald-500': txn.tx_type === 'BUY', 'text-rose-500': txn.tx_type === 'SELL'}">
+                              {{ txn.tx_type || '-' }}
+                            </span>
+                         </TableCell>
+                         <TableCell class="text-foreground text-xs">{{ txn.description || '-' }}</TableCell>
                          <TableCell class="text-right font-mono text-foreground">{{ formatCurrency(txn.amount) }}</TableCell>
                          <TableCell class="text-right font-mono text-foreground">{{ formatNumber(txn.units) }}</TableCell>
                          <TableCell class="text-right font-mono text-foreground">{{ formatCurrency(txn.nav) }}</TableCell>

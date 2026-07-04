@@ -13,6 +13,7 @@ pub struct InvestorInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Asset {
     pub name: String,
+    pub folio_number: Option<String>,
     pub isin: Option<String>,
     pub symbol: Option<String>,
     pub category: Option<String>,
@@ -32,6 +33,7 @@ pub struct Asset {
 pub struct Transaction {
     pub date: String,
     pub tx_type: String,
+    pub description: Option<String>,
     pub amount: f64,
     pub units: f64,
     pub nav: Option<f64>,
