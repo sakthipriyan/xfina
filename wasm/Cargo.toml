@@ -12,3 +12,5 @@ serde_json.workspace = true
 financial-extract-models.workspace = true
 financial-extract-ibkr = { path = "../ibkr" }
 financial-extract-cams = { path = "../cams" }
+financial-extract-hdfc = { path = "../credit-card/hdfc" }
+financial-extract-icici = { path = "../credit-card/icici" }
