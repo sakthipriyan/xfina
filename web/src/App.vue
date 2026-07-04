@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
 import init, { parse_ibkr, parse_cams, parse_hdfc_cc, parse_icici_cc } from './wasm/financial_extract_wasm.js';
-import { Sun, Moon, Github, HelpCircle } from 'lucide-vue-next';
+import { Sun, Moon, Github, HelpCircle, ChevronDown } from 'lucide-vue-next';
 
 // Shadcn components
 import { Button } from '@/components/ui/button';
@@ -47,7 +47,7 @@ const setCategory = (cat) => {
     ccStatement.value = null;
     error.value = null;
     if (cat === 'Mutual Funds') selectedSource.value = 'CAMS';
-    else if (cat === 'Stocks') selectedSource.value = 'IBKR';
+    else if (cat === 'Intl Stocks/ETFs') selectedSource.value = 'IBKR';
     else if (cat === 'Credit Cards') selectedSource.value = 'HDFC';
 };
 
@@ -108,7 +108,9 @@ const getCurrencySymbol = () => {
 
 const formatCurrency = (val) => {
     if (val === null || val === undefined) return '-';
-    return getCurrencySymbol() + Number(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const num = Number(val);
+    const formatted = Math.abs(num).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return (num < 0 ? '-' : '') + getCurrencySymbol() + formatted;
 };
 
 const formatNumber = (val) => {
@@ -121,21 +123,8 @@ const formatDateLocal = (dateStr) => {
     
     let parseStr = dateStr.trim();
     
-    // Support dd-mm-yyyy and dd/mm/yyyy formats (with optional time)
-    const dmyRegex = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/;
-    const match = parseStr.match(dmyRegex);
-    if (match) {
-        const day = match[1].padStart(2, '0');
-        const month = match[2].padStart(2, '0');
-        const year = match[3];
-        const hour = match[4] ? match[4].padStart(2, '0') : '00';
-        const minute = match[5] ? match[5] : '00';
-        const second = match[6] ? match[6] : '00';
-        parseStr = `${year}-${month}-${day}T${hour}:${minute}:${second}`;
-    } else {
-        if (/^\d{4}-\d{2}-\d{2}$/.test(parseStr)) {
-            parseStr = parseStr + "T00:00:00";
-        }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(parseStr)) {
+        parseStr = parseStr + "T00:00:00";
     }
 
     const d = new Date(parseStr);
@@ -219,9 +208,9 @@ const hasRewards = (stmt) => {
               @click="setCategory('Mutual Funds')"
             >Mutual Funds</Button>
             <Button 
-              :variant="selectedCategory === 'Stocks' ? 'default' : 'outline'"
-              @click="setCategory('Stocks')"
-            >Stocks</Button>
+              :variant="selectedCategory === 'Intl Stocks/ETFs' ? 'default' : 'outline'"
+              @click="setCategory('Intl Stocks/ETFs')"
+            >Intl Stocks/ETFs</Button>
             <Button 
               :variant="selectedCategory === 'Credit Cards' ? 'default' : 'outline'"
               @click="setCategory('Credit Cards')"
@@ -229,6 +218,19 @@ const hasRewards = (stmt) => {
           </div>
 
           <div class="flex flex-col md:flex-row gap-6 items-end">
+             <div class="space-y-2 w-full md:w-64" v-if="selectedCategory === 'Mutual Funds'">
+               <Label>Provider</Label>
+               <Select v-model="selectedSource">
+                 <SelectTrigger class="w-full bg-background border-border">
+                   <SelectValue placeholder="Select Provider" />
+                 </SelectTrigger>
+                 <SelectContent>
+                   <SelectGroup>
+                     <SelectItem value="CAMS">CAMS Combined Statement</SelectItem>
+                   </SelectGroup>
+                 </SelectContent>
+               </Select>
+             </div>
              <div class="space-y-2 w-full md:w-64" v-if="selectedCategory === 'Mutual Funds'">
                <Label>PDF Password</Label>
                <Input 
@@ -238,9 +240,18 @@ const hasRewards = (stmt) => {
                   class="bg-background border-border"
                 />
              </div>
-             <div class="space-y-2 w-full md:w-64" v-if="selectedCategory === 'Stocks'">
+             <div class="space-y-2 w-full md:w-64" v-if="selectedCategory === 'Intl Stocks/ETFs'">
                <Label>Broker</Label>
-               <div class="text-sm font-medium h-10 flex items-center border border-transparent">Interactive Brokers</div>
+               <Select v-model="selectedSource">
+                 <SelectTrigger class="w-full bg-background border-border">
+                   <SelectValue placeholder="Select Broker" />
+                 </SelectTrigger>
+                 <SelectContent>
+                   <SelectGroup>
+                     <SelectItem value="IBKR">Interactive Brokers</SelectItem>
+                   </SelectGroup>
+                 </SelectContent>
+               </Select>
              </div>
              <div class="space-y-2 w-full md:w-64" v-if="selectedCategory === 'Credit Cards'">
                <Label>Bank</Label>
@@ -258,12 +269,17 @@ const hasRewards = (stmt) => {
              </div>
 
              <div class="space-y-2 w-full flex-1">
-               <Label>Upload File</Label>
+               <Label class="flex items-baseline gap-2">
+                 Upload File
+                 <span class="text-xs text-muted-foreground font-normal">
+                   (Supported: {{ selectedCategory === 'Mutual Funds' ? 'PDF' : (selectedCategory === 'Credit Cards' && selectedSource === 'ICICI' ? 'EXCEL' : 'CSV') }})
+                 </span>
+               </Label>
                <Input 
                   type="file" 
                   :accept="selectedCategory === 'Mutual Funds' ? '.pdf' : (selectedCategory === 'Credit Cards' && selectedSource === 'ICICI' ? '.xls,.xlsx' : '.csv')"
                   @change="onFileSelect" 
-                  class="cursor-pointer bg-background border-border text-foreground file:bg-secondary file:text-secondary-foreground file:border-0 file:mr-4 file:px-4 file:py-2 file:rounded hover:file:bg-secondary/80 transition-colors" 
+                  class="cursor-pointer bg-background border-border text-foreground file:bg-secondary file:text-secondary-foreground file:border-0 file:mr-4 file:px-4 file:py-1.5 file:rounded-md hover:file:bg-secondary/80 transition-colors h-auto pb-2 pt-2" 
                 />
             </div>
           </div>
@@ -364,7 +380,7 @@ const hasRewards = (stmt) => {
             </CardHeader>
             <CardContent>
               <div class="space-y-2">
-                <div class="flex justify-between items-center mb-2 border-b pb-2"><span class="text-sm font-medium">Opening Balance</span><span class="font-bold font-mono text-lg text-primary">{{ formatNumber(ccStatement.reward_points_summary.opening_balance) }}</span></div>
+                <div v-if="ccStatement.reward_points_summary.opening_balance !== 0 || ccStatement.reward_points_summary.closing_balance !== 0" class="flex justify-between items-center mb-2 border-b pb-2"><span class="text-sm font-medium">Opening Balance</span><span class="font-bold font-mono text-lg text-primary">{{ formatNumber(ccStatement.reward_points_summary.opening_balance) }}</span></div>
                 
                 <div class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Earned</span><span class="font-medium font-mono text-emerald-500">+{{ formatNumber(ccStatement.reward_points_summary.earned) }}</span></div>
                 
@@ -382,7 +398,7 @@ const hasRewards = (stmt) => {
                 <div v-if="ccStatement.reward_points_summary.disbursed > 0" class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Disbursed</span><span class="font-medium font-mono text-rose-500">-{{ formatNumber(ccStatement.reward_points_summary.disbursed) }}</span></div>
                 <div v-if="ccStatement.reward_points_summary.adjusted_lapsed > 0" class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Adjusted / Lapsed</span><span class="font-medium font-mono text-rose-500">-{{ formatNumber(ccStatement.reward_points_summary.adjusted_lapsed) }}</span></div>
                 
-                <div class="flex justify-between items-center mt-2 border-t pt-2"><span class="text-sm font-medium">Closing Balance</span><span class="font-bold font-mono text-lg text-primary">{{ formatNumber(ccStatement.reward_points_summary.closing_balance) }}</span></div>
+                <div v-if="ccStatement.reward_points_summary.opening_balance !== 0 || ccStatement.reward_points_summary.closing_balance !== 0" class="flex justify-between items-center mt-2 border-t pt-2"><span class="text-sm font-medium">Closing Balance</span><span class="font-bold font-mono text-lg text-primary">{{ formatNumber(ccStatement.reward_points_summary.closing_balance) }}</span></div>
                 <div v-if="ccStatement.reward_points_summary.expiring_in_30_days" class="flex justify-between items-center text-rose-500"><span class="text-xs">Expiring (30d)</span><span class="font-medium font-mono text-xs">{{ formatNumber(ccStatement.reward_points_summary.expiring_in_30_days) }}</span></div>
                 <div v-if="ccStatement.reward_points_summary.expiring_in_60_days" class="flex justify-between items-center text-rose-500"><span class="text-xs">Expiring (60d)</span><span class="font-medium font-mono text-xs">{{ formatNumber(ccStatement.reward_points_summary.expiring_in_60_days) }}</span></div>
               </div>
@@ -390,12 +406,19 @@ const hasRewards = (stmt) => {
           </Card>
         </div>
 
-        <Card class="border rounded-lg bg-card text-card-foreground shadow-sm overflow-hidden">
-          <CardHeader>
-            <CardTitle>Transactions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div class="rounded-md border border-border overflow-x-auto">
+        <Accordion type="single" collapsible class="w-full">
+          <AccordionItem value="transactions" class="border rounded-lg bg-card text-card-foreground shadow-sm overflow-hidden" :disabled="!ccStatement.transactions?.length">
+            <AccordionTrigger class="group hover:no-underline px-4 py-4 data-[state=open]:border-b border-border">
+              <span class="font-medium text-foreground text-lg text-left w-full pr-4">Transactions</span>
+              <template #icon>
+                <div class="flex items-center gap-1.5 text-xs font-mono bg-primary/10 text-primary pl-2.5 pr-2 py-1.5 rounded shrink-0 ml-2">
+                  <span>{{ ccStatement.transactions?.length || 0 }} {{ ccStatement.transactions?.length === 1 ? 'Txn' : 'Txns' }}</span>
+                  <ChevronDown v-if="ccStatement.transactions?.length" class="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                </div>
+              </template>
+            </AccordionTrigger>
+            <AccordionContent class="p-4">
+              <div class="rounded-md border border-border overflow-x-auto">
               <Table>
                 <TableHeader class="bg-muted/50">
                   <TableRow class="hover:bg-transparent">
@@ -422,8 +445,9 @@ const hasRewards = (stmt) => {
                 </TableBody>
               </Table>
             </div>
-          </CardContent>
-        </Card>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </div>
 
       <!-- Results Table -->
@@ -451,16 +475,14 @@ const hasRewards = (stmt) => {
              :key="index" 
              :value="`item-${index}`"
              class="border rounded-lg bg-card text-card-foreground shadow-sm overflow-hidden"
+             :disabled="!asset.transactions?.length"
            >
-               <AccordionTrigger class="hover:no-underline px-4 py-4 data-[state=open]:border-b border-border">
+               <AccordionTrigger class="group hover:no-underline px-4 py-4 data-[state=open]:border-b border-border">
                  <div class="flex flex-col w-full text-left pr-4 space-y-3">
                    <div class="flex justify-between items-start w-full">
                      <div class="flex flex-col items-start">
                        <span class="font-medium text-foreground text-lg">{{ asset.name }}</span>
                        <span class="text-sm text-muted-foreground mt-0.5">{{ asset.symbol || '-' }} <span v-if="asset.isin">| ISIN: {{ asset.isin }}</span></span>
-                     </div>
-                     <div class="text-xs font-mono bg-primary/10 text-primary px-2 py-1 rounded">
-                       {{ asset.transactions ? asset.transactions.length : 0 }} Txns
                      </div>
                    </div>
                    
@@ -524,6 +546,12 @@ const hasRewards = (stmt) => {
                      </div>
                    </div>
                  </div>
+                 <template #icon>
+                    <div class="flex items-center gap-1.5 text-xs font-mono bg-primary/10 text-primary pl-2.5 pr-2 py-1.5 rounded shrink-0 ml-2 self-start mt-0.5">
+                      <span>{{ asset.transactions?.length || 0 }} {{ asset.transactions?.length === 1 ? 'Txn' : 'Txns' }}</span>
+                      <ChevronDown v-if="asset.transactions?.length" class="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                    </div>
+                  </template>
                </AccordionTrigger>
                <AccordionContent>
                  <div class="rounded-md border border-border mt-2 overflow-x-auto">
@@ -552,7 +580,7 @@ const hasRewards = (stmt) => {
                          <TableCell class="text-right font-mono text-foreground">{{ formatCurrency(txn.amount) }}</TableCell>
                          <TableCell class="text-right font-mono text-foreground">{{ formatNumber(txn.units) }}</TableCell>
                          <TableCell class="text-right font-mono text-foreground">{{ formatCurrency(txn.nav) }}</TableCell>
-                         <TableCell class="text-right font-mono text-foreground">{{ txn.fee ? formatCurrency(Math.abs(txn.fee)) : '-' }}</TableCell>
+                         <TableCell class="text-right font-mono text-foreground">{{ txn.fee ? formatCurrency(txn.fee) : '-' }}</TableCell>
                          <TableCell class="text-right font-mono text-foreground">{{ formatNumber(txn.balance) }}</TableCell>
                        </TableRow>
                      </TableBody>

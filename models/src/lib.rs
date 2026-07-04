@@ -3,6 +3,55 @@ use serde::{Deserialize, Serialize};
 pub mod credit_card;
 pub use credit_card::*;
 
+pub fn parse_indian_date(date_str: &str) -> String {
+    let date_str = date_str.trim();
+    // try dd/mm/yyyy or dd-mm-yyyy or dd-Mmm-yyyy
+    let parts: Vec<&str> = if date_str.contains('/') {
+        date_str.split('/').collect()
+    } else {
+        date_str.split('-').collect()
+    };
+    
+    if parts.len() == 3 {
+        let day = parts[0].trim();
+        let month_str = parts[1].trim();
+        let year = parts[2].trim();
+        
+        let month = if month_str.chars().all(|c| c.is_ascii_digit()) {
+            format!("{:02}", month_str.parse::<u32>().unwrap_or(0))
+        } else {
+            match month_str.to_lowercase().as_str() {
+                "jan" => "01".to_string(),
+                "feb" => "02".to_string(),
+                "mar" => "03".to_string(),
+                "apr" => "04".to_string(),
+                "may" => "05".to_string(),
+                "jun" => "06".to_string(),
+                "jul" => "07".to_string(),
+                "aug" => "08".to_string(),
+                "sep" => "09".to_string(),
+                "oct" => "10".to_string(),
+                "nov" => "11".to_string(),
+                "dec" => "12".to_string(),
+                _ => month_str.to_string(),
+            }
+        };
+        
+        let formatted_day = format!("{:02}", day.parse::<u32>().unwrap_or(0));
+        
+        let formatted_year = if year.len() == 2 {
+            let year_num = year.parse::<u32>().unwrap_or(0);
+            if year_num > 50 { format!("19{:02}", year_num) } else { format!("20{:02}", year_num) }
+        } else {
+            year.to_string()
+        };
+        
+        return format!("{}-{}-{}", formatted_year, month, formatted_day);
+    }
+    
+    date_str.to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct InvestorInfo {
     pub account_number: Option<String>,

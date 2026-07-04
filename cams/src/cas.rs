@@ -32,8 +32,8 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>) -> Result<Portfolio, String>
                         let p1 = original_parts[0].trim().to_string();
                         let p2 = original_parts[1][1..].trim().to_string(); // Skip the 'o ' in 'To '
                         if date_re.is_match(&p1) {
-                            portfolio.statement_start_date = Some(p1);
-                            portfolio.statement_end_date = Some(p2);
+                            portfolio.statement_start_date = Some(financial_extract_models::parse_indian_date(&p1));
+                            portfolio.statement_end_date = Some(financial_extract_models::parse_indian_date(&p2));
                         }
                     }
                 }
@@ -131,7 +131,7 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>) -> Result<Portfolio, String>
                             asset.total_cost_basis = parts[i+1].replace(",", "").parse().unwrap_or(0.0);
                         }
                         if p.to_lowercase() == "nav" && i + 2 < parts.len() && parts[i+1].to_lowercase() == "on" {
-                            asset.current_nav_date = Some(parts[i+2].replace(":", ""));
+                            asset.current_nav_date = Some(financial_extract_models::parse_indian_date(&parts[i+2].replace(":", "")));
                         }
                         
                         // Parse "INR <value>"
@@ -173,7 +173,7 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>) -> Result<Portfolio, String>
                         if let Some(last_val) = parts.last() {
                             let fee: f64 = last_val.replace(",", "").parse().unwrap_or(0.0);
                             if let Some(txn) = asset.transactions.last_mut() {
-                                txn.fee = Some(fee);
+                                txn.fee = Some(fee.abs());
                             }
                         }
                         continue;
@@ -216,7 +216,7 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>) -> Result<Portfolio, String>
                     };
                     
                     asset.transactions.push(Transaction {
-                        date,
+                        date: financial_extract_models::parse_indian_date(&date),
                         tx_type,
                         description: Some(raw_desc),
                         amount,
