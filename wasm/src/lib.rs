@@ -12,9 +12,15 @@ pub fn parse_ibkr(csv_content: &str) -> Result<String, JsValue> {
     }
 }
 
-// Temporary stub for CAMS
+use financial_extract_cams::parse_cams_pdf;
+
 #[wasm_bindgen]
-pub fn parse_cams(bytes: &[u8]) -> Result<String, JsValue> {
-    let _ = bytes;
-    Err(JsValue::from_str("CAMS parsing not implemented yet"))
+pub fn parse_cams(bytes: &[u8], password: Option<String>) -> Result<String, JsValue> {
+    match parse_cams_pdf(bytes, password.as_deref()) {
+        Ok(portfolio) => {
+            serde_json::to_string(&portfolio)
+                .map_err(|e| JsValue::from_str(&format!("JSON serialization error: {}", e)))
+        },
+        Err(e) => Err(JsValue::from_str(&e)),
+    }
 }
