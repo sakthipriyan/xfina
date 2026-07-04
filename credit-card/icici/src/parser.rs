@@ -45,12 +45,12 @@ pub fn parse_icici_statement(bytes: &[u8]) -> Result<CreditCardStatement, String
                 "Previous Balance" => {
                     let val = cells.get(4).unwrap_or(&String::new()).replace("INR", "").trim().to_string();
                     previous_balance = val.parse().unwrap_or(0.0);
-                    stmt.statement_date = Some(cells.get(12).unwrap_or(&String::new()).trim().to_string());
+                    stmt.statement_date = Some(financial_extract_models::parse_indian_date(cells.get(12).unwrap_or(&String::new()).trim()));
                 }
                 "Purchases and Other Charges" => {
                     let val = cells.get(4).unwrap_or(&String::new()).replace("INR", "").trim().to_string();
                     purchases = val.parse().unwrap_or(0.0);
-                    stmt.payment_due_date = Some(cells.get(12).unwrap_or(&String::new()).trim().to_string());
+                    stmt.payment_due_date = Some(financial_extract_models::parse_indian_date(cells.get(12).unwrap_or(&String::new()).trim()));
                 }
                 "Payments and Other Credits" => {
                     let val = cells.get(4).unwrap_or(&String::new()).replace("INR", "").trim().to_string();
@@ -75,8 +75,8 @@ pub fn parse_icici_statement(bytes: &[u8]) -> Result<CreditCardStatement, String
                 "Cash Advances" => {
                     let period = cells.get(12).unwrap_or(&String::new()).trim().to_string();
                     if let Some((start, end)) = period.split_once(" TO ") {
-                        stmt.statement_start_date = Some(start.trim().to_string());
-                        stmt.statement_end_date = Some(end.trim().to_string());
+                        stmt.statement_start_date = Some(financial_extract_models::parse_indian_date(start.trim()));
+                        stmt.statement_end_date = Some(financial_extract_models::parse_indian_date(end.trim()));
                     }
                 }
                 "Transaction Date" => {
@@ -99,13 +99,13 @@ pub fn parse_icici_statement(bytes: &[u8]) -> Result<CreditCardStatement, String
             let tx_type = if is_credit { "Credit".to_string() } else if is_debit { "Debit".to_string() } else { "Unknown".to_string() };
             
             let amt_clean = amount_str.replace("Dr.", "").replace("Cr.", "").replace("INR", "").trim().to_string();
-            let amount = amt_clean.parse::<f64>().unwrap_or(0.0);
+            let amount = amt_clean.parse::<f64>().unwrap_or(0.0).abs();
             
             let reward_points = cells.get(12).and_then(|s| s.trim().parse::<i32>().ok());
             
             stmt.transactions.push(CreditCardTransaction {
                 owner: card_holder_name.clone(), // default to card holder
-                date: date.to_string(),
+                date: financial_extract_models::parse_indian_date(date),
                 description: details,
                 amount,
                 tx_type: tx_type.clone(),
@@ -137,7 +137,7 @@ pub fn parse_icici_statement(bytes: &[u8]) -> Result<CreditCardStatement, String
     stmt.reward_points_summary = Some(RewardPointsSummary {
         default_rewards,
         opening_balance: 0,
-        earned: 0,
+        earned: default_rewards,
         disbursed: 0,
         adjusted_lapsed: 0,
         closing_balance: 0,
