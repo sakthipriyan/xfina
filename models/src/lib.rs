@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
 
+pub mod credit_card;
+pub use credit_card::*;
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct InvestorInfo {
     pub account_number: Option<String>,

@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
-import init, { parse_ibkr, parse_cams } from './wasm/financial_extract_wasm.js';
+import init, { parse_ibkr, parse_cams, parse_hdfc_cc, parse_icici_cc } from './wasm/financial_extract_wasm.js';
 import { Sun, Moon, Github, HelpCircle } from 'lucide-vue-next';
 
 // Shadcn components
@@ -35,13 +35,21 @@ onMounted(() => {
 const wasmLoaded = ref(false);
 const error = ref(null);
 const portfolio = ref(null);
+const ccStatement = ref(null);
 
-const sources = ref([
-    { label: 'Interactive Brokers (IBKR)', value: 'IBKR' },
-    { label: 'CAMS (Mutual Funds)', value: 'CAMS' }
-]);
-const selectedSource = ref('IBKR');
+const selectedCategory = ref('Mutual Funds');
+const selectedSource = ref('CAMS');
 const password = ref('');
+
+const setCategory = (cat) => {
+    selectedCategory.value = cat;
+    portfolio.value = null;
+    ccStatement.value = null;
+    error.value = null;
+    if (cat === 'Mutual Funds') selectedSource.value = 'CAMS';
+    else if (cat === 'Stocks') selectedSource.value = 'IBKR';
+    else if (cat === 'Credit Cards') selectedSource.value = 'HDFC';
+};
 
 onMounted(async () => {
     try {
@@ -58,6 +66,7 @@ const onFileSelect = async (event) => {
 
     error.value = null;
     portfolio.value = null;
+    ccStatement.value = null;
     try {
         let jsonString;
         const start = performance.now();
@@ -65,16 +74,26 @@ const onFileSelect = async (event) => {
         if (selectedSource.value === 'IBKR') {
             const text = await file.text();
             jsonString = parse_ibkr(text);
+            portfolio.value = JSON.parse(jsonString);
         } else if (selectedSource.value === 'CAMS') {
             const arrayBuffer = await file.arrayBuffer();
             const uint8Array = new Uint8Array(arrayBuffer);
             jsonString = parse_cams(uint8Array, password.value ? password.value : null);
+            portfolio.value = JSON.parse(jsonString);
+        } else if (selectedSource.value === 'HDFC') {
+            const text = await file.text();
+            jsonString = parse_hdfc_cc(text);
+            ccStatement.value = JSON.parse(jsonString);
+        } else if (selectedSource.value === 'ICICI') {
+            const arrayBuffer = await file.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+            jsonString = parse_icici_cc(uint8Array);
+            ccStatement.value = JSON.parse(jsonString);
         }
         
         const end = performance.now();
         console.log(`🚀 Rust WASM Processing Time: ${(end - start).toFixed(2)} ms`);
-        
-        portfolio.value = JSON.parse(jsonString);
+
     } catch (e) {
         error.value = "Error parsing file: " + e;
     }
@@ -100,18 +119,29 @@ const formatNumber = (val) => {
 const formatDateLocal = (dateStr) => {
     if (!dateStr) return '-';
     
-    // Convert dd-MMM-yyyy (e.g. 19-Jun-2026) to standard format if needed, but Date() can usually parse it.
-    let parseStr = dateStr;
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-        parseStr = dateStr + "T00:00:00";
+    let parseStr = dateStr.trim();
+    
+    // Support dd-mm-yyyy and dd/mm/yyyy formats (with optional time)
+    const dmyRegex = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/;
+    const match = parseStr.match(dmyRegex);
+    if (match) {
+        const day = match[1].padStart(2, '0');
+        const month = match[2].padStart(2, '0');
+        const year = match[3];
+        const hour = match[4] ? match[4].padStart(2, '0') : '00';
+        const minute = match[5] ? match[5] : '00';
+        const second = match[6] ? match[6] : '00';
+        parseStr = `${year}-${month}-${day}T${hour}:${minute}:${second}`;
+    } else {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(parseStr)) {
+            parseStr = parseStr + "T00:00:00";
+        }
     }
 
     const d = new Date(parseStr);
     if (isNaN(d)) return dateStr;
 
-    // Check if original string implies a specific time.
-    // 'T' is usually present in ISO strings with time.
-    const hasTime = dateStr.includes('T') && !dateStr.endsWith('T00:00:00.000Z') && !dateStr.endsWith('T00:00:00Z');
+    const hasTime = dateStr.includes(':') || (dateStr.includes('T') && !dateStr.endsWith('T00:00:00.000Z') && !dateStr.endsWith('T00:00:00Z') && !dateStr.endsWith('T00:00:00'));
 
     if (hasTime) {
         return new Intl.DateTimeFormat(undefined, { 
@@ -129,6 +159,17 @@ const formatDateLocal = (dateStr) => {
             day: 'numeric' 
         }).format(d);
     }
+};
+
+const hasRewards = (stmt) => {
+    if (!stmt?.reward_points_summary) return false;
+    const s = stmt.reward_points_summary;
+    return s.opening_balance !== 0 || 
+           s.earned !== 0 || 
+           s.disbursed !== 0 || 
+           s.adjusted_lapsed !== 0 || 
+           s.closing_balance !== 0 || 
+           s.default_rewards !== 0;
 };
 </script>
 
@@ -169,26 +210,26 @@ const formatDateLocal = (dateStr) => {
       <Card v-if="wasmLoaded" class="bg-card border-border shadow-sm">
         <CardHeader>
           <CardTitle>Parse Statement</CardTitle>
-          <CardDescription>Upload a CSV or PDF statement to extract your portfolio data directly in the browser.</CardDescription>
+          <CardDescription>Upload your statement to securely extract and view your financial data directly in the browser.</CardDescription>
         </CardHeader>
         <CardContent>
+          <div class="flex flex-wrap gap-2 mb-6">
+            <Button 
+              :variant="selectedCategory === 'Mutual Funds' ? 'default' : 'outline'"
+              @click="setCategory('Mutual Funds')"
+            >Mutual Funds</Button>
+            <Button 
+              :variant="selectedCategory === 'Stocks' ? 'default' : 'outline'"
+              @click="setCategory('Stocks')"
+            >Stocks</Button>
+            <Button 
+              :variant="selectedCategory === 'Credit Cards' ? 'default' : 'outline'"
+              @click="setCategory('Credit Cards')"
+            >Credit Cards</Button>
+          </div>
+
           <div class="flex flex-col md:flex-row gap-6 items-end">
-            <div class="space-y-2 w-full md:w-64">
-               <Label>Source Broker</Label>
-               <Select v-model="selectedSource">
-                 <SelectTrigger class="w-full bg-background border-border">
-                   <SelectValue placeholder="Select Source" />
-                 </SelectTrigger>
-                 <SelectContent class="bg-card border-border">
-                   <SelectGroup>
-                     <SelectItem v-for="src in sources" :key="src.value" :value="src.value">
-                       {{ src.label }}
-                     </SelectItem>
-                   </SelectGroup>
-                 </SelectContent>
-               </Select>
-            </div>
-             <div class="space-y-2 w-full md:w-64" v-if="selectedSource === 'CAMS'">
+             <div class="space-y-2 w-full md:w-64" v-if="selectedCategory === 'Mutual Funds'">
                <Label>PDF Password</Label>
                <Input 
                   type="password" 
@@ -197,11 +238,30 @@ const formatDateLocal = (dateStr) => {
                   class="bg-background border-border"
                 />
              </div>
+             <div class="space-y-2 w-full md:w-64" v-if="selectedCategory === 'Stocks'">
+               <Label>Broker</Label>
+               <div class="text-sm font-medium h-10 flex items-center border border-transparent">Interactive Brokers</div>
+             </div>
+             <div class="space-y-2 w-full md:w-64" v-if="selectedCategory === 'Credit Cards'">
+               <Label>Bank</Label>
+               <Select v-model="selectedSource">
+                 <SelectTrigger class="w-full bg-background border-border">
+                   <SelectValue placeholder="Select Bank" />
+                 </SelectTrigger>
+                 <SelectContent>
+                   <SelectGroup>
+                     <SelectItem value="HDFC">HDFC</SelectItem>
+                     <SelectItem value="ICICI">ICICI</SelectItem>
+                   </SelectGroup>
+                 </SelectContent>
+               </Select>
+             </div>
+
              <div class="space-y-2 w-full flex-1">
                <Label>Upload File</Label>
                <Input 
                   type="file" 
-                  :accept="selectedSource === 'IBKR' ? '.csv' : '.pdf'"
+                  :accept="selectedCategory === 'Mutual Funds' ? '.pdf' : (selectedCategory === 'Credit Cards' && selectedSource === 'ICICI' ? '.xls,.xlsx' : '.csv')"
                   @change="onFileSelect" 
                   class="cursor-pointer bg-background border-border text-foreground file:bg-secondary file:text-secondary-foreground file:border-0 file:mr-4 file:px-4 file:py-2 file:rounded hover:file:bg-secondary/80 transition-colors" 
                 />
@@ -211,6 +271,161 @@ const formatDateLocal = (dateStr) => {
       </Card>
       <div v-else class="text-muted-foreground animate-pulse">Loading WebAssembly module...</div>
       
+      <!-- Credit Card Results Table -->
+      <div v-if="ccStatement" class="space-y-6">
+        
+        <!-- Statement Info Card -->
+        <Card>
+          <CardHeader>
+            <CardTitle class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+              <div class="flex items-center gap-3">
+                <span class="text-xl">{{ ccStatement.customer_info?.name || 'Customer' }}</span>
+                <span v-if="ccStatement.card_no" class="text-sm font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">{{ ccStatement.card_no.slice(-4) }}</span>
+              </div>
+            </CardTitle>
+            <CardDescription class="flex flex-col sm:flex-row gap-2 sm:gap-4 mt-1">
+              <span v-if="ccStatement.statement_start_date && ccStatement.statement_end_date">Period: {{ formatDateLocal(ccStatement.statement_start_date) }} to {{ formatDateLocal(ccStatement.statement_end_date) }}</span>
+              <span v-if="ccStatement.statement_date">Statement Date: {{ formatDateLocal(ccStatement.statement_date) }}</span>
+              <span v-if="ccStatement.payment_due_date">Due Date: {{ formatDateLocal(ccStatement.payment_due_date) }}</span>
+            </CardDescription>
+          </CardHeader>
+        </Card>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <Card class="bg-card text-card-foreground shadow-sm">
+            <CardHeader class="pb-2">
+              <CardTitle class="text-sm text-muted-foreground font-semibold uppercase tracking-wider">Account Summary</CardTitle>
+            </CardHeader>
+            <CardContent v-if="ccStatement.account_summary">
+              <div class="space-y-2">
+                <div class="flex justify-between items-center mb-2 border-b pb-2">
+                  <span class="text-sm font-medium">Opening Balance</span>
+                  <span class="font-bold font-mono text-lg text-primary">{{ formatCurrency(ccStatement.account_summary.opening_balance) }}</span>
+                </div>
+                
+                <div class="flex justify-between items-center">
+                  <span class="text-sm text-muted-foreground">Payment / Credit</span>
+                  <span class="font-medium font-mono text-emerald-500">-{{ formatCurrency(ccStatement.account_summary.payment_credit) }}</span>
+                </div>
+
+                <div v-if="ccStatement.account_summary.owner_credit_breakdown && Object.keys(ccStatement.account_summary.owner_credit_breakdown).length > 1" class="pl-4 border-l-2 border-muted space-y-1 my-1">
+                  <div v-for="(amount, owner) in ccStatement.account_summary.owner_credit_breakdown" :key="owner" class="flex justify-between items-center">
+                    <span class="text-sm text-muted-foreground truncate mr-2">{{ owner }}</span>
+                    <span class="font-medium font-mono text-sm text-emerald-500">-{{ formatCurrency(amount) }}</span>
+                  </div>
+                </div>
+                
+                <div class="flex justify-between items-center">
+                  <span class="text-sm text-muted-foreground">Purchases / Debits</span>
+                  <span class="font-medium font-mono text-rose-500">+{{ formatCurrency(ccStatement.account_summary.purchases_debits) }}</span>
+                </div>
+                
+                <div v-if="ccStatement.account_summary.owner_debit_breakdown && Object.keys(ccStatement.account_summary.owner_debit_breakdown).length > 1" class="pl-4 border-l-2 border-muted space-y-1 my-1">
+                  <div v-for="(amount, owner) in ccStatement.account_summary.owner_debit_breakdown" :key="owner" class="flex justify-between items-center">
+                    <span class="text-sm text-muted-foreground truncate mr-2">{{ owner }}</span>
+                    <span class="font-medium font-mono text-sm text-rose-500">+{{ formatCurrency(amount) }}</span>
+                  </div>
+                </div>
+
+                <div v-if="ccStatement.account_summary.finance_charges > 0" class="flex justify-between items-center">
+                  <span class="text-sm text-muted-foreground">Finance Charges</span>
+                  <span class="font-medium font-mono text-rose-500">+{{ formatCurrency(ccStatement.account_summary.finance_charges) }}</span>
+                </div>
+                
+                <div class="flex justify-between items-center mt-2 border-t pt-2">
+                  <span class="text-sm font-medium">Total Dues</span>
+                  <span class="font-bold font-mono text-lg text-primary">{{ formatCurrency(ccStatement.account_summary.total_dues) }}</span>
+                </div>
+                
+                <div class="flex justify-between items-center mt-1">
+                  <span class="text-xs text-muted-foreground">Min Amount Due</span>
+                  <span class="font-medium font-mono text-xs">{{ formatCurrency(ccStatement.minimum_amount_due) }}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card class="bg-card text-card-foreground shadow-sm">
+            <CardHeader class="pb-2">
+              <CardTitle class="text-sm text-muted-foreground font-semibold uppercase tracking-wider">Credit Limits</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div class="space-y-2">
+                <div class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Credit Limit</span><span class="font-medium font-mono">{{ formatCurrency(ccStatement.credit_limit) }}</span></div>
+                <div class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Available Limit</span><span class="font-medium font-mono">{{ formatCurrency(ccStatement.available_limit) }}</span></div>
+                <div class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Cash Limit</span><span class="font-medium font-mono">{{ formatCurrency(ccStatement.available_cash_limit) }}</span></div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card v-if="hasRewards(ccStatement)" class="bg-card text-card-foreground shadow-sm">
+            <CardHeader class="pb-2">
+              <CardTitle class="text-sm text-muted-foreground font-semibold uppercase tracking-wider">Rewards Summary</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div class="space-y-2">
+                <div class="flex justify-between items-center mb-2 border-b pb-2"><span class="text-sm font-medium">Opening Balance</span><span class="font-bold font-mono text-lg text-primary">{{ formatNumber(ccStatement.reward_points_summary.opening_balance) }}</span></div>
+                
+                <div class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Earned</span><span class="font-medium font-mono text-emerald-500">+{{ formatNumber(ccStatement.reward_points_summary.earned) }}</span></div>
+                
+                <div v-if="ccStatement.reward_programs && ccStatement.reward_programs.length > 0" class="pl-4 border-l-2 border-muted space-y-1 my-1">
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-muted-foreground truncate mr-2">Default Rewards</span>
+                    <span class="font-medium font-mono text-sm text-emerald-500">+{{ formatNumber(ccStatement.reward_points_summary.default_rewards) }}</span>
+                  </div>
+                  <div v-for="(prog, idx) in ccStatement.reward_programs" :key="idx" class="flex justify-between items-center">
+                    <span class="text-sm text-muted-foreground truncate mr-2" :title="prog.program">{{ prog.program }}</span>
+                    <span class="font-medium font-mono text-sm text-emerald-500">+{{ formatNumber(prog.bonus_points) }}</span>
+                  </div>
+                </div>
+
+                <div v-if="ccStatement.reward_points_summary.disbursed > 0" class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Disbursed</span><span class="font-medium font-mono text-rose-500">-{{ formatNumber(ccStatement.reward_points_summary.disbursed) }}</span></div>
+                <div v-if="ccStatement.reward_points_summary.adjusted_lapsed > 0" class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Adjusted / Lapsed</span><span class="font-medium font-mono text-rose-500">-{{ formatNumber(ccStatement.reward_points_summary.adjusted_lapsed) }}</span></div>
+                
+                <div class="flex justify-between items-center mt-2 border-t pt-2"><span class="text-sm font-medium">Closing Balance</span><span class="font-bold font-mono text-lg text-primary">{{ formatNumber(ccStatement.reward_points_summary.closing_balance) }}</span></div>
+                <div v-if="ccStatement.reward_points_summary.expiring_in_30_days" class="flex justify-between items-center text-rose-500"><span class="text-xs">Expiring (30d)</span><span class="font-medium font-mono text-xs">{{ formatNumber(ccStatement.reward_points_summary.expiring_in_30_days) }}</span></div>
+                <div v-if="ccStatement.reward_points_summary.expiring_in_60_days" class="flex justify-between items-center text-rose-500"><span class="text-xs">Expiring (60d)</span><span class="font-medium font-mono text-xs">{{ formatNumber(ccStatement.reward_points_summary.expiring_in_60_days) }}</span></div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card class="border rounded-lg bg-card text-card-foreground shadow-sm overflow-hidden">
+          <CardHeader>
+            <CardTitle>Transactions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div class="rounded-md border border-border overflow-x-auto">
+              <Table>
+                <TableHeader class="bg-muted/50">
+                  <TableRow class="hover:bg-transparent">
+                    <TableHead class="text-muted-foreground whitespace-nowrap">Date</TableHead>
+                    <TableHead class="text-muted-foreground whitespace-nowrap">Description</TableHead>
+                    <TableHead class="text-muted-foreground whitespace-nowrap">Owner</TableHead>
+                    <TableHead class="text-right text-muted-foreground whitespace-nowrap pr-8">Amount</TableHead>
+                    <TableHead class="text-right text-muted-foreground whitespace-nowrap">Rewards</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow v-for="(txn, idx) in ccStatement.transactions" :key="idx" class="hover:bg-muted/50 transition-colors">
+                    <TableCell class="text-foreground whitespace-nowrap">{{ formatDateLocal(txn.date) }}</TableCell>
+                    <TableCell class="text-foreground text-sm">{{ txn.description }}</TableCell>
+                    <TableCell class="text-foreground text-xs text-muted-foreground whitespace-nowrap">{{ txn.owner }}</TableCell>
+                    <TableCell class="text-right font-mono whitespace-nowrap pr-8" :class="{'text-emerald-500': txn.tx_type === 'Credit', 'text-foreground': txn.tx_type !== 'Credit'}">
+                      <div class="inline-flex items-baseline justify-end">
+                        <span>{{ formatCurrency(txn.amount) }}</span>
+                        <span v-if="txn.tx_type === 'Credit'" class="w-5 text-xs text-left ml-1 -mr-6">Cr</span>
+                      </div>
+                    </TableCell>
+                    <TableCell class="text-right font-mono text-emerald-500">{{ txn.reward_points > 0 ? '+' + txn.reward_points : (txn.reward_points || '-') }}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       <!-- Results Table -->
       <div v-if="portfolio" class="space-y-6">
         

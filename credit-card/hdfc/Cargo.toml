@@ -1,0 +1,8 @@
+[package]
+name = "financial-extract-hdfc"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+financial-extract-models.workspace = true
+serde.workspace = true

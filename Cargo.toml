@@ -5,7 +5,7 @@ members = [
     "cams",
     "ibkr",
     "wasm"
-]
+, "credit-card/hdfc", "credit-card/icici"]
 
 [workspace.package]
 version = "0.1.0"
