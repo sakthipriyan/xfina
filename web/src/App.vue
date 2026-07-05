@@ -444,7 +444,7 @@ const hasRewards = (stmt) => {
                   <TableRow class="hover:bg-transparent">
                     <TableHead class="text-muted-foreground whitespace-nowrap">Date</TableHead>
                     <TableHead class="text-muted-foreground whitespace-nowrap">Description</TableHead>
-                    <TableHead class="text-muted-foreground whitespace-nowrap">Owner</TableHead>
+                    <TableHead class="text-muted-foreground whitespace-nowrap">Card Name</TableHead>
                     <TableHead class="text-right text-muted-foreground whitespace-nowrap">Amount</TableHead>
                     <TableHead class="text-right text-muted-foreground whitespace-nowrap">Rewards</TableHead>
                   </TableRow>
