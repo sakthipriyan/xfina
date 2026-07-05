@@ -445,7 +445,7 @@ const hasRewards = (stmt) => {
                     <TableHead class="text-muted-foreground whitespace-nowrap">Date</TableHead>
                     <TableHead class="text-muted-foreground whitespace-nowrap">Description</TableHead>
                     <TableHead class="text-muted-foreground whitespace-nowrap">Owner</TableHead>
-                    <TableHead class="text-right text-muted-foreground whitespace-nowrap pr-8">Amount</TableHead>
+                    <TableHead class="text-right text-muted-foreground whitespace-nowrap">Amount</TableHead>
                     <TableHead class="text-right text-muted-foreground whitespace-nowrap">Rewards</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -457,10 +457,10 @@ const hasRewards = (stmt) => {
                       {{ txn.description }}
                     </TableCell>
                     <TableCell class="text-foreground text-xs text-muted-foreground whitespace-nowrap">{{ txn.owner }}</TableCell>
-                    <TableCell class="text-right font-mono whitespace-nowrap pr-8" :class="{'text-emerald-500': txn.tx_type === 'Credit', 'text-foreground': txn.tx_type !== 'Credit'}">
+                    <TableCell class="text-right font-mono whitespace-nowrap" :class="{'text-emerald-500': txn.tx_type === 'Credit', 'text-foreground': txn.tx_type !== 'Credit'}">
                       <div class="inline-flex items-baseline justify-end">
+                        <span v-if="txn.tx_type === 'Credit'">+</span>
                         <span>{{ formatCurrency(txn.amount) }}</span>
-                        <span v-if="txn.tx_type === 'Credit'" class="w-5 text-xs text-left ml-1 -mr-6">Cr</span>
                       </div>
                     </TableCell>
                     <TableCell class="text-right font-mono text-emerald-500">{{ txn.reward_points > 0 ? '+' + txn.reward_points : (txn.reward_points || '-') }}</TableCell>
