@@ -18,6 +18,9 @@ The project is organized as a Cargo workspace with several distinct, publishable
 - **`models`**: Contains the shared data models and types (`Portfolio`, `Asset`, `Transaction`, etc.) used by all downstream parsers.
 - **`cams`**: The parsing engine for CAMS Mutual Fund CAS PDFs.
 - **`ibkr`**: The parsing engine for Interactive Brokers (IBKR) CSV reports.
+- **`credit-card`**: Contains parsing engines for credit card statements. Currently supports:
+  - **HDFC Bank**: Parsing engine for HDFC Bank credit card statements.
+  - **ICICI Bank**: Parsing engine for ICICI Bank credit card statements.
 
 ### Future Roadmap
 
