@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
 import init, { parse_ibkr, parse_cams, parse_hdfc_cc, parse_icici_cc } from './wasm/financial_extract_wasm.js';
-import { Sun, Moon, Github, HelpCircle, ChevronDown } from 'lucide-vue-next';
+import { Sun, Moon, Github, HelpCircle, ChevronDown, Loader2 } from 'lucide-vue-next';
 
 // Shadcn components
 import { Button } from '@/components/ui/button';
@@ -36,6 +36,8 @@ const wasmLoaded = ref(false);
 const error = ref(null);
 const portfolio = ref(null);
 const ccStatement = ref(null);
+const isProcessing = ref(false);
+const parseTime = ref(null);
 
 const selectedCategory = ref('Mutual Funds');
 const selectedSource = ref('CAMS');
@@ -67,6 +69,12 @@ const onFileSelect = async (event) => {
     error.value = null;
     portfolio.value = null;
     ccStatement.value = null;
+    isProcessing.value = true;
+    parseTime.value = null;
+    
+    // Yield to the event loop so the "Parsing..." UI can render
+    await new Promise(resolve => setTimeout(resolve, 10));
+
     try {
         let jsonString;
         const start = performance.now();
@@ -92,10 +100,13 @@ const onFileSelect = async (event) => {
         }
         
         const end = performance.now();
+        parseTime.value = ((end - start) / 1000).toFixed(3);
         console.log(`🚀 Rust WASM Processing Time: ${(end - start).toFixed(2)} ms`);
 
     } catch (e) {
         error.value = "Error parsing file: " + e;
+    } finally {
+        isProcessing.value = false;
     }
 };
 
@@ -197,9 +208,18 @@ const hasRewards = (stmt) => {
       
       <!-- Upload Zone -->
       <Card v-if="wasmLoaded" class="bg-card border-border shadow-sm">
-        <CardHeader>
-          <CardTitle>Parse Statement</CardTitle>
-          <CardDescription>Upload your statement to securely extract and view your financial data directly in the browser.</CardDescription>
+        <CardHeader class="flex flex-row items-start justify-between space-y-0 pb-4">
+          <div class="space-y-1.5">
+            <CardTitle>Parse Statement</CardTitle>
+            <CardDescription>Upload your statement to securely extract and view your financial data directly in the browser.</CardDescription>
+          </div>
+          <div v-if="isProcessing" class="flex items-center text-sm font-medium text-muted-foreground gap-2 whitespace-nowrap mt-0.5">
+            <span>Parsing...</span>
+            <Loader2 class="h-4 w-4 animate-spin" />
+          </div>
+          <div v-else-if="parseTime !== null" class="text-sm font-medium text-muted-foreground whitespace-nowrap mt-0.5">
+            Parsed in {{ parseTime }}s
+          </div>
         </CardHeader>
         <CardContent>
           <div class="flex flex-wrap gap-2 mb-6">
