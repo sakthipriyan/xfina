@@ -6,7 +6,7 @@ members = [
     "intl-stocks/ibkr",
     "wasm",
     "credit-cards/hdfc", "credit-cards/icici"
-]
+, "bank-accounts/hdfc", "bank-accounts/icici", "bank-accounts/sbi", "bank-accounts/bob"]
 
 [workspace.package]
 version = "0.1.0"

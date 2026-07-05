@@ -14,3 +14,7 @@ finx-intl-stocks-ibkr = { path = "../intl-stocks/ibkr" }
 finx-mf-cams = { path = "../mutual-funds/cams" }
 finx-cc-hdfc = { path = "../credit-cards/hdfc" }
 finx-cc-icici = { path = "../credit-cards/icici" }
+finx-ba-hdfc = { path = "../bank-accounts/hdfc" }
+finx-ba-icici = { path = "../bank-accounts/icici" }
+finx-ba-sbi = { path = "../bank-accounts/sbi" }
+finx-ba-bob = { path = "../bank-accounts/bob" }
