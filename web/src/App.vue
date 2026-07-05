@@ -180,7 +180,7 @@ const hasRewards = (stmt) => {
       <!-- Header -->
       <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div class="space-y-2">
-          <h1 class="text-3xl font-bold tracking-tight">extract.sakthipriyan.com</h1>
+          <h1 class="text-3xl font-bold tracking-tight">finx.sakthipriyan.com</h1>
           <p class="text-muted-foreground mt-2 leading-relaxed">
             Parse financial statements entirely in your browser with Rust/Wasm<br />
             Fast, private, zero-setup, and without uploading your files to any server.

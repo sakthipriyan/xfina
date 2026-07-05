@@ -1,6 +1,8 @@
-# financial-extract
+# FinX
 
-`finx-*` is a suite of robust, privacy-preserving Rust libraries designed for parsing financial documents, such as mutual fund Consolidated Account Statements (CAS) PDFs and broker CSV exports.
+FinX is a collection of Rust libraries for extracting structured financial data from statements and reports.
+
+The libraries are designed to run entirely in the browser via WebAssembly (WASM), allowing users to process sensitive financial documents without uploading them to any server.
 
 ## Motivation & Vision
 
