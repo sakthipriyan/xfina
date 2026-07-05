@@ -463,7 +463,7 @@ const hasRewards = (stmt) => {
                         <span>{{ formatCurrency(txn.amount) }}</span>
                       </div>
                     </TableCell>
-                    <TableCell class="text-right font-mono text-emerald-500">{{ txn.reward_points > 0 ? '+' + txn.reward_points : (txn.reward_points || '-') }}</TableCell>
+                    <TableCell class="text-right font-mono text-emerald-500">{{ txn.reward_points > 0 ? '+' + txn.reward_points : (txn.reward_points || '') }}</TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
