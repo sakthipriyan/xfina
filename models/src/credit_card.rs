@@ -49,6 +49,7 @@ pub struct CreditCardTransaction {
     pub amount: f64,
     pub tx_type: String, // e.g. "Debit", "Credit"
     pub reward_points: Option<i32>,
+    pub category: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

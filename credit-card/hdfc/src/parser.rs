@@ -113,6 +113,14 @@ pub fn parse_hdfc_statement(content: &str) -> Result<CreditCardStatement, String
             Section::Transactions => {
                 if parts.len() >= 5 && parts[0] != "Transaction type" {
                     // Domestic~|~SAKTHI PRIYAN H ~|~30/05/2026 09:41:11~|~DESC~|~464.00~|~~|~+ 15
+                    let cat = parts[0].trim();
+                    let category = if cat == "International" {
+                        Some("INTL".to_string())
+                    } else if cat == "Domestic" {
+                        Some("IN".to_string())
+                    } else {
+                        None
+                    };
                     let owner = parts.get(1).unwrap_or(&"").trim().to_string();
                     let date = financial_extract_models::parse_indian_date(parts.get(2).unwrap_or(&""));
                     let desc = parts.get(3).unwrap_or(&"").to_string();
@@ -128,7 +136,8 @@ pub fn parse_hdfc_statement(content: &str) -> Result<CreditCardStatement, String
                         description: desc,
                         amount,
                         tx_type,
-                        reward_points
+                        reward_points,
+                        category,
                     });
                 }
             }

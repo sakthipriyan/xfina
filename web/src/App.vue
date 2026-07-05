@@ -452,7 +452,10 @@ const hasRewards = (stmt) => {
                 <TableBody>
                   <TableRow v-for="(txn, idx) in ccStatement.transactions" :key="idx" class="hover:bg-muted/50 transition-colors">
                     <TableCell class="text-foreground whitespace-nowrap">{{ formatDateLocal(txn.date) }}</TableCell>
-                    <TableCell class="text-foreground text-sm">{{ txn.description }}</TableCell>
+                    <TableCell class="text-foreground text-sm">
+                      {{ txn.description }}
+                      <span v-if="txn.category" class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-muted text-muted-foreground">{{ txn.category }}</span>
+                    </TableCell>
                     <TableCell class="text-foreground text-xs text-muted-foreground whitespace-nowrap">{{ txn.owner }}</TableCell>
                     <TableCell class="text-right font-mono whitespace-nowrap pr-8" :class="{'text-emerald-500': txn.tx_type === 'Credit', 'text-foreground': txn.tx_type !== 'Credit'}">
                       <div class="inline-flex items-baseline justify-end">

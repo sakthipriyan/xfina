@@ -103,6 +103,9 @@ pub fn parse_icici_statement(bytes: &[u8]) -> Result<CreditCardStatement, String
             
             let reward_points = cells.get(12).and_then(|s| s.trim().parse::<i32>().ok());
             
+            let has_extra_cols = cells.iter().skip(17).any(|s| !s.trim().is_empty());
+            let category = if has_extra_cols { Some("INTL".to_string()) } else { Some("IN".to_string()) };
+            
             stmt.transactions.push(CreditCardTransaction {
                 owner: card_holder_name.clone(), // default to card holder
                 date: financial_extract_models::parse_indian_date(date),
@@ -110,6 +113,7 @@ pub fn parse_icici_statement(bytes: &[u8]) -> Result<CreditCardStatement, String
                 amount,
                 tx_type: tx_type.clone(),
                 reward_points,
+                category,
             });
             
             // Aggregations
