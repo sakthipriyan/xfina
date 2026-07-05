@@ -1,10 +1,10 @@
 [package]
-name = "financial-extract-ibkr"
+name = "finx-intl-stocks-ibkr"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-financial-extract-models.workspace = true
+finx-models.workspace = true
 csv.workspace = true
 chrono = "0.4.45"
 chrono-tz = "0.10.4"

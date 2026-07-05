@@ -1,9 +1,0 @@
-[package]
-name = "financial-extract-icici"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-financial-extract-models = { path = "../../models" }
-calamine = "0.25.0"
-serde = { version = "1.0", features = ["derive"] }

@@ -1,5 +1,5 @@
 use std::fs;
-use financial_extract_icici::parse_icici_statement;
+use finx_cc_icici::parse_icici_statement;
 
 fn main() {
     let bytes = fs::read("/Users/sakthipriyan/Downloads/CCStatement_Past29-06-2026.xls").unwrap();

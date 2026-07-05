@@ -1,0 +1,9 @@
+[package]
+name = "finx-cc-icici"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+finx-models.workspace = true
+calamine = "0.25.0"
+serde = { version = "1.0", features = ["derive"] }

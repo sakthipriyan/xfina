@@ -1,4 +1,4 @@
-use financial_extract_models::credit_card::{
+use finx_models::credit_card::{
     AccountSummary, CreditCardStatement, CreditCardTransaction, CustomerInfo, PastDues,
     RewardPointsSummary, RewardProgram,
 };
@@ -65,8 +65,8 @@ pub fn parse_hdfc_statement(content: &str) -> Result<CreditCardStatement, String
                         "Name" => stmt.customer_info.name = val.to_string(),
                         "Address" => address_parts.push(val.to_string()),
                         "Customer GSTN" => stmt.customer_info.customer_gstn = if val.is_empty() { None } else { Some(val.to_string()) },
-                        "Payment Due Date" => stmt.payment_due_date = Some(financial_extract_models::parse_indian_date(val)),
-                        "Statement Date" => stmt.statement_date = Some(financial_extract_models::parse_indian_date(val)),
+                        "Payment Due Date" => stmt.payment_due_date = Some(finx_models::parse_indian_date(val)),
+                        "Statement Date" => stmt.statement_date = Some(finx_models::parse_indian_date(val)),
                         "Total Amount Due" => stmt.total_amount_due = parse_f64(val),
                         "Minimum Amount Due" => stmt.minimum_amount_due = parse_f64(val),
                         "Credit Limit" => stmt.credit_limit = parse_f64(val),
@@ -122,7 +122,7 @@ pub fn parse_hdfc_statement(content: &str) -> Result<CreditCardStatement, String
                         None
                     };
                     let owner = parts.get(1).unwrap_or(&"").trim().to_string();
-                    let date = financial_extract_models::parse_indian_date(parts.get(2).unwrap_or(&""));
+                    let date = finx_models::parse_indian_date(parts.get(2).unwrap_or(&""));
                     let desc = parts.get(3).unwrap_or(&"").to_string();
                     let amount = parse_f64(parts.get(4).unwrap_or(&"")).unwrap_or(0.0).abs();
                     let ty = parts.get(5).unwrap_or(&"");

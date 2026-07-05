@@ -1,5 +1,5 @@
 use clap::Parser;
-use financial_extract_cams::parse_cams_pdf;
+use finx_mf_cams::parse_cams_pdf;
 use std::fs;
 
 /// CLI tool to test CAMS PDF extraction
