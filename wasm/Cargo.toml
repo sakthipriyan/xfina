@@ -1,5 +1,5 @@
 [package]
-name = "financial-extract-wasm"
+name = "finx-wasm"
 version.workspace = true
 edition.workspace = true
 
@@ -9,6 +9,8 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 wasm-bindgen.workspace = true
 serde_json.workspace = true
-financial-extract-models.workspace = true
-financial-extract-ibkr = { path = "../ibkr" }
-financial-extract-cams = { path = "../cams" }
+finx-models.workspace = true
+finx-intl-stocks-ibkr = { path = "../intl-stocks/ibkr" }
+finx-mf-cams = { path = "../mutual-funds/cams" }
+finx-cc-hdfc = { path = "../credit-cards/hdfc" }
+finx-cc-icici = { path = "../credit-cards/icici" }
