@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - cams-cas-parser
 
 permissions:
   contents: read
