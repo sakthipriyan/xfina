@@ -406,7 +406,7 @@ const hasRewards = (stmt) => {
                 
                 <div v-if="ccStatement.reward_programs && ccStatement.reward_programs.length > 0" class="pl-4 border-l-2 border-muted space-y-1 my-1">
                   <div class="flex justify-between items-center">
-                    <span class="text-sm text-muted-foreground truncate mr-2">Default Rewards</span>
+                    <span class="text-sm text-muted-foreground truncate mr-2">Rewards</span>
                     <span class="font-medium font-mono text-sm text-emerald-500">+{{ formatNumber(ccStatement.reward_points_summary.default_rewards) }}</span>
                   </div>
                   <div v-for="(prog, idx) in ccStatement.reward_programs" :key="idx" class="flex justify-between items-center">
