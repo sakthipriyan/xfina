@@ -149,5 +149,7 @@ pub fn parse_icici_statement(bytes: &[u8]) -> Result<CreditCardStatement, String
         expiring_in_60_days: None,
     });
     
+    stmt.transactions.sort_by(|a, b| a.date.cmp(&b.date));
+    
     Ok(stmt)
 }
