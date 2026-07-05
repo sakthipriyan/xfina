@@ -4,7 +4,8 @@ pub mod credit_card;
 pub use credit_card::*;
 
 pub fn parse_indian_date(date_str: &str) -> String {
-    let date_str = date_str.trim();
+    // Extract only the date part, ignoring time like "09:41:11"
+    let date_str = date_str.split_whitespace().next().unwrap_or("").trim();
     // try dd/mm/yyyy or dd-mm-yyyy or dd-Mmm-yyyy
     let parts: Vec<&str> = if date_str.contains('/') {
         date_str.split('/').collect()
