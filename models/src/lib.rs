@@ -3,9 +3,14 @@ use serde::{Deserialize, Serialize};
 pub mod credit_card;
 pub use credit_card::*;
 
-pub fn parse_indian_date(date_str: &str) -> String {
-    // Extract only the date part, ignoring time like "09:41:11"
-    let date_str = date_str.split_whitespace().next().unwrap_or("").trim();
+pub fn parse_indian_date(input: &str) -> String {
+    let input = input.trim();
+    
+    // Extract date and optional time component like "09:41:11"
+    let mut ws_parts = input.split_whitespace();
+    let date_str = ws_parts.next().unwrap_or("");
+    let time_str = ws_parts.next().unwrap_or("");
+
     // try dd/mm/yyyy or dd-mm-yyyy or dd-Mmm-yyyy
     let parts: Vec<&str> = if date_str.contains('/') {
         date_str.split('/').collect()
@@ -47,10 +52,15 @@ pub fn parse_indian_date(date_str: &str) -> String {
             year.to_string()
         };
         
-        return format!("{}-{}-{}", formatted_year, month, formatted_day);
+        let mut iso_date = format!("{}-{}-{}", formatted_year, month, formatted_day);
+        if !time_str.is_empty() {
+            iso_date.push('T');
+            iso_date.push_str(time_str);
+        }
+        return iso_date;
     }
     
-    date_str.to_string()
+    input.to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
