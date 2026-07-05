@@ -22,3 +22,10 @@ target
 
 # Build outputs
 docs/
+
+# Local test data and statements
+test_data/
+*.xls
+*.xlsx
+*.pdf
+*.csv
