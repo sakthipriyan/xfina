@@ -1,5 +1,5 @@
 [package]
-name = "financial-extract-models"
+name = "finx-models"
 version.workspace = true
 edition.workspace = true
 

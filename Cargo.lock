@@ -345,68 +345,68 @@ dependencies = [
 ]
 
 [[package]]
-name = "financial-extract-cams"
+name = "find-msvc-tools"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5baebc0774151f905a1a2cc41989300b1e6fbb29aff0ceffa1064fdd3088d582"
+
+[[package]]
+name = "finx-cc-hdfc"
+version = "0.1.0"
+dependencies = [
+ "finx-models",
+ "serde",
+]
+
+[[package]]
+name = "finx-cc-icici"
+version = "0.1.0"
+dependencies = [
+ "calamine",
+ "finx-models",
+ "serde",
+]
+
+[[package]]
+name = "finx-intl-stocks-ibkr"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "chrono-tz",
+ "csv",
+ "finx-models",
+]
+
+[[package]]
+name = "finx-mf-cams"
 version = "0.1.0"
 dependencies = [
  "clap",
- "financial-extract-models",
+ "finx-models",
  "pdf-extract",
  "regex",
  "serde_json",
 ]
 
 [[package]]
-name = "financial-extract-hdfc"
-version = "0.1.0"
-dependencies = [
- "financial-extract-models",
- "serde",
-]
-
-[[package]]
-name = "financial-extract-ibkr"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "chrono-tz",
- "csv",
- "financial-extract-models",
-]
-
-[[package]]
-name = "financial-extract-icici"
-version = "0.1.0"
-dependencies = [
- "calamine",
- "financial-extract-models",
- "serde",
-]
-
-[[package]]
-name = "financial-extract-models"
+name = "finx-models"
 version = "0.1.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
-name = "financial-extract-wasm"
+name = "finx-wasm"
 version = "0.1.0"
 dependencies = [
- "financial-extract-cams",
- "financial-extract-hdfc",
- "financial-extract-ibkr",
- "financial-extract-icici",
- "financial-extract-models",
+ "finx-cc-hdfc",
+ "finx-cc-icici",
+ "finx-intl-stocks-ibkr",
+ "finx-mf-cams",
+ "finx-models",
  "serde_json",
  "wasm-bindgen",
 ]
-
-[[package]]
-name = "find-msvc-tools"
-version = "0.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5baebc0774151f905a1a2cc41989300b1e6fbb29aff0ceffa1064fdd3088d582"
 
 [[package]]
 name = "flate2"

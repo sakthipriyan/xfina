@@ -1,6 +1,6 @@
 use calamine::{Reader, Xlsx, open_workbook_from_rs};
 use std::io::Cursor;
-use financial_extract_models::{CreditCardStatement, AccountSummary, CustomerInfo, CreditCardTransaction, RewardPointsSummary};
+use finx_models::{CreditCardStatement, AccountSummary, CustomerInfo, CreditCardTransaction, RewardPointsSummary};
 
 pub fn parse_icici_statement(bytes: &[u8]) -> Result<CreditCardStatement, String> {
     let cursor = Cursor::new(bytes);
@@ -45,12 +45,12 @@ pub fn parse_icici_statement(bytes: &[u8]) -> Result<CreditCardStatement, String
                 "Previous Balance" => {
                     let val = cells.get(4).unwrap_or(&String::new()).replace("INR", "").trim().to_string();
                     previous_balance = val.parse().unwrap_or(0.0);
-                    stmt.statement_date = Some(financial_extract_models::parse_indian_date(cells.get(12).unwrap_or(&String::new()).trim()));
+                    stmt.statement_date = Some(finx_models::parse_indian_date(cells.get(12).unwrap_or(&String::new()).trim()));
                 }
                 "Purchases and Other Charges" => {
                     let val = cells.get(4).unwrap_or(&String::new()).replace("INR", "").trim().to_string();
                     purchases = val.parse().unwrap_or(0.0);
-                    stmt.payment_due_date = Some(financial_extract_models::parse_indian_date(cells.get(12).unwrap_or(&String::new()).trim()));
+                    stmt.payment_due_date = Some(finx_models::parse_indian_date(cells.get(12).unwrap_or(&String::new()).trim()));
                 }
                 "Payments and Other Credits" => {
                     let val = cells.get(4).unwrap_or(&String::new()).replace("INR", "").trim().to_string();
@@ -75,8 +75,8 @@ pub fn parse_icici_statement(bytes: &[u8]) -> Result<CreditCardStatement, String
                 "Cash Advances" => {
                     let period = cells.get(12).unwrap_or(&String::new()).trim().to_string();
                     if let Some((start, end)) = period.split_once(" TO ") {
-                        stmt.statement_start_date = Some(financial_extract_models::parse_indian_date(start.trim()));
-                        stmt.statement_end_date = Some(financial_extract_models::parse_indian_date(end.trim()));
+                        stmt.statement_start_date = Some(finx_models::parse_indian_date(start.trim()));
+                        stmt.statement_end_date = Some(finx_models::parse_indian_date(end.trim()));
                     }
                 }
                 "Transaction Date" => {
@@ -108,7 +108,7 @@ pub fn parse_icici_statement(bytes: &[u8]) -> Result<CreditCardStatement, String
             
             stmt.transactions.push(CreditCardTransaction {
                 owner: card_holder_name.clone(), // default to card holder
-                date: financial_extract_models::parse_indian_date(date),
+                date: finx_models::parse_indian_date(date),
                 description: details,
                 amount,
                 tx_type: tx_type.clone(),

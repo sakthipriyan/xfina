@@ -1,8 +1,8 @@
 [package]
-name = "financial-extract-hdfc"
+name = "finx-cc-hdfc"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-financial-extract-models.workspace = true
+finx-models.workspace = true
 serde.workspace = true

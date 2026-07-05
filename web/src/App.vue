@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
-import init, { parse_ibkr, parse_cams, parse_hdfc_cc, parse_icici_cc } from './wasm/financial_extract_wasm.js';
+import init, { parse_ibkr, parse_cams, parse_hdfc_cc, parse_icici_cc } from './wasm/finx_wasm.js';
 import { Sun, Moon, Github, HelpCircle, ChevronDown, Loader2 } from 'lucide-vue-next';
 
 // Shadcn components
@@ -49,7 +49,7 @@ const setCategory = (cat) => {
     ccStatement.value = null;
     error.value = null;
     if (cat === 'Mutual Funds') selectedSource.value = 'CAMS';
-    else if (cat === 'Intl Stocks/ETFs') selectedSource.value = 'IBKR';
+    else if (cat === 'Intl Stocks') selectedSource.value = 'IBKR';
     else if (cat === 'Credit Cards') selectedSource.value = 'HDFC';
 };
 
@@ -228,9 +228,9 @@ const hasRewards = (stmt) => {
               @click="setCategory('Mutual Funds')"
             >Mutual Funds</Button>
             <Button 
-              :variant="selectedCategory === 'Intl Stocks/ETFs' ? 'default' : 'outline'"
-              @click="setCategory('Intl Stocks/ETFs')"
-            >Intl Stocks/ETFs</Button>
+              :variant="selectedCategory === 'Intl Stocks' ? 'default' : 'outline'"
+              @click="setCategory('Intl Stocks')"
+            >Intl Stocks</Button>
             <Button 
               :variant="selectedCategory === 'Credit Cards' ? 'default' : 'outline'"
               @click="setCategory('Credit Cards')"
@@ -260,7 +260,7 @@ const hasRewards = (stmt) => {
                   class="bg-background border-border"
                 />
              </div>
-             <div class="space-y-2 w-full md:w-64" v-if="selectedCategory === 'Intl Stocks/ETFs'">
+             <div class="space-y-2 w-full md:w-64" v-if="selectedCategory === 'Intl Stocks'">
                <Label>Broker</Label>
                <Select v-model="selectedSource">
                  <SelectTrigger class="w-full bg-background border-border">

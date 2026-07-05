@@ -1,5 +1,5 @@
 use wasm_bindgen::prelude::*;
-use financial_extract_ibkr::parse_ibkr_csv;
+use finx_intl_stocks_ibkr::parse_ibkr_csv;
 
 #[wasm_bindgen]
 pub fn parse_ibkr(csv_content: &str) -> Result<String, JsValue> {
@@ -12,7 +12,7 @@ pub fn parse_ibkr(csv_content: &str) -> Result<String, JsValue> {
     }
 }
 
-use financial_extract_cams::parse_cams_pdf;
+use finx_mf_cams::parse_cams_pdf;
 
 #[wasm_bindgen]
 pub fn parse_cams(bytes: &[u8], password: Option<String>) -> Result<String, JsValue> {
@@ -25,7 +25,7 @@ pub fn parse_cams(bytes: &[u8], password: Option<String>) -> Result<String, JsVa
     }
 }
 
-use financial_extract_hdfc::parse_hdfc_statement;
+use finx_cc_hdfc::parse_hdfc_statement;
 
 #[wasm_bindgen]
 pub fn parse_hdfc_cc(csv_content: &str) -> Result<String, JsValue> {
@@ -38,7 +38,7 @@ pub fn parse_hdfc_cc(csv_content: &str) -> Result<String, JsValue> {
     }
 }
 
-use financial_extract_icici::parse_icici_statement;
+use finx_cc_icici::parse_icici_statement;
 
 #[wasm_bindgen]
 pub fn parse_icici_cc(bytes: &[u8]) -> Result<String, JsValue> {
