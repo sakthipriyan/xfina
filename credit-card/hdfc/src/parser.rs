@@ -201,6 +201,8 @@ pub fn parse_hdfc_statement(content: &str) -> Result<CreditCardStatement, String
         as_sum.owner_debit_breakdown = owner_debit_breakdown;
     }
     
+    stmt.transactions.sort_by(|a, b| a.date.cmp(&b.date));
+    
     Ok(stmt)
 }
 
