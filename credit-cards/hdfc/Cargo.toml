@@ -1,7 +1,8 @@
 [package]
-name = "finx-models"
+name = "finx-cc-hdfc"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-serde = { workspace = true, features = ["derive"] }
+finx-models.workspace = true
+serde.workspace = true
