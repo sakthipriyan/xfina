@@ -700,19 +700,43 @@ const hasRewards = (stmt) => {
               <span v-if="bankStatement.statement_start_date && bankStatement.statement_end_date">Period: {{ formatDateLocal(bankStatement.statement_start_date) }} to {{ formatDateLocal(bankStatement.statement_end_date) }}</span>
             </CardDescription>
           </CardHeader>
-          <CardContent v-if="bankStatement.opening_balance !== undefined || bankStatement.closing_balance !== undefined">
-             <div class="flex flex-col sm:flex-row gap-6 mt-2">
-                <div v-if="bankStatement.opening_balance !== undefined" class="flex flex-col">
-                   <span class="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Opening Balance</span>
-                   <span class="font-bold font-mono text-lg text-foreground">{{ formatCurrency(bankStatement.opening_balance) }}</span>
-                </div>
-                <div v-if="bankStatement.closing_balance !== undefined" class="flex flex-col border-l pl-6 border-border">
-                   <span class="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Closing Balance</span>
-                   <span class="font-bold font-mono text-lg text-primary">{{ formatCurrency(bankStatement.closing_balance) }}</span>
-                </div>
+          <CardContent v-if="bankStatement.generated_date">
+             <div class="text-xs text-muted-foreground mt-2">
+                Generated: {{ formatDateLocal(bankStatement.generated_date) }}
              </div>
           </CardContent>
         </Card>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" v-if="bankStatement.opening_balance !== null && bankStatement.opening_balance !== undefined">
+          <Card class="bg-card text-card-foreground shadow-sm">
+            <CardHeader class="pb-2">
+              <CardTitle class="text-sm text-muted-foreground font-semibold uppercase tracking-wider">Account Summary</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div class="space-y-2">
+                <div class="flex justify-between items-center mb-2 border-b pb-2">
+                  <span class="text-sm font-medium">Opening Balance</span>
+                  <span class="font-bold font-mono text-lg text-foreground">{{ formatCurrency(bankStatement.opening_balance) }}</span>
+                </div>
+                
+                <div v-if="bankStatement.total_credits !== null && bankStatement.total_credits !== undefined" class="flex justify-between items-center">
+                  <span class="text-sm text-muted-foreground">Credits / Deposits</span>
+                  <span class="font-medium font-mono text-emerald-500">+{{ formatCurrency(bankStatement.total_credits) }}</span>
+                </div>
+                
+                <div v-if="bankStatement.total_debits !== null && bankStatement.total_debits !== undefined" class="flex justify-between items-center">
+                  <span class="text-sm text-muted-foreground">Debits / Withdrawals</span>
+                  <span class="font-medium font-mono text-rose-500">-{{ formatCurrency(bankStatement.total_debits) }}</span>
+                </div>
+                
+                <div class="flex justify-between items-center mt-2 border-t pt-2">
+                  <span class="text-sm font-medium">Closing Balance</span>
+                  <span class="font-bold font-mono text-lg text-primary">{{ formatCurrency(bankStatement.closing_balance) }}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         <Accordion type="single" collapsible class="w-full">
           <AccordionItem value="transactions" class="border rounded-lg bg-card text-card-foreground shadow-sm overflow-hidden" :disabled="!bankStatement.transactions?.length">
