@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import StatementHeader from '@/components/StatementHeader.vue';
 
 const isDark = useDark();
 const toggleDark = () => {
@@ -379,22 +380,18 @@ const hasRewards = (stmt) => {
       <!-- Credit Card Results Table -->
       <div v-if="ccStatement" class="space-y-6">
         
-        <!-- Statement Info Card -->
-        <Card>
-          <CardHeader>
-            <CardTitle class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-              <div class="flex items-center gap-3">
-                <span class="text-xl">{{ ccStatement.customer_info?.name || 'Customer' }}</span>
-                <span v-if="ccStatement.card_no" class="text-sm font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">{{ ccStatement.card_no.slice(-4) }}</span>
-              </div>
-            </CardTitle>
-            <CardDescription class="flex flex-col sm:flex-row gap-2 sm:gap-4 mt-1">
-              <span v-if="ccStatement.statement_start_date && ccStatement.statement_end_date">Period: {{ formatDateLocal(ccStatement.statement_start_date) }} to {{ formatDateLocal(ccStatement.statement_end_date) }}</span>
-              <span v-if="ccStatement.statement_date">Statement Date: {{ formatDateLocal(ccStatement.statement_date) }}</span>
-              <span v-if="ccStatement.payment_due_date">Due Date: {{ formatDateLocal(ccStatement.payment_due_date) }}</span>
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <!-- Standardized Header -->
+        <StatementHeader 
+          :customerName="ccStatement.customer_info?.name || 'Customer'"
+          :institutionName="selectedSource + ' Credit Card'"
+          :accountNumber="ccStatement.card_no ? '**** ' + ccStatement.card_no.slice(-4) : ''"
+          :statementDetails="[
+            ...(ccStatement.statement_start_date ? [{ label: 'From', value: formatDateLocal(ccStatement.statement_start_date) }] : []),
+            ...(ccStatement.statement_end_date ? [{ label: 'To', value: formatDateLocal(ccStatement.statement_end_date) }] : []),
+            ...(ccStatement.statement_date ? [{ label: 'Generated', value: formatDateLocal(ccStatement.statement_date) }] : []),
+            ...(ccStatement.payment_due_date ? [{ label: 'Due Date', value: formatDateLocal(ccStatement.payment_due_date) }] : [])
+          ]"
+        />
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <Card class="bg-card text-card-foreground shadow-sm">
@@ -545,21 +542,18 @@ const hasRewards = (stmt) => {
       <!-- Results Table -->
       <div v-if="portfolio" class="space-y-6">
         
-        <!-- Investor Info Card -->
-        <Card v-if="portfolio.investor_info">
-          <CardHeader>
-            <CardTitle class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-              <div class="flex items-center gap-3">
-                <span class="text-xl">{{ portfolio.investor_info.name || 'Investor' }}</span>
-                <span v-if="portfolio.investor_info.account_number" class="text-sm font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">{{ portfolio.investor_info.account_number }}</span>
-              </div>
-            </CardTitle>
-            <CardDescription class="flex flex-col sm:flex-row gap-2 sm:gap-4 mt-1">
-              <span v-if="portfolio.statement_start_date && portfolio.statement_end_date">Period: {{ formatDateLocal(portfolio.statement_start_date) }} to {{ formatDateLocal(portfolio.statement_end_date) }}</span>
-              <span v-if="portfolio.generated_date">Generated: {{ formatDateLocal(portfolio.generated_date) }}</span>
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <!-- Standardized Header -->
+        <StatementHeader 
+          v-if="portfolio.investor_info"
+          :customerName="portfolio.investor_info.name || 'Investor'"
+          :institutionName="selectedSource"
+          :accountNumber="portfolio.investor_info.account_number || ''"
+          :statementDetails="[
+            ...(portfolio.statement_start_date ? [{ label: 'From', value: formatDateLocal(portfolio.statement_start_date) }] : []),
+            ...(portfolio.statement_end_date ? [{ label: 'To', value: formatDateLocal(portfolio.statement_end_date) }] : []),
+            ...(portfolio.generated_date ? [{ label: 'Generated', value: formatDateLocal(portfolio.generated_date) }] : [])
+          ]"
+        />
 
         <Accordion type="multiple" class="w-full space-y-4">
            <AccordionItem 
@@ -686,26 +680,17 @@ const hasRewards = (stmt) => {
       <!-- Bank Statement Results Table -->
       <div v-if="bankStatement" class="space-y-6">
         
-        <!-- Bank Info Card -->
-        <Card>
-          <CardHeader>
-            <CardTitle class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-              <div class="flex items-center gap-3">
-                <span class="text-xl">{{ bankStatement.bank_name || 'Bank Account' }}</span>
-                <span v-if="bankStatement.account_number" class="text-sm font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">{{ bankStatement.account_number }}</span>
-              </div>
-            </CardTitle>
-            <CardDescription class="flex flex-col sm:flex-row gap-2 sm:gap-4 mt-1">
-              <span v-if="bankStatement.customer_info?.name">Customer: {{ bankStatement.customer_info.name }}</span>
-              <span v-if="bankStatement.statement_start_date && bankStatement.statement_end_date">Period: {{ formatDateLocal(bankStatement.statement_start_date) }} to {{ formatDateLocal(bankStatement.statement_end_date) }}</span>
-            </CardDescription>
-          </CardHeader>
-          <CardContent v-if="bankStatement.generated_date">
-             <div class="text-xs text-muted-foreground mt-2">
-                Generated: {{ formatDateLocal(bankStatement.generated_date) }}
-             </div>
-          </CardContent>
-        </Card>
+        <!-- Standardized Header -->
+        <StatementHeader 
+          :customerName="bankStatement.customer_info?.name || 'Customer'"
+          :institutionName="bankStatement.bank_name || 'Bank Account'"
+          :accountNumber="bankStatement.account_number || ''"
+          :statementDetails="[
+            ...(bankStatement.statement_start_date ? [{ label: 'From', value: formatDateLocal(bankStatement.statement_start_date) }] : []),
+            ...(bankStatement.statement_end_date ? [{ label: 'To', value: formatDateLocal(bankStatement.statement_end_date) }] : []),
+            ...(bankStatement.generated_date ? [{ label: 'Generated', value: formatDateLocal(bankStatement.generated_date) }] : [])
+          ]"
+        />
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" v-if="bankStatement.opening_balance !== null && bankStatement.opening_balance !== undefined">
           <Card class="bg-card text-card-foreground shadow-sm">
