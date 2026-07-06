@@ -9,8 +9,18 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>) -> Result<
     let mut transactions = Vec::new();
     let mut account_number = String::new();
     let mut account_name = String::new();
+    let mut generated_date = None;
+    let mut statement_start_date = None;
+    let mut statement_end_date = None;
+    let mut opening_balance = None;
+    let mut closing_balance = None;
+    let mut total_debits = None;
+    let mut total_credits = None;
     
     let date_re = Regex::new(r"^(\d{2}/\d{2}/\d{4})\s+(\d{2}/\d{2}/\d{4})").unwrap();
+    let gen_date_re = Regex::new(r"Date of Statement\s*:\s*(\d{2}-\d{2}-\d{4})").unwrap();
+    let stmt_from_re = Regex::new(r"(?i)Statement From\s*:\s*(\d{2}-\d{2}-\d{4})\s*to\s*(\d{2}-\d{2}-\d{4})").unwrap();
+    let summary_re = Regex::new(r"^([\d,.]+C?R?D?R?)\s+\d+\s+\d+\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+C?R?D?R?)$").unwrap();
 
     let mut inside_table = false;
     
@@ -50,6 +60,38 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>) -> Result<
             // Check for Account Number / Name in the block
             for line in &block {
                 let text = line.text.trim();
+                
+                if let Some(caps) = gen_date_re.captures(text) {
+                    if let Ok(parsed) = NaiveDate::parse_from_str(caps.get(1).unwrap().as_str(), "%d-%m-%Y") {
+                        generated_date = Some(parsed.format("%Y-%m-%d").to_string());
+                    }
+                }
+                if let Some(caps) = stmt_from_re.captures(text) {
+                    if let Ok(parsed) = NaiveDate::parse_from_str(caps.get(1).unwrap().as_str(), "%d-%m-%Y") {
+                        statement_start_date = Some(parsed.format("%Y-%m-%d").to_string());
+                    }
+                    if let Ok(parsed) = NaiveDate::parse_from_str(caps.get(2).unwrap().as_str(), "%d-%m-%Y") {
+                        statement_end_date = Some(parsed.format("%Y-%m-%d").to_string());
+                    }
+                }
+                
+                let parse_amt_summary = |s: &str| -> Option<f64> {
+                    s.replace(",", "").replace("CR", "").replace("DR", "").parse().ok()
+                };
+                
+                if text.contains("Brought Forward") && text.contains("Total Debits") {
+                    // Header line, the next block might contain the values or this block does
+                }
+                
+                if text.len() > 30 && (text.contains("CR") || text.contains("DR")) {
+                    if let Some(caps) = summary_re.captures(text) {
+                        opening_balance = parse_amt_summary(caps.get(1).unwrap().as_str());
+                        total_debits = parse_amt_summary(caps.get(2).unwrap().as_str());
+                        total_credits = parse_amt_summary(caps.get(3).unwrap().as_str());
+                        closing_balance = parse_amt_summary(caps.get(4).unwrap().as_str());
+                    }
+                }
+
                 if text.contains("Account Number") {
                     let parts: Vec<&str> = text.split(':').collect();
                     if parts.len() > 1 {
@@ -163,10 +205,13 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>) -> Result<
             address: String::new(),
             customer_gstn: None,
         },
-        statement_start_date: None,
-        statement_end_date: None,
-        opening_balance: None,
-        closing_balance: None,
+        statement_start_date,
+        statement_end_date,
+        opening_balance,
+        closing_balance,
+        total_debits,
+        total_credits,
+        generated_date,
         transactions,
     })
 }
