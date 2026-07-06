@@ -1,7 +1,7 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
-import init, { parse_ibkr, parse_cams, parse_hdfc_cc, parse_icici_cc } from './wasm/finx_wasm.js';
+import init, { parse_ibkr, parse_cams, parse_hdfc_cc, parse_icici_cc, parse_hdfc_ba, parse_icici_ba, parse_sbi_ba, parse_bob_ba } from './wasm/finx_wasm.js';
 import { Sun, Moon, Github, HelpCircle, ChevronDown, Loader2 } from 'lucide-vue-next';
 
 // Shadcn components
@@ -36,6 +36,7 @@ const wasmLoaded = ref(false);
 const error = ref(null);
 const portfolio = ref(null);
 const ccStatement = ref(null);
+const bankStatement = ref(null);
 const isProcessing = ref(false);
 const parseTime = ref(null);
 
@@ -43,14 +44,46 @@ const selectedCategory = ref('Mutual Funds');
 const selectedSource = ref('CAMS');
 const password = ref('');
 
+const requiresPassword = computed(() => {
+    return selectedCategory.value === 'Mutual Funds' || (selectedCategory.value === 'Bank Accounts' && selectedSource.value === 'SBI');
+});
+
+const getFileFormat = computed(() => {
+    if (selectedCategory.value === 'Mutual Funds') return 'PDF';
+    if (selectedCategory.value === 'Bank Accounts') {
+        if (selectedSource.value === 'HDFC' || selectedSource.value === 'ICICI') return 'Excel';
+        return 'PDF';
+    }
+    if (selectedCategory.value === 'Credit Cards') {
+        if (selectedSource.value === 'ICICI') return 'Excel';
+        return 'CSV';
+    }
+    return 'File';
+});
+
+const getAcceptString = computed(() => {
+    if (selectedCategory.value === 'Mutual Funds') return '.pdf';
+    if (selectedCategory.value === 'Bank Accounts') {
+        if (selectedSource.value === 'HDFC' || selectedSource.value === 'ICICI') return '.xls,.xlsx';
+        return '.pdf';
+    }
+    if (selectedCategory.value === 'Credit Cards') {
+        if (selectedSource.value === 'ICICI') return '.xls,.xlsx';
+        return '.csv';
+    }
+    return '*';
+});
+
 const setCategory = (cat) => {
     selectedCategory.value = cat;
     portfolio.value = null;
     ccStatement.value = null;
+    bankStatement.value = null;
     error.value = null;
     if (cat === 'Mutual Funds') selectedSource.value = 'CAMS';
     else if (cat === 'Intl Stocks') selectedSource.value = 'IBKR';
     else if (cat === 'Credit Cards') selectedSource.value = 'HDFC';
+    else if (cat === 'Bank Accounts') selectedSource.value = 'HDFC';
 };
 
 onMounted(async () => {
@@ -69,6 +102,7 @@ const onFileSelect = async (event) => {
     error.value = null;
     portfolio.value = null;
     ccStatement.value = null;
+    bankStatement.value = null;
     isProcessing.value = true;
     parseTime.value = null;
     
@@ -79,7 +113,20 @@ const onFileSelect = async (event) => {
         let jsonString;
         const start = performance.now();
         
-        if (selectedSource.value === 'IBKR') {
+        if (selectedCategory.value === 'Bank Accounts') {
+            const arrayBuffer = await file.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+            if (selectedSource.value === 'HDFC') {
+                jsonString = parse_hdfc_ba(uint8Array);
+            } else if (selectedSource.value === 'ICICI') {
+                jsonString = parse_icici_ba(uint8Array);
+            } else if (selectedSource.value === 'SBI') {
+                jsonString = parse_sbi_ba(uint8Array, password.value ? password.value : null);
+            } else if (selectedSource.value === 'BoB') {
+                jsonString = parse_bob_ba(uint8Array);
+            }
+            bankStatement.value = JSON.parse(jsonString);
+        } else if (selectedSource.value === 'IBKR') {
             const text = await file.text();
             jsonString = parse_ibkr(text);
             portfolio.value = JSON.parse(jsonString);
@@ -235,6 +282,10 @@ const hasRewards = (stmt) => {
               :variant="selectedCategory === 'Credit Cards' ? 'default' : 'outline'"
               @click="setCategory('Credit Cards')"
             >Credit Cards</Button>
+            <Button 
+              :variant="selectedCategory === 'Bank Accounts' ? 'default' : 'outline'"
+              @click="setCategory('Bank Accounts')"
+            >Bank Accounts</Button>
           </div>
 
           <div class="flex flex-col md:flex-row gap-6 items-end">
@@ -250,15 +301,6 @@ const hasRewards = (stmt) => {
                    </SelectGroup>
                  </SelectContent>
                </Select>
-             </div>
-             <div class="space-y-2 w-full md:w-64" v-if="selectedCategory === 'Mutual Funds'">
-               <Label>PDF Password</Label>
-               <Input 
-                  type="password" 
-                  v-model="password"
-                  placeholder="Enter password" 
-                  class="bg-background border-border"
-                />
              </div>
              <div class="space-y-2 w-full md:w-64" v-if="selectedCategory === 'Intl Stocks'">
                <Label>Broker</Label>
@@ -287,21 +329,48 @@ const hasRewards = (stmt) => {
                  </SelectContent>
                </Select>
              </div>
+             <div class="space-y-2 w-full md:w-64" v-if="selectedCategory === 'Bank Accounts'">
+               <Label>Bank</Label>
+               <Select v-model="selectedSource">
+                 <SelectTrigger class="w-full bg-background border-border">
+                   <SelectValue placeholder="Select Bank" />
+                 </SelectTrigger>
+                 <SelectContent>
+                   <SelectGroup>
+                     <SelectItem value="HDFC">HDFC</SelectItem>
+                     <SelectItem value="ICICI">ICICI</SelectItem>
+                     <SelectItem value="SBI">SBI</SelectItem>
+                     <SelectItem value="BoB">Bank of Baroda</SelectItem>
+                   </SelectGroup>
+                 </SelectContent>
+               </Select>
+             </div>
 
              <div class="space-y-2 w-full flex-1">
-               <Label class="flex items-baseline gap-2">
-                 Upload File
-                 <span class="text-xs text-muted-foreground font-normal">
-                   (Supported: {{ selectedCategory === 'Mutual Funds' ? 'PDF' : (selectedCategory === 'Credit Cards' && selectedSource === 'ICICI' ? 'EXCEL' : 'CSV') }})
-                 </span>
-               </Label>
-               <Input 
-                  type="file" 
-                  :accept="selectedCategory === 'Mutual Funds' ? '.pdf' : (selectedCategory === 'Credit Cards' && selectedSource === 'ICICI' ? '.xls,.xlsx' : '.csv')"
-                  @change="onFileSelect" 
-                  class="cursor-pointer bg-background border-border text-foreground file:bg-secondary file:text-secondary-foreground file:border-0 file:mr-4 file:px-4 file:py-1.5 file:rounded-md hover:file:bg-secondary/80 transition-colors h-auto pb-2 pt-2" 
-                />
-            </div>
+               <Label class="invisible hidden md:block">Action</Label>
+               <div v-if="requiresPassword" class="flex w-full max-w-md">
+                 <Input 
+                    type="password" 
+                    v-model="password"
+                    placeholder="Password" 
+                    class="rounded-r-none bg-background border-border focus-visible:z-10 focus-visible:ring-1 border-r-0"
+                  />
+                  <Button asChild class="rounded-l-none cursor-pointer">
+                    <label>
+                      <span>Import {{ getFileFormat }}</span>
+                      <input type="file" class="hidden" :accept="getAcceptString" @change="onFileSelect" />
+                    </label>
+                  </Button>
+               </div>
+               <div v-else class="flex w-full max-w-md">
+                  <Button asChild class="cursor-pointer w-full sm:w-auto">
+                    <label>
+                      <span>Import {{ getFileFormat }}</span>
+                      <input type="file" class="hidden" :accept="getAcceptString" @change="onFileSelect" />
+                    </label>
+                  </Button>
+               </div>
+             </div>
           </div>
         </CardContent>
       </Card>
@@ -612,6 +681,86 @@ const hasRewards = (stmt) => {
                </AccordionContent>
              </AccordionItem>
             </Accordion>
+      </div>
+
+      <!-- Bank Statement Results Table -->
+      <div v-if="bankStatement" class="space-y-6">
+        
+        <!-- Bank Info Card -->
+        <Card>
+          <CardHeader>
+            <CardTitle class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+              <div class="flex items-center gap-3">
+                <span class="text-xl">{{ bankStatement.bank_name || 'Bank Account' }}</span>
+                <span v-if="bankStatement.account_number" class="text-sm font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">{{ bankStatement.account_number }}</span>
+              </div>
+            </CardTitle>
+            <CardDescription class="flex flex-col sm:flex-row gap-2 sm:gap-4 mt-1">
+              <span v-if="bankStatement.customer_info?.name">Customer: {{ bankStatement.customer_info.name }}</span>
+              <span v-if="bankStatement.statement_start_date && bankStatement.statement_end_date">Period: {{ formatDateLocal(bankStatement.statement_start_date) }} to {{ formatDateLocal(bankStatement.statement_end_date) }}</span>
+            </CardDescription>
+          </CardHeader>
+          <CardContent v-if="bankStatement.opening_balance !== undefined || bankStatement.closing_balance !== undefined">
+             <div class="flex flex-col sm:flex-row gap-6 mt-2">
+                <div v-if="bankStatement.opening_balance !== undefined" class="flex flex-col">
+                   <span class="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Opening Balance</span>
+                   <span class="font-bold font-mono text-lg text-foreground">{{ formatCurrency(bankStatement.opening_balance) }}</span>
+                </div>
+                <div v-if="bankStatement.closing_balance !== undefined" class="flex flex-col border-l pl-6 border-border">
+                   <span class="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Closing Balance</span>
+                   <span class="font-bold font-mono text-lg text-primary">{{ formatCurrency(bankStatement.closing_balance) }}</span>
+                </div>
+             </div>
+          </CardContent>
+        </Card>
+
+        <Accordion type="single" collapsible class="w-full">
+          <AccordionItem value="transactions" class="border rounded-lg bg-card text-card-foreground shadow-sm overflow-hidden" :disabled="!bankStatement.transactions?.length">
+            <AccordionTrigger class="group hover:no-underline px-4 py-4 data-[state=open]:border-b border-border">
+              <span class="font-medium text-foreground text-lg text-left w-full pr-4">Transactions</span>
+              <template #icon>
+                <div class="flex items-center gap-1.5 text-xs font-mono bg-primary/10 text-primary pl-2.5 pr-2 py-1.5 rounded shrink-0 ml-2">
+                  <span>{{ bankStatement.transactions?.length || 0 }} {{ bankStatement.transactions?.length === 1 ? 'Txn' : 'Txns' }}</span>
+                  <ChevronDown v-if="bankStatement.transactions?.length" class="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                </div>
+              </template>
+            </AccordionTrigger>
+            <AccordionContent class="p-4">
+              <div class="rounded-md border border-border overflow-x-auto">
+              <Table>
+                <TableHeader class="bg-muted/50">
+                  <TableRow class="hover:bg-transparent">
+                    <TableHead class="text-muted-foreground whitespace-nowrap">Date</TableHead>
+                    <TableHead class="text-muted-foreground whitespace-nowrap">Description</TableHead>
+                    <TableHead class="text-muted-foreground whitespace-nowrap">Reference No.</TableHead>
+                    <TableHead class="text-right text-muted-foreground whitespace-nowrap">Amount</TableHead>
+                    <TableHead class="text-right text-muted-foreground whitespace-nowrap">Balance</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow v-for="(txn, idx) in bankStatement.transactions" :key="idx" class="hover:bg-muted/50 transition-colors">
+                    <TableCell class="text-foreground whitespace-nowrap">
+                      <div class="flex flex-col">
+                        <span>{{ formatDateLocal(txn.date) }}</span>
+                        <span v-if="txn.value_date && txn.date !== txn.value_date" class="text-[10px] text-muted-foreground mt-0.5" title="Value Date">Val: {{ formatDateLocal(txn.value_date) }}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell class="text-foreground text-sm">{{ txn.description }}</TableCell>
+                    <TableCell class="text-muted-foreground font-mono text-xs">{{ txn.reference_number || '' }}</TableCell>
+                    <TableCell class="text-right font-mono whitespace-nowrap" :class="{'text-emerald-500': txn.tx_type === 'Credit', 'text-foreground': txn.tx_type !== 'Credit'}">
+                      <div class="inline-flex items-baseline justify-end">
+                        <span v-if="txn.tx_type === 'Credit'">+</span>
+                        <span>{{ formatCurrency(txn.amount) }}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell class="text-right font-mono">{{ formatCurrency(txn.balance) }}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </div>
       
     </div>

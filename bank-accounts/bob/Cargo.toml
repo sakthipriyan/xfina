@@ -1,0 +1,7 @@
+[package]
+name = "finx-ba-bob"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+finx-models = { workspace = true }

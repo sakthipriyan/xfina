@@ -1,0 +1,15 @@
+[package]
+name = "finx-ba-sbi"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+finx-models = { workspace = true }
+calamine = "0.22"
+chrono = "0.4"
+msoffice_crypt = "0.1.6"
+pdf-extract = { workspace = true }
+regex = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
