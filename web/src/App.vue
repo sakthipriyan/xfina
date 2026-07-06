@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
 import init, { parse_ibkr, parse_cams, parse_hdfc_cc, parse_icici_cc, parse_hdfc_ba, parse_icici_ba, parse_sbi_ba, parse_bob_ba } from './wasm/finx_wasm.js';
 import { Sun, Moon, Github, HelpCircle, ChevronDown, Loader2 } from 'lucide-vue-next';
@@ -43,6 +43,36 @@ const parseTime = ref(null);
 const selectedCategory = ref('Mutual Funds');
 const selectedSource = ref('CAMS');
 const password = ref('');
+
+const requiresPassword = computed(() => {
+    return selectedCategory.value === 'Mutual Funds' || (selectedCategory.value === 'Bank Accounts' && selectedSource.value === 'SBI');
+});
+
+const getFileFormat = computed(() => {
+    if (selectedCategory.value === 'Mutual Funds') return 'PDF';
+    if (selectedCategory.value === 'Bank Accounts') {
+        if (selectedSource.value === 'HDFC' || selectedSource.value === 'ICICI') return 'Excel';
+        return 'PDF';
+    }
+    if (selectedCategory.value === 'Credit Cards') {
+        if (selectedSource.value === 'ICICI') return 'Excel';
+        return 'CSV';
+    }
+    return 'File';
+});
+
+const getAcceptString = computed(() => {
+    if (selectedCategory.value === 'Mutual Funds') return '.pdf';
+    if (selectedCategory.value === 'Bank Accounts') {
+        if (selectedSource.value === 'HDFC' || selectedSource.value === 'ICICI') return '.xls,.xlsx';
+        return '.pdf';
+    }
+    if (selectedCategory.value === 'Credit Cards') {
+        if (selectedSource.value === 'ICICI') return '.xls,.xlsx';
+        return '.csv';
+    }
+    return '*';
+});
 
 const setCategory = (cat) => {
     selectedCategory.value = cat;
@@ -272,15 +302,6 @@ const hasRewards = (stmt) => {
                  </SelectContent>
                </Select>
              </div>
-             <div class="space-y-2 w-full md:w-64" v-if="selectedCategory === 'Mutual Funds' || (selectedCategory === 'Bank Accounts' && selectedSource === 'SBI')">
-               <Label>PDF Password</Label>
-               <Input 
-                  type="password" 
-                  v-model="password"
-                  placeholder="Enter password" 
-                  class="bg-background border-border"
-                />
-             </div>
              <div class="space-y-2 w-full md:w-64" v-if="selectedCategory === 'Intl Stocks'">
                <Label>Broker</Label>
                <Select v-model="selectedSource">
@@ -326,19 +347,30 @@ const hasRewards = (stmt) => {
              </div>
 
              <div class="space-y-2 w-full flex-1">
-               <Label class="flex items-baseline gap-2">
-                 Upload File
-                 <span class="text-xs text-muted-foreground font-normal">
-                   (Supported: {{ selectedCategory === 'Mutual Funds' ? 'PDF' : (selectedCategory === 'Bank Accounts' ? (selectedSource === 'HDFC' || selectedSource === 'ICICI' ? 'EXCEL' : 'PDF') : (selectedCategory === 'Credit Cards' && selectedSource === 'ICICI' ? 'EXCEL' : 'CSV')) }})
-                 </span>
-               </Label>
-               <Input 
-                  type="file" 
-                  :accept="selectedCategory === 'Mutual Funds' ? '.pdf' : (selectedCategory === 'Bank Accounts' ? (selectedSource === 'HDFC' || selectedSource === 'ICICI' ? '.xls,.xlsx' : '.pdf') : (selectedCategory === 'Credit Cards' && selectedSource === 'ICICI' ? '.xls,.xlsx' : '.csv'))"
-                  @change="onFileSelect" 
-                  class="cursor-pointer bg-background border-border text-foreground file:bg-secondary file:text-secondary-foreground file:border-0 file:mr-4 file:px-4 file:py-1.5 file:rounded-md hover:file:bg-secondary/80 transition-colors h-auto pb-2 pt-2" 
-                />
-            </div>
+               <Label class="invisible hidden md:block">Action</Label>
+               <div v-if="requiresPassword" class="flex w-full max-w-md">
+                 <Input 
+                    type="password" 
+                    v-model="password"
+                    placeholder="Password" 
+                    class="rounded-r-none bg-background border-border focus-visible:z-10 focus-visible:ring-1 border-r-0"
+                  />
+                  <Button asChild class="rounded-l-none cursor-pointer">
+                    <label>
+                      <span>Import {{ getFileFormat }}</span>
+                      <input type="file" class="hidden" :accept="getAcceptString" @change="onFileSelect" />
+                    </label>
+                  </Button>
+               </div>
+               <div v-else class="flex w-full max-w-md">
+                  <Button asChild class="cursor-pointer w-full sm:w-auto">
+                    <label>
+                      <span>Import {{ getFileFormat }}</span>
+                      <input type="file" class="hidden" :accept="getAcceptString" @change="onFileSelect" />
+                    </label>
+                  </Button>
+               </div>
+             </div>
           </div>
         </CardContent>
       </Card>
