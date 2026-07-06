@@ -2,8 +2,9 @@ use chrono::NaiveDate;
 use calamine::{Reader, open_workbook_auto_from_rs};
 use std::io::Cursor;
 use finx_models::{BankAccountStatement, BankTransaction};
+use regex::Regex;
 
-pub fn parse_icici_xls(bytes: &[u8]) -> Result<BankAccountStatement, String> {
+pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<BankAccountStatement, String> {
     let cursor = Cursor::new(bytes);
     let mut workbook = open_workbook_auto_from_rs(cursor)
         .map_err(|e| format!("Failed to open Excel workbook: {}", e))?;
@@ -15,6 +16,18 @@ pub fn parse_icici_xls(bytes: &[u8]) -> Result<BankAccountStatement, String> {
 
     let mut statement = BankAccountStatement::default();
     statement.bank_name = "ICICI".to_string();
+
+    if let Some(fname) = filename {
+        // e.g. OpTransactionHistory05-07-2026.xls
+        let re = Regex::new(r"(\d{2}-\d{2}-\d{4})").unwrap();
+        if let Some(caps) = re.captures(fname) {
+            if let Some(m) = caps.get(1) {
+                if let Ok(d) = NaiveDate::parse_from_str(m.as_str(), "%d-%m-%Y") {
+                    statement.generated_date = Some(d.format("%Y-%m-%d").to_string());
+                }
+            }
+        }
+    }
 
     let mut in_transactions = false;
 

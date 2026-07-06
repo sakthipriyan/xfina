@@ -62,8 +62,8 @@ pub fn parse_hdfc_ba(bytes: &[u8]) -> Result<String, JsValue> {
 
 use finx_ba_icici::parse_icici_bank_statement;
 #[wasm_bindgen]
-pub fn parse_icici_ba(bytes: &[u8]) -> Result<String, JsValue> {
-    match parse_icici_bank_statement(bytes) {
+pub fn parse_icici_ba(bytes: &[u8], filename: Option<String>) -> Result<String, JsValue> {
+    match parse_icici_bank_statement(bytes, filename.as_deref()) {
         Ok(stmt) => serde_json::to_string(&stmt).map_err(|e| JsValue::from_str(&format!("JSON serialization error: {}", e))),
         Err(e) => Err(JsValue::from_str(&e)),
     }
