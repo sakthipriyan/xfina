@@ -22,5 +22,8 @@ pub struct BankAccountStatement {
     pub statement_end_date: Option<String>,
     pub opening_balance: Option<f64>,
     pub closing_balance: Option<f64>,
+    pub total_debits: Option<f64>,
+    pub total_credits: Option<f64>,
+    pub generated_date: Option<String>,
     pub transactions: Vec<BankTransaction>,
 }
