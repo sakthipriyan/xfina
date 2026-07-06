@@ -59,6 +59,7 @@ const getFileFormat = computed(() => {
         if (selectedSource.value === 'ICICI') return 'Excel';
         return 'CSV';
     }
+    if (selectedCategory.value === 'Intl Stocks') return 'CSV';
     return 'File';
 });
 
@@ -270,7 +271,7 @@ const hasRewards = (stmt) => {
           </div>
         </CardHeader>
         <CardContent>
-          <div class="flex flex-wrap gap-2 mb-6">
+          <div class="flex flex-wrap gap-4 mb-6">
             <Button 
               :variant="selectedCategory === 'Mutual Funds' ? 'default' : 'outline'"
               @click="setCategory('Mutual Funds')"
@@ -292,62 +293,32 @@ const hasRewards = (stmt) => {
           <div class="flex flex-col md:flex-row gap-6 items-end">
              <div class="space-y-2 w-full md:w-64" v-if="selectedCategory === 'Mutual Funds'">
                <Label>Provider</Label>
-               <Select v-model="selectedSource">
-                 <SelectTrigger class="w-full bg-background border-border">
-                   <SelectValue placeholder="Select Provider" />
-                 </SelectTrigger>
-                 <SelectContent>
-                   <SelectGroup>
-                     <SelectItem value="CAMS">CAMS Combined Statement</SelectItem>
-                   </SelectGroup>
-                 </SelectContent>
-               </Select>
+               <div class="flex flex-wrap gap-4">
+                 <Button :variant="selectedSource === 'CAMS' ? 'default' : 'outline'" @click="selectedSource = 'CAMS'">CAMS</Button>
+               </div>
              </div>
              <div class="space-y-2 w-full md:w-64" v-if="selectedCategory === 'Intl Stocks'">
                <Label>Broker</Label>
-               <Select v-model="selectedSource">
-                 <SelectTrigger class="w-full bg-background border-border">
-                   <SelectValue placeholder="Select Broker" />
-                 </SelectTrigger>
-                 <SelectContent>
-                   <SelectGroup>
-                     <SelectItem value="IBKR">Interactive Brokers</SelectItem>
-                   </SelectGroup>
-                 </SelectContent>
-               </Select>
+               <div class="flex flex-wrap gap-4">
+                 <Button :variant="selectedSource === 'IBKR' ? 'default' : 'outline'" @click="selectedSource = 'IBKR'">IBKR</Button>
+               </div>
              </div>
              <div class="space-y-2 w-full md:w-64" v-if="selectedCategory === 'Credit Cards'">
                <Label>Bank</Label>
-               <Select v-model="selectedSource">
-                 <SelectTrigger class="w-full bg-background border-border">
-                   <SelectValue placeholder="Select Bank" />
-                 </SelectTrigger>
-                 <SelectContent>
-                   <SelectGroup>
-                     <SelectItem value="HDFC">HDFC</SelectItem>
-                     <SelectItem value="ICICI">ICICI</SelectItem>
-                   </SelectGroup>
-                 </SelectContent>
-               </Select>
+               <div class="flex flex-wrap gap-4">
+                 <Button :variant="selectedSource === 'HDFC' ? 'default' : 'outline'" @click="selectedSource = 'HDFC'">HDFC Bank</Button>
+                 <Button :variant="selectedSource === 'ICICI' ? 'default' : 'outline'" @click="selectedSource = 'ICICI'">ICICI Bank</Button>
+               </div>
              </div>
              <div class="space-y-2 w-full md:w-64" v-if="selectedCategory === 'Bank Accounts'">
                <Label>Bank</Label>
-               <Select v-model="selectedSource">
-                 <SelectTrigger class="w-full bg-background border-border">
-                   <SelectValue placeholder="Select Bank" />
-                 </SelectTrigger>
-                 <SelectContent>
-                   <SelectGroup>
-                     <SelectItem value="HDFC">HDFC</SelectItem>
-                     <SelectItem value="ICICI">ICICI</SelectItem>
-                     <SelectItem value="SBI">SBI</SelectItem>
-                     <SelectItem value="BoB">Bank of Baroda</SelectItem>
-                   </SelectGroup>
-                 </SelectContent>
-               </Select>
+               <div class="flex flex-wrap gap-4">
+                 <Button :variant="selectedSource === 'HDFC' ? 'default' : 'outline'" @click="selectedSource = 'HDFC'">HDFC Bank</Button>
+                 <Button :variant="selectedSource === 'ICICI' ? 'default' : 'outline'" @click="selectedSource = 'ICICI'">ICICI Bank</Button>
+               </div>
              </div>
 
-             <div class="space-y-2 w-full flex-1">
+             <div class="space-y-2 w-full md:w-auto ml-auto">
                <Label class="invisible hidden md:block">Action</Label>
                <div v-if="requiresPassword" class="flex w-full max-w-md">
                  <Input 
@@ -385,10 +356,10 @@ const hasRewards = (stmt) => {
           :customerName="ccStatement.customer_info?.name || 'Customer'"
           :institutionName="selectedSource"
           statementType="Credit Card"
-          :accountNumber="ccStatement.card_no ? '**** ' + ccStatement.card_no.slice(-4) : ''"
+          :accountNumber="ccStatement.card_no || ''"
           :statementDetails="[
-            ...(ccStatement.statement_start_date ? [{ label: 'From', value: formatDateLocal(ccStatement.statement_start_date) }] : []),
-            ...(ccStatement.statement_end_date ? [{ label: 'To', value: formatDateLocal(ccStatement.statement_end_date) }] : []),
+            ...(ccStatement.statement_start_date ? [{ label: 'From', value: formatDateLocal(ccStatement.statement_start_date), derived: ccStatement.statement_start_date_derived }] : []),
+            ...(ccStatement.statement_end_date ? [{ label: 'To', value: formatDateLocal(ccStatement.statement_end_date), derived: ccStatement.statement_end_date_derived }] : []),
             ...(ccStatement.statement_date ? [{ label: 'Generated', value: formatDateLocal(ccStatement.statement_date) }] : []),
             ...(ccStatement.payment_due_date ? [{ label: 'Due Date', value: formatDateLocal(ccStatement.payment_due_date) }] : [])
           ]"

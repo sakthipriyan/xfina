@@ -1,11 +1,11 @@
-use calamine::{Reader, open_workbook_auto};
+use calamine::{Reader, open_workbook, Xlsx};
 
 fn main() {
-    let mut workbook = open_workbook_auto("../../../financial-extract-test-data/bank-accounts/icici/raw/OpTransactionHistory05-07-2026.xls").unwrap();
+    let mut workbook: Xlsx<_> = open_workbook("../../../financial-extract-test-data/credit-cards/icici/CCStatement_Past29-06-2026.xls").unwrap();
     if let Some(Ok(range)) = workbook.worksheet_range_at(0) {
-        for (i, row) in range.rows().enumerate().take(15) {
+        for (i, row) in range.rows().enumerate().take(50) {
             let cols: Vec<String> = row.iter().map(|c| c.to_string()).collect();
-            println!("ICICI {:02}: {:?}", i, cols);
+            println!("ICICI CC {:02}: {:?}", i, cols);
         }
     }
 }
