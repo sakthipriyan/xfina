@@ -149,6 +149,14 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<BankAccountStatement, String> {
         customer_gstn: None,
     };
 
+    let total_debits: f64 = stmt.transactions.iter().filter(|t| t.tx_type == "Debit").map(|t| t.amount).sum();
+    let total_credits: f64 = stmt.transactions.iter().filter(|t| t.tx_type == "Credit").map(|t| t.amount).sum();
+    
+    if !stmt.transactions.is_empty() {
+        stmt.total_debits = Some(total_debits);
+        stmt.total_credits = Some(total_credits);
+    }
+
     Ok(stmt)
 }
 
