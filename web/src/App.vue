@@ -383,7 +383,8 @@ const hasRewards = (stmt) => {
         <!-- Standardized Header -->
         <StatementHeader 
           :customerName="ccStatement.customer_info?.name || 'Customer'"
-          :institutionName="selectedSource + ' Credit Card'"
+          :institutionName="selectedSource"
+          statementType="Credit Card"
           :accountNumber="ccStatement.card_no ? '**** ' + ccStatement.card_no.slice(-4) : ''"
           :statementDetails="[
             ...(ccStatement.statement_start_date ? [{ label: 'From', value: formatDateLocal(ccStatement.statement_start_date) }] : []),
@@ -547,6 +548,7 @@ const hasRewards = (stmt) => {
           v-if="portfolio.investor_info"
           :customerName="portfolio.investor_info.name || 'Investor'"
           :institutionName="selectedSource"
+          statementType="Mutual Funds"
           :accountNumber="portfolio.investor_info.account_number || ''"
           :statementDetails="[
             ...(portfolio.statement_start_date ? [{ label: 'From', value: formatDateLocal(portfolio.statement_start_date) }] : []),
@@ -683,7 +685,8 @@ const hasRewards = (stmt) => {
         <!-- Standardized Header -->
         <StatementHeader 
           :customerName="bankStatement.customer_info?.name || 'Customer'"
-          :institutionName="bankStatement.bank_name || 'Bank Account'"
+          :institutionName="bankStatement.bank_name || 'Bank'"
+          statementType="Bank Account"
           :accountNumber="bankStatement.account_number || ''"
           :statementDetails="[
             ...(bankStatement.statement_start_date ? [{ label: 'From', value: formatDateLocal(bankStatement.statement_start_date) }] : []),
