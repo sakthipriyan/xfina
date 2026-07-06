@@ -76,7 +76,9 @@ pub fn parse_icici_statement(bytes: &[u8]) -> Result<CreditCardStatement, String
                     let period = cells.get(12).unwrap_or(&String::new()).trim().to_string();
                     if let Some((start, end)) = period.split_once(" TO ") {
                         stmt.statement_start_date = Some(finx_models::parse_indian_date(start.trim()));
+                        stmt.statement_start_date_derived = false;
                         stmt.statement_end_date = Some(finx_models::parse_indian_date(end.trim()));
+                        stmt.statement_end_date_derived = false;
                     }
                 }
                 "Transaction Date" => {
@@ -150,6 +152,24 @@ pub fn parse_icici_statement(bytes: &[u8]) -> Result<CreditCardStatement, String
     });
     
     stmt.transactions.sort_by(|a, b| a.date.cmp(&b.date));
+
+    // Fallback: derive start/end from transactions if not set from file
+    if stmt.statement_start_date.is_none() {
+        if let Some(first) = stmt.transactions.first() {
+            stmt.statement_start_date = Some(date_only(&first.date));
+            stmt.statement_start_date_derived = true;
+        }
+    }
+    if stmt.statement_end_date.is_none() {
+        if let Some(last) = stmt.transactions.last() {
+            stmt.statement_end_date = Some(date_only(&last.date));
+            stmt.statement_end_date_derived = true;
+        }
+    }
     
     Ok(stmt)
+}
+
+fn date_only(s: &str) -> String {
+    s.split('T').next().unwrap_or(s).to_string()
 }
