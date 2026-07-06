@@ -153,8 +153,12 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<BankAccountStatement, String> {
 }
 
 fn parse_date(date_str: &str) -> String {
-    // Input format: DD/MM/YY
+    // Try DD/MM/YY
     if let Ok(parsed) = NaiveDate::parse_from_str(date_str, "%d/%m/%y") {
+        return parsed.format("%Y-%m-%d").to_string();
+    }
+    // Try DD/MM/YYYY
+    if let Ok(parsed) = NaiveDate::parse_from_str(date_str, "%d/%m/%Y") {
         return parsed.format("%Y-%m-%d").to_string();
     }
     date_str.to_string()
