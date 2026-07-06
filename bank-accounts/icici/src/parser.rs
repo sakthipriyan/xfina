@@ -137,5 +137,13 @@ pub fn parse_icici_xls(bytes: &[u8]) -> Result<BankAccountStatement, String> {
         statement.statement_end_date = Some(last.date.clone());
     }
 
+    let total_debits: f64 = statement.transactions.iter().filter(|t| t.tx_type == "Debit").map(|t| t.amount).sum();
+    let total_credits: f64 = statement.transactions.iter().filter(|t| t.tx_type == "Credit").map(|t| t.amount).sum();
+    
+    if !statement.transactions.is_empty() {
+        statement.total_debits = Some(total_debits);
+        statement.total_credits = Some(total_credits);
+    }
+
     Ok(statement)
 }
