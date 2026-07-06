@@ -1,5 +1,5 @@
 use finx_models::credit_card::{
-    AccountSummary, CreditCardStatement, CreditCardTransaction, CustomerInfo, PastDues,
+    AccountSummary, CreditCardStatement, CreditCardTransaction, PastDues,
     RewardPointsSummary, RewardProgram,
 };
 
@@ -66,7 +66,13 @@ pub fn parse_hdfc_statement(content: &str) -> Result<CreditCardStatement, String
                         "Address" => address_parts.push(val.to_string()),
                         "Customer GSTN" => stmt.customer_info.customer_gstn = if val.is_empty() { None } else { Some(val.to_string()) },
                         "Payment Due Date" => stmt.payment_due_date = Some(finx_models::parse_indian_date(val)),
-                        "Statement Date" => stmt.statement_date = Some(finx_models::parse_indian_date(val)),
+                        "Statement Date" => {
+                            let d = finx_models::parse_indian_date(val);
+                            // Statement Date is the billing cycle end — actual, not derived
+                            stmt.statement_end_date = Some(d.clone());
+                            stmt.statement_end_date_derived = false;
+                            stmt.statement_date = Some(d);
+                        }
                         "Total Amount Due" => stmt.total_amount_due = parse_f64(val),
                         "Minimum Amount Due" => stmt.minimum_amount_due = parse_f64(val),
                         "Credit Limit" => stmt.credit_limit = parse_f64(val),
@@ -202,6 +208,22 @@ pub fn parse_hdfc_statement(content: &str) -> Result<CreditCardStatement, String
     }
     
     stmt.transactions.sort_by(|a, b| a.date.cmp(&b.date));
+
+    // Derive start date from earliest transaction (no explicit start field in HDFC CC CSV)
+    if stmt.statement_start_date.is_none() {
+        if let Some(first) = stmt.transactions.first() {
+            stmt.statement_start_date = Some(date_only(&first.date));
+            stmt.statement_start_date_derived = true;
+        }
+    }
+
+    // Derive end date from latest transaction if not set from file
+    if stmt.statement_end_date.is_none() {
+        if let Some(last) = stmt.transactions.last() {
+            stmt.statement_end_date = Some(date_only(&last.date));
+            stmt.statement_end_date_derived = true;
+        }
+    }
     
     Ok(stmt)
 }
@@ -214,4 +236,9 @@ fn parse_f64(val: &str) -> Option<f64> {
 fn parse_i32(val: &str) -> Option<i32> {
     let clean = val.replace(",", "");
     clean.parse::<i32>().ok()
+}
+
+/// Returns only the date part (YYYY-MM-DD) from an ISO datetime string like 2026-05-30T09:41:11
+fn date_only(s: &str) -> String {
+    s.split('T').next().unwrap_or(s).to_string()
 }
