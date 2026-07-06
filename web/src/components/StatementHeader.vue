@@ -13,6 +13,10 @@ const props = defineProps({
     type: String,
     default: ''
   },
+  statementType: {
+    type: String,
+    default: ''
+  },
   accountNumber: {
     type: String,
     default: ''
@@ -30,12 +34,16 @@ const props = defineProps({
   <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
     <!-- Customer/Investor Card -->
     <Card class="bg-card text-card-foreground shadow-sm flex flex-col h-full">
-      <CardHeader class="pb-2">
-        <CardTitle class="text-xl">{{ customerName }}</CardTitle>
+      <CardHeader class="pb-1">
+        <div class="text-xs text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-2">
+          <span v-if="institutionName">{{ institutionName }}</span>
+          <span v-if="institutionName && statementType" class="text-muted-foreground/50">|</span>
+          <span v-if="statementType">{{ statementType }}</span>
+        </div>
       </CardHeader>
-      <CardContent class="mt-auto">
+      <CardContent class="mt-1">
         <div class="flex flex-col gap-1">
-          <span class="text-sm font-medium" v-if="institutionName">{{ institutionName }}</span>
+          <span class="text-xl font-bold">{{ customerName }}</span>
           <span class="text-sm text-muted-foreground font-mono" v-if="accountNumber">Account: {{ accountNumber }}</span>
         </div>
       </CardContent>
