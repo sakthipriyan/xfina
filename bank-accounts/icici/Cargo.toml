@@ -1,0 +1,12 @@
+[package]
+name = "finx-ba-icici"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+finx-models = { workspace = true }
+calamine = "0.22"
+chrono = "0.4"
+
+[dev-dependencies]
+serde_json = { workspace = true }
