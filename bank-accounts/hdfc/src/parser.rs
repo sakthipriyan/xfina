@@ -1,5 +1,5 @@
 use calamine::{Reader, open_workbook_auto_from_rs};
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveDateTime};
 use finx_models::{BankAccountStatement, BankTransaction};
 use finx_models::credit_card::CustomerInfo;
 use std::io::Cursor;
@@ -25,6 +25,12 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<BankAccountStatement, String> {
     };
 
     let mut in_transactions = false;
+    let mut in_summary = false;
+    let mut parsed_summary_opening: Option<f64> = None;
+    let mut parsed_summary_closing: Option<f64> = None;
+    let mut parsed_summary_debits: Option<f64> = None;
+    let mut parsed_summary_credits: Option<f64> = None;
+
     let re_dates = Regex::new(r"Statement From\s*:\s*(\d{2}/\d{2}/\d{4})\s*To\s*:\s*(\d{2}/\d{2}/\d{4})").unwrap();
     let mut name = String::new();
 
@@ -62,13 +68,6 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<BankAccountStatement, String> {
             }
         }
 
-        if !in_transactions {
-            if row_vec[0] == "Date" && row_vec.len() > 6 && row_vec[1] == "Narration" {
-                in_transactions = true;
-            }
-            continue;
-        }
-
         // We are in transactions. A row of asterisks might appear first.
         if row_vec[0].starts_with('*') {
             continue;
@@ -83,12 +82,50 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<BankAccountStatement, String> {
             continue;
         }
 
-        if row_vec[0].contains("Statement Summary") || row_vec[0].contains("Opening Balance") || row_vec[0].contains("Generated On:") {
-            break; // Reached the end of the statement
+        if row_vec[0].contains("STATEMENT SUMMARY") {
+            in_transactions = false;
+            in_summary = true;
+            continue;
+        }
+
+        if in_summary {
+            if let Ok(ob) = row_vec[0].trim().parse::<f64>() {
+                parsed_summary_opening = Some(ob);
+                if row_vec.len() >= 7 {
+                    parsed_summary_debits = row_vec[4].trim().parse::<f64>().ok();
+                    parsed_summary_credits = row_vec[5].trim().parse::<f64>().ok();
+                    parsed_summary_closing = row_vec[6].trim().parse::<f64>().ok();
+                }
+                in_summary = false; // we got the values
+            }
+            continue;
+        }
+
+        if row_vec[0].contains("Generated On:") {
+            if row_vec.len() > 1 {
+                let gen_str = row_vec[1].trim();
+                if let Ok(dt) = NaiveDateTime::parse_from_str(gen_str, "%d-%b-%Y %H:%M:%S") {
+                    stmt.generated_date = Some(dt.format("%Y-%m-%d").to_string());
+                } else if let Ok(d) = NaiveDate::parse_from_str(gen_str, "%d-%b-%Y") {
+                    stmt.generated_date = Some(d.format("%Y-%m-%d").to_string());
+                }
+            }
+            continue;
+        }
+
+        if !in_transactions && !in_summary {
+            if row_vec[0] == "Date" && row_vec.len() > 6 && row_vec[1] == "Narration" {
+                in_transactions = true;
+            }
+            continue;
+        }
+
+        if row_vec[0].contains("Opening Balance") {
+            continue; // Reached the end of the statement or a header we can ignore
         }
 
         // Parse a transaction line
-        if row_vec.len() >= 7 {
+        if row_vec.len() >= 7 && in_transactions {
             let date_str = row_vec[0].trim();
             if date_str.is_empty() || date_str.starts_with('*') || date_str.len() < 8 {
                 continue; // Skip lines that aren't transactions
@@ -152,6 +189,33 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<BankAccountStatement, String> {
     let total_debits: f64 = stmt.transactions.iter().filter(|t| t.tx_type == "Debit").map(|t| t.amount).sum();
     let total_credits: f64 = stmt.transactions.iter().filter(|t| t.tx_type == "Credit").map(|t| t.amount).sum();
     
+    // Validation against summary
+    let tolerance = 0.05; // 5 paise tolerance
+    
+    if let Some(expected) = parsed_summary_debits {
+        if (total_debits - expected).abs() > tolerance {
+            return Err(format!("Total debits validation failed: computed {}, expected {}", total_debits, expected));
+        }
+    }
+    
+    if let Some(expected) = parsed_summary_credits {
+        if (total_credits - expected).abs() > tolerance {
+            return Err(format!("Total credits validation failed: computed {}, expected {}", total_credits, expected));
+        }
+    }
+    
+    if let (Some(expected), Some(computed)) = (parsed_summary_opening, stmt.opening_balance) {
+        if (computed - expected).abs() > tolerance {
+            return Err(format!("Opening balance validation failed: computed {}, expected {}", computed, expected));
+        }
+    }
+    
+    if let (Some(expected), Some(computed)) = (parsed_summary_closing, stmt.closing_balance) {
+        if (computed - expected).abs() > tolerance {
+            return Err(format!("Closing balance validation failed: computed {}, expected {}", computed, expected));
+        }
+    }
+
     if !stmt.transactions.is_empty() {
         stmt.total_debits = Some(total_debits);
         stmt.total_credits = Some(total_credits);
