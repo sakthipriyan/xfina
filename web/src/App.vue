@@ -291,32 +291,32 @@ const hasRewards = (stmt) => {
           </div>
 
           <div class="flex flex-col md:flex-row gap-6 items-end">
-             <div class="space-y-2 w-full md:w-64" v-if="selectedCategory === 'Mutual Funds'">
+             <div class="space-y-2" v-if="selectedCategory === 'Mutual Funds'">
                <Label>Provider</Label>
                <div class="flex flex-wrap gap-4">
                  <Button :variant="selectedSource === 'CAMS' ? 'default' : 'outline'" @click="selectedSource = 'CAMS'">CAMS</Button>
                </div>
              </div>
-             <div class="space-y-2 w-full md:w-64" v-if="selectedCategory === 'Intl Stocks'">
+             <div class="space-y-2" v-if="selectedCategory === 'Intl Stocks'">
                <Label>Broker</Label>
                <div class="flex flex-wrap gap-4">
                  <Button :variant="selectedSource === 'IBKR' ? 'default' : 'outline'" @click="selectedSource = 'IBKR'">IBKR</Button>
                </div>
              </div>
-             <div class="space-y-2 w-full md:w-64" v-if="selectedCategory === 'Credit Cards'">
+             <div class="space-y-2" v-if="selectedCategory === 'Credit Cards'">
                <Label>Bank</Label>
                <div class="flex flex-wrap gap-4">
                  <Button :variant="selectedSource === 'HDFC' ? 'default' : 'outline'" @click="selectedSource = 'HDFC'">HDFC Bank</Button>
                  <Button :variant="selectedSource === 'ICICI' ? 'default' : 'outline'" @click="selectedSource = 'ICICI'">ICICI Bank</Button>
                </div>
              </div>
-             <div class="space-y-2 w-full md:w-64" v-if="selectedCategory === 'Bank Accounts'">
+             <div class="space-y-2" v-if="selectedCategory === 'Bank Accounts'">
                <Label>Bank</Label>
                <div class="flex flex-wrap gap-4">
                  <Button :variant="selectedSource === 'HDFC' ? 'default' : 'outline'" @click="selectedSource = 'HDFC'">HDFC Bank</Button>
                  <Button :variant="selectedSource === 'ICICI' ? 'default' : 'outline'" @click="selectedSource = 'ICICI'">ICICI Bank</Button>
                  <Button :variant="selectedSource === 'SBI' ? 'default' : 'outline'" @click="selectedSource = 'SBI'">State Bank of India</Button>
-                 <Button :variant="selectedSource === 'BoB' ? 'default' : 'outline'" @click="selectedSource = 'BoB'">Bank of Baroda</Button>
+
                </div>
              </div>
 
