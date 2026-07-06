@@ -120,7 +120,7 @@ const onFileSelect = async (event) => {
             if (selectedSource.value === 'HDFC') {
                 jsonString = parse_hdfc_ba(uint8Array);
             } else if (selectedSource.value === 'ICICI') {
-                jsonString = parse_icici_ba(uint8Array);
+                jsonString = parse_icici_ba(uint8Array, file.name);
             } else if (selectedSource.value === 'SBI') {
                 jsonString = parse_sbi_ba(uint8Array, password.value ? password.value : null);
             } else if (selectedSource.value === 'BoB') {
