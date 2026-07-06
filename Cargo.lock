@@ -390,6 +390,7 @@ dependencies = [
  "calamine 0.22.1",
  "chrono",
  "finx-models",
+ "regex",
  "serde_json",
 ]
 
