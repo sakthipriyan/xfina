@@ -11,124 +11,144 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>) -> Result<
     let mut account_name = String::new();
     
     let date_re = Regex::new(r"^(\d{2}/\d{2}/\d{4})\s+(\d{2}/\d{2}/\d{4})").unwrap();
-    let num_re = Regex::new(r"^[0-9,.]+(CR|DR)?$").unwrap();
 
     let mut inside_table = false;
     
-    // To handle description blocks for a transaction, we keep track of the last transaction pushed
-    // and append descriptions to it.
-    let mut last_tx_idx: Option<usize> = None;
+    struct DescPart {
+        y: f64,
+        text: String,
+    }
 
     for page in pages {
         let lines = layout::group_into_lines(&page, 2.0);
         
-        for line in lines {
-            let text = line.text.trim();
-            if text.is_empty() { continue; }
-            let min_x = line.chars.first().map(|c| c.x0).unwrap_or(0.0);
-            
-            // Extract Account Number
-            if text.contains("Account Number") {
-                let parts: Vec<&str> = text.split(':').collect();
-                if parts.len() > 1 {
-                    let acc_part = parts[1].trim().split('(').next().unwrap_or("").trim();
-                    if !acc_part.is_empty() {
-                        account_number = acc_part.to_string();
+        // First, group lines into vertical blocks based on a y-gap threshold
+        let mut blocks: Vec<Vec<&layout::Line>> = Vec::new();
+        let mut current_block = Vec::new();
+        let mut last_y: Option<f64> = None;
+        
+        for line in &lines {
+            let y = line.chars.first().map(|c| c.y0).unwrap_or(0.0);
+            if let Some(ly) = last_y {
+                if (y - ly).abs() > 11.5 {
+                    if !current_block.is_empty() {
+                        blocks.push(current_block);
+                        current_block = Vec::new();
                     }
                 }
-                continue;
             }
+            current_block.push(line);
+            last_y = Some(y);
+        }
+        if !current_block.is_empty() {
+            blocks.push(current_block);
+        }
+        
+        for block in blocks {
+            let mut is_header_or_footer = false;
             
-            if text.contains("Welcome:") {
-                // Usually the next few lines contain the name, but let's just grab the Mrs. / Mr. line if it exists.
-                // In SBI, the name is often right below Welcome: or beside it.
-                // We'll leave account_name blank for now or parse it if needed.
-            }
-            if text.starts_with("Mr.") || text.starts_with("Mrs.") {
-                if account_name.is_empty() {
-                    account_name = text.to_string();
+            // Check for Account Number / Name in the block
+            for line in &block {
+                let text = line.text.trim();
+                if text.contains("Account Number") {
+                    let parts: Vec<&str> = text.split(':').collect();
+                    if parts.len() > 1 {
+                        let acc_part = parts[1].trim().split('(').next().unwrap_or("").trim();
+                        if !acc_part.is_empty() {
+                            account_number = acc_part.to_string();
+                        }
+                    }
+                    is_header_or_footer = true;
+                }
+                if text.starts_with("Mr.") || text.starts_with("Mrs.") {
+                    if account_name.is_empty() {
+                        account_name = text.to_string();
+                    }
+                }
+                if text.contains("Balance") && text.len() < 10 {
+                    inside_table = true;
+                    is_header_or_footer = true;
+                }
+                if text.contains("Statement Summary") || text.contains("Closing Balance") {
+                    inside_table = false;
+                    is_header_or_footer = true;
+                }
+                if text.contains("Page no.") {
+                    is_header_or_footer = true;
                 }
             }
-
-            if text.contains("Balance") && text.len() < 10 {
-                // Table header hint
-                inside_table = true;
+            
+            if is_header_or_footer || !inside_table {
                 continue;
             }
             
-            if text.contains("Statement Summary") || text.contains("Closing Balance") {
-                inside_table = false;
-            }
-
-            if inside_table {
-                // Check if line is a main transaction line (Starts with Date Date)
+            let mut desc_parts = Vec::new();
+            let mut date_str = String::new();
+            let mut val_date_str = String::new();
+            let mut debit = None;
+            let mut credit = None;
+            let mut balance = None;
+            
+            let parse_amt = |s: &str| -> Option<f64> {
+                if s == "-" { return None; }
+                s.replace(",", "").replace("CR", "").replace("DR", "").parse().ok()
+            };
+            
+            for line in &block {
+                let text = line.text.trim();
+                if text.is_empty() { continue; }
+                let min_x = line.chars.first().map(|c| c.x0).unwrap_or(0.0);
+                let min_y = line.chars.first().map(|c| c.y0).unwrap_or(0.0);
+                
                 if let Some(caps) = date_re.captures(text) {
-                    let date_str = caps.get(1).unwrap().as_str();
-                    let val_date_str = caps.get(2).unwrap().as_str();
+                    date_str = caps.get(1).unwrap().as_str().to_string();
+                    val_date_str = caps.get(2).unwrap().as_str().to_string();
                     
                     let parts: Vec<&str> = text.split_whitespace().collect();
-                    
-                    // Format: 02/04/2026 02/04/2026 - - 47,819.00 70,318.26
-                    // Usually: Date ValueDate ChqNo Debit Credit Balance
-                    // But wait, the line in the dump was: "02/04/2026 02/04/2026 - - 47,819.00 70,318.26" (6 parts)
-                    // If it has 6 parts and they are mostly numbers/dashes:
-                    
-                    let mut debit = None;
-                    let mut credit = None;
-                    let mut balance = None;
-                    let mut ref_no = String::new();
-                    
-                    let parse_amt = |s: &str| -> Option<f64> {
-                        if s == "-" { return None; }
-                        s.replace(",", "").replace("CR", "").replace("DR", "").parse().ok()
-                    };
-
                     if parts.len() >= 6 {
                         let len = parts.len();
                         balance = parse_amt(parts[len - 1]);
                         credit = parse_amt(parts[len - 2]);
                         debit = parse_amt(parts[len - 3]);
-                        ref_no = parts[2..len - 3].join(" ");
-                        if ref_no == "-" {
-                            ref_no = String::new();
+                        
+                        let middle = parts[2..len - 3].join(" ");
+                        if middle != "-" && !middle.is_empty() {
+                            let clean_middle = middle.trim_end_matches('-').trim().to_string();
+                            if !clean_middle.is_empty() {
+                                desc_parts.push(DescPart { y: min_y, text: clean_middle });
+                            }
                         }
                     }
-                    
-                    let mut tx_type = "Debit".to_string();
-                    let mut amount = 0.0;
-                    
-                    if let Some(c) = credit {
-                        tx_type = "Credit".to_string();
-                        amount = c;
-                    } else if let Some(d) = debit {
-                        tx_type = "Debit".to_string();
-                        amount = d;
-                    }
-
-                    let tx = BankTransaction {
-                        date: NaiveDate::parse_from_str(date_str, "%d/%m/%Y").unwrap().format("%Y-%m-%d").to_string(),
-                        value_date: Some(NaiveDate::parse_from_str(val_date_str, "%d/%m/%Y").unwrap().format("%Y-%m-%d").to_string()),
-                        description: String::new(),
-                        reference_number: if ref_no.is_empty() { None } else { Some(ref_no) },
-                        tx_type,
-                        amount,
-                        balance,
-                    };
-                    
-                    transactions.push(tx);
-                    last_tx_idx = Some(transactions.len() - 1);
                 } else if min_x > 120.0 && min_x < 150.0 {
-                    // This is a description line for the current transaction
-                    if let Some(idx) = last_tx_idx {
-                        let tx = &mut transactions[idx];
-                        if !tx.description.is_empty() {
-                            tx.description.push(' ');
-                        }
-                        tx.description.push_str(text);
-                    }
-                } else if text.contains("Page no.") || text.contains("Balance") {
-                    // Ignore footer / header
+                    desc_parts.push(DescPart { y: min_y, text: text.to_string() });
                 }
+            }
+            
+            if !date_str.is_empty() {
+                desc_parts.sort_by(|a, b| a.y.partial_cmp(&b.y).unwrap_or(std::cmp::Ordering::Equal));
+                let description = desc_parts.into_iter().map(|d| d.text).collect::<Vec<_>>().join(" ");
+                
+                let mut tx_type = "Debit".to_string();
+                let mut amount = 0.0;
+                
+                if let Some(c) = credit {
+                    tx_type = "Credit".to_string();
+                    amount = c;
+                } else if let Some(d) = debit {
+                    tx_type = "Debit".to_string();
+                    amount = d;
+                }
+                
+                let tx = BankTransaction {
+                    date: NaiveDate::parse_from_str(&date_str, "%d/%m/%Y").unwrap().format("%Y-%m-%d").to_string(),
+                    value_date: Some(NaiveDate::parse_from_str(&val_date_str, "%d/%m/%Y").unwrap().format("%Y-%m-%d").to_string()),
+                    description,
+                    reference_number: None,
+                    tx_type,
+                    amount,
+                    balance,
+                };
+                transactions.push(tx);
             }
         }
     }
