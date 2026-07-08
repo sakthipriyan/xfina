@@ -1,8 +1,2 @@
-use xfina_models::BankAccountStatement;
-
-pub fn parse_bob_bank_statement(bytes: &[u8]) -> Result<BankAccountStatement, String> {
-    Ok(BankAccountStatement {
-        bank_name: "Bank of Baroda".to_string(),
-        ..Default::default()
-    })
-}
+pub mod parser;
+pub use parser::parse_bob_xls;

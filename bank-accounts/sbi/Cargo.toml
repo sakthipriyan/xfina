@@ -10,6 +10,7 @@ chrono = "0.4"
 msoffice_crypt = "0.1.6"
 pdf-extract = { workspace = true }
 regex = { workspace = true }
+rust_decimal = "1.42.1"
 
 [dev-dependencies]
 serde_json = { workspace = true }
