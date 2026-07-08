@@ -1,4 +1,4 @@
-use finx_models::BankAccountStatement;
+use xfina_models::BankAccountStatement;
 
 mod parser;
 pub use parser::parse_hdfc_xls;

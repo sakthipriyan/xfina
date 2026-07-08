@@ -1,10 +1,10 @@
-use finx_ba_sbi::parse_sbi_bank_statement;
+use xfina_ba_sbi::parse_sbi_bank_statement;
 use std::fs;
 use std::path::Path;
 
 #[test]
 fn test_sbi_pdf_parser() {
-    let test_dir = Path::new("../../../financial-extract-test-data/bank-accounts/sbi");
+    let test_dir = Path::new("../../../xfina-test-data/bank-accounts/sbi");
     let raw_dir = test_dir.join("raw");
     let expected_dir = test_dir.join("expected");
 

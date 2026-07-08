@@ -1,5 +1,5 @@
 use clap::Parser;
-use finx_mf_cams::parse_cams_pdf;
+use xfina_mf_cams::parse_cams_pdf;
 use std::fs;
 
 /// CLI tool to test CAMS PDF extraction
