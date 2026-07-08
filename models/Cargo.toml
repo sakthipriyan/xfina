@@ -1,5 +1,5 @@
 [package]
-name = "finx-models"
+name = "xfina-models"
 version.workspace = true
 edition.workspace = true
 

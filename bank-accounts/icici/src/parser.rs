@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 use calamine::{Reader, open_workbook_auto_from_rs};
 use std::io::Cursor;
-use finx_models::{BankAccountStatement, BankTransaction};
+use xfina_models::{BankAccountStatement, BankTransaction};
 use regex::Regex;
 
 pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<BankAccountStatement, String> {

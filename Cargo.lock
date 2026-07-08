@@ -366,110 +366,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5baebc0774151f905a1a2cc41989300b1e6fbb29aff0ceffa1064fdd3088d582"
 
 [[package]]
-name = "finx-ba-bob"
-version = "0.1.0"
-dependencies = [
- "finx-models",
-]
-
-[[package]]
-name = "finx-ba-hdfc"
-version = "0.1.0"
-dependencies = [
- "calamine 0.22.1",
- "chrono",
- "finx-models",
- "regex",
- "serde_json",
-]
-
-[[package]]
-name = "finx-ba-icici"
-version = "0.1.0"
-dependencies = [
- "calamine 0.22.1",
- "chrono",
- "finx-models",
- "regex",
- "serde_json",
-]
-
-[[package]]
-name = "finx-ba-sbi"
-version = "0.1.0"
-dependencies = [
- "calamine 0.22.1",
- "chrono",
- "finx-models",
- "msoffice_crypt",
- "pdf-extract",
- "regex",
- "serde_json",
-]
-
-[[package]]
-name = "finx-cc-hdfc"
-version = "0.1.0"
-dependencies = [
- "finx-models",
- "serde",
-]
-
-[[package]]
-name = "finx-cc-icici"
-version = "0.1.0"
-dependencies = [
- "calamine 0.25.0",
- "finx-models",
- "serde",
-]
-
-[[package]]
-name = "finx-intl-stocks-ibkr"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "chrono-tz",
- "csv",
- "finx-models",
-]
-
-[[package]]
-name = "finx-mf-cams"
-version = "0.1.0"
-dependencies = [
- "clap",
- "finx-models",
- "pdf-extract",
- "regex",
- "serde_json",
-]
-
-[[package]]
-name = "finx-models"
-version = "0.1.0"
-dependencies = [
- "serde",
-]
-
-[[package]]
-name = "finx-wasm"
-version = "0.1.0"
-dependencies = [
- "finx-ba-bob",
- "finx-ba-hdfc",
- "finx-ba-icici",
- "finx-ba-sbi",
- "finx-cc-hdfc",
- "finx-cc-icici",
- "finx-intl-stocks-ibkr",
- "finx-mf-cams",
- "finx-models",
- "serde_json",
- "wasm-bindgen",
-]
-
-[[package]]
 name = "flate2"
 version = "1.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1207,6 +1103,110 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0592e1c9d151f854e6fd382574c3a0855250e1d9b2f99d9281c6e6391af352f1"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "xfina-ba-bob"
+version = "0.1.0"
+dependencies = [
+ "xfina-models",
+]
+
+[[package]]
+name = "xfina-ba-hdfc"
+version = "0.1.0"
+dependencies = [
+ "calamine 0.22.1",
+ "chrono",
+ "regex",
+ "serde_json",
+ "xfina-models",
+]
+
+[[package]]
+name = "xfina-ba-icici"
+version = "0.1.0"
+dependencies = [
+ "calamine 0.22.1",
+ "chrono",
+ "regex",
+ "serde_json",
+ "xfina-models",
+]
+
+[[package]]
+name = "xfina-ba-sbi"
+version = "0.1.0"
+dependencies = [
+ "calamine 0.22.1",
+ "chrono",
+ "msoffice_crypt",
+ "pdf-extract",
+ "regex",
+ "serde_json",
+ "xfina-models",
+]
+
+[[package]]
+name = "xfina-cc-hdfc"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "xfina-models",
+]
+
+[[package]]
+name = "xfina-cc-icici"
+version = "0.1.0"
+dependencies = [
+ "calamine 0.25.0",
+ "serde",
+ "xfina-models",
+]
+
+[[package]]
+name = "xfina-intl-stocks-ibkr"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "chrono-tz",
+ "csv",
+ "xfina-models",
+]
+
+[[package]]
+name = "xfina-mf-cams"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "pdf-extract",
+ "regex",
+ "serde_json",
+ "xfina-models",
+]
+
+[[package]]
+name = "xfina-models"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "xfina-wasm"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "wasm-bindgen",
+ "xfina-ba-bob",
+ "xfina-ba-hdfc",
+ "xfina-ba-icici",
+ "xfina-ba-sbi",
+ "xfina-cc-hdfc",
+ "xfina-cc-icici",
+ "xfina-intl-stocks-ibkr",
+ "xfina-mf-cams",
+ "xfina-models",
 ]
 
 [[package]]

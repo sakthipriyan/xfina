@@ -1,10 +1,10 @@
 [package]
-name = "finx-mf-cams"
+name = "xfina-mf-cams"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-finx-models.workspace = true
+xfina-models.workspace = true
 pdf-extract.workspace = true
 regex.workspace = true
 clap = { version = "4.4", features = ["derive"] }

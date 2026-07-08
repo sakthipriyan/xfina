@@ -2,7 +2,7 @@ pub mod parser;
 pub mod layout;
 pub mod cas;
 
-use finx_models::{Portfolio, InvestorInfo, Asset};
+use xfina_models::{Portfolio, InvestorInfo, Asset};
 
 pub fn parse_cams_pdf(bytes: &[u8], password: Option<&str>) -> Result<Portfolio, String> {
     let pages = parser::extract_spatial_pages(bytes, password)?;

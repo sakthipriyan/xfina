@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
-import init, { parse_ibkr, parse_cams, parse_hdfc_cc, parse_icici_cc, parse_hdfc_ba, parse_icici_ba, parse_sbi_ba, parse_bob_ba } from './wasm/finx_wasm.js';
+import init, { parse_ibkr, parse_cams, parse_hdfc_cc, parse_icici_cc, parse_hdfc_ba, parse_icici_ba, parse_sbi_ba, parse_bob_ba } from './wasm/xfina_wasm.js';
 import { Sun, Moon, Github, HelpCircle, ChevronDown, Loader2 } from 'lucide-vue-next';
 
 // Shadcn components
@@ -229,14 +229,14 @@ const hasRewards = (stmt) => {
       <!-- Header -->
       <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div class="space-y-2">
-          <h1 class="text-3xl font-bold tracking-tight">FinX<span class="text-xl font-medium text-muted-foreground ml-2">sakthipriyan.com</span></h1>
+          <h1 class="text-3xl font-bold tracking-tight">Xfina<span class="text-xl font-medium text-muted-foreground ml-2">sakthipriyan.com</span></h1>
           <p class="text-muted-foreground mt-2 leading-relaxed">
             Parse financial statements entirely in your browser with Rust/Wasm<br />
             Fast, private, zero-setup, and without uploading your files to any server.
           </p>
         </div>
         <div class="flex items-center space-x-3">
-          <a href="https://github.com/sakthipriyan/financial-extract" target="_blank" rel="noopener noreferrer" class="no-underline">
+          <a href="https://github.com/sakthipriyan/xfina" target="_blank" rel="noopener noreferrer" class="no-underline">
             <Button variant="outline" class="flex items-center gap-2 px-3">
               <Github class="h-[1.2rem] w-[1.2rem]" />
               <span class="font-medium">Open Source</span>

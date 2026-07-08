@@ -1,10 +1,10 @@
 [package]
-name = "finx-ba-icici"
+name = "xfina-ba-icici"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-finx-models = { workspace = true }
+xfina-models = { workspace = true }
 calamine = "0.22"
 chrono = "0.4"
 regex.workspace = true

@@ -1,10 +1,10 @@
 [package]
-name = "finx-ba-hdfc"
+name = "xfina-ba-hdfc"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-finx-models = { workspace = true }
+xfina-models = { workspace = true }
 calamine = "0.22"
 chrono = "0.4"
 regex = { workspace = true }

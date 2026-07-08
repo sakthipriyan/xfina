@@ -1,7 +1,7 @@
-use finx_ba_sbi::{pdf_parser, layout};
+use xfina_ba_sbi::{pdf_parser, layout};
 
 fn main() {
-    let bytes = std::fs::read("../../../financial-extract-test-data/bank-accounts/sbi/raw/AccountStatement_05072026_211225.pdf").unwrap();
+    let bytes = std::fs::read("../../../xfina-test-data/bank-accounts/sbi/raw/AccountStatement_05072026_211225.pdf").unwrap();
     let pages = pdf_parser::extract_spatial_pages(&bytes, Some("22391030559")).unwrap();
     
     for (page_idx, page) in pages.iter().enumerate() {

@@ -13,7 +13,7 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace.dependencies]
-finx-models = { path = "models" }
+xfina-models = { path = "models" }
 serde = "1.0"
 pdf-extract = "0.7"
 csv = "1.3"
