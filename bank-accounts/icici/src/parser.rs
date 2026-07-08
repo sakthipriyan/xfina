@@ -15,7 +15,7 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<BankAccou
         .map_err(|e| format!("Error reading worksheet: {}", e))?;
 
     let mut statement = BankAccountStatement::default();
-    statement.statement.institution_name = "ICICI".to_string();
+    statement.statement.institution_name = Some("ICICI".to_string());
 
     if let Some(fname) = filename {
         // e.g. OpTransactionHistory05-07-2026.xls
@@ -112,6 +112,18 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<BankAccou
                     continue; // Zero amount transaction? Skip.
                 };
 
+                let mode = if desc.starts_with("UPI/") {
+                    Some("UPI".to_string())
+                } else if desc.starts_with("MMT/") || desc.starts_with("IMPS/") {
+                    Some("IMPS".to_string())
+                } else if desc.starts_with("NEFT/") {
+                    Some("NEFT".to_string())
+                } else if desc.contains("ATM") || desc.starts_with("CASH") {
+                    Some("CASH".to_string())
+                } else {
+                    None
+                };
+
                 statement.transactions.push(DepositTransaction {
                     txn_id: None, // No specific txn_id provided in PDF
                     date: parsed_date,
@@ -120,7 +132,8 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<BankAccou
                     reference: if ref_num.is_empty() { None } else { Some(ref_num.to_string()) },
                     r#type: tx_type,
                     amount,
-                    current_balance: Some(balance),
+                    mode,
+                    current_balance: balance,
                 });
             }
         }
@@ -128,10 +141,10 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<BankAccou
     
     // Set opening and closing balance
     if let Some(first) = statement.transactions.first() {
-        if first.r#type == "CREDIT" {
-            statement.summary.opening_balance = Some(first.current_balance.unwrap_or(0.0) - first.amount);
-        } else if first.r#type == "DEBIT" {
-            statement.summary.opening_balance = Some(first.current_balance.unwrap_or(0.0) + first.amount);
+        if first.r#type == "DEBIT" {
+            statement.summary.opening_balance = Some(first.current_balance + first.amount);
+        } else {
+            statement.summary.opening_balance = Some(first.current_balance - first.amount);
         }
     }
     
