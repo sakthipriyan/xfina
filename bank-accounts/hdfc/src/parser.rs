@@ -1,7 +1,6 @@
 use calamine::{Reader, open_workbook_auto_from_rs};
-use chrono::{NaiveDate, NaiveDateTime};
-use xfina_models::{BankAccountStatement, BankTransaction};
-use xfina_models::credit_card::CustomerInfo;
+use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc};
+use xfina_models::{BankAccountStatement, DepositTransaction, Holder};
 use std::io::Cursor;
 use regex::Regex;
 
@@ -19,10 +18,8 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<BankAccountStatement, String> {
         .ok_or("Sheet not found")?
         .map_err(|e| format!("Error reading sheet: {}", e))?;
 
-    let mut stmt = BankAccountStatement {
-        bank_name: "HDFC Bank".to_string(),
-        ..Default::default()
-    };
+    let mut stmt = BankAccountStatement::default();
+    stmt.statement.institution_name = "HDFC Bank".to_string();
 
     let mut in_transactions = false;
     let mut in_summary = false;
@@ -51,7 +48,7 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<BankAccountStatement, String> {
             if acct_str.contains("Account No :") {
                 let parts: Vec<&str> = acct_str.split(':').collect();
                 if parts.len() > 1 {
-                    stmt.account_number = Some(parts[1].trim().split_whitespace().next().unwrap_or("").to_string());
+                    stmt.statement.account_number = Some(parts[1].trim().split_whitespace().next().unwrap_or("").to_string());
                 }
             }
         }
@@ -60,10 +57,10 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<BankAccountStatement, String> {
         if row_idx == 15 && !row_vec[0].is_empty() {
             if let Some(caps) = re_dates.captures(&row_vec[0]) {
                 if let Some(start) = caps.get(1) {
-                    stmt.statement_start_date = Some(parse_date(start.as_str()));
+                    stmt.statement.start_date = Some(parse_date(start.as_str()));
                 }
                 if let Some(end) = caps.get(2) {
-                    stmt.statement_end_date = Some(parse_date(end.as_str()));
+                    stmt.statement.end_date = Some(parse_date(end.as_str()));
                 }
             }
         }
@@ -74,8 +71,6 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<BankAccountStatement, String> {
         }
 
         if row_vec[0].is_empty() || row_vec[0].contains("**Continue**") {
-            // Might be the end or a continuation, wait... HDFC has `**Continue**` and page headers in the middle of transactions for long statements!
-            // Let's check for page breaks.
             if row_vec[0].contains("**Continue**") || row_vec[0].contains("HDFC BANK Ltd.") {
                 in_transactions = false; // pause transactions until we see "Date" header again
             }
@@ -105,9 +100,9 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<BankAccountStatement, String> {
             if row_vec.len() > 1 {
                 let gen_str = row_vec[1].trim();
                 if let Ok(dt) = NaiveDateTime::parse_from_str(gen_str, "%d-%b-%Y %H:%M:%S") {
-                    stmt.generated_date = Some(dt.format("%Y-%m-%d").to_string());
+                    stmt.statement.generated_date = Some(Utc.from_utc_datetime(&dt));
                 } else if let Ok(d) = NaiveDate::parse_from_str(gen_str, "%d-%b-%Y") {
-                    stmt.generated_date = Some(d.format("%Y-%m-%d").to_string());
+                    stmt.statement.generated_date = Some(Utc.from_utc_datetime(&d.and_hms_opt(0, 0, 0).unwrap()));
                 }
             }
             continue;
@@ -121,7 +116,7 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<BankAccountStatement, String> {
         }
 
         if row_vec[0].contains("Opening Balance") {
-            continue; // Reached the end of the statement or a header we can ignore
+            continue;
         }
 
         // Parse a transaction line
@@ -146,48 +141,47 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<BankAccountStatement, String> {
             let balance_str = row_vec[6].trim().replace(",", "");
 
             let (tx_type, amount) = if !withdrawal_str.is_empty() {
-                ("Debit".to_string(), withdrawal_str.parse::<f64>().unwrap_or(0.0))
+                ("DEBIT".to_string(), withdrawal_str.parse::<f64>().unwrap_or(0.0))
             } else if !deposit_str.is_empty() {
-                ("Credit".to_string(), deposit_str.parse::<f64>().unwrap_or(0.0))
+                ("CREDIT".to_string(), deposit_str.parse::<f64>().unwrap_or(0.0))
             } else {
                 continue;
             };
 
             let balance = balance_str.parse::<f64>().ok();
 
-            if stmt.opening_balance.is_none() {
+            if stmt.summary.opening_balance.is_none() {
                 // If opening balance isn't set, infer it from the first transaction's balance and amount
                 if let Some(bal) = balance {
-                    if tx_type == "Credit" {
-                        stmt.opening_balance = Some(bal - amount);
+                    if tx_type == "CREDIT" {
+                        stmt.summary.opening_balance = Some(bal - amount);
                     } else {
-                        stmt.opening_balance = Some(bal + amount);
+                        stmt.summary.opening_balance = Some(bal + amount);
                     }
                 }
             }
 
-            stmt.closing_balance = balance; // Updates with each transaction so it holds the final one
+            stmt.summary.current_balance = balance; // Updates with each transaction so it holds the final one
 
-            stmt.transactions.push(BankTransaction {
+            stmt.transactions.push(DepositTransaction {
+                txn_id: None,
                 date,
                 value_date,
-                description,
-                reference_number: if ref_no.is_empty() { None } else { Some(ref_no) },
-                tx_type,
+                narration: description,
+                reference: if ref_no.is_empty() { None } else { Some(ref_no) },
+                r#type: tx_type,
                 amount,
-                balance,
+                current_balance: balance,
             });
         }
     }
 
-    stmt.customer_info = CustomerInfo {
-        name,
-        address: "".to_string(),
-        customer_gstn: None,
-    };
+    let mut holder = Holder::default();
+    holder.name = name;
+    stmt.profile.holders.holder.push(holder);
 
-    let total_debits: f64 = stmt.transactions.iter().filter(|t| t.tx_type == "Debit").map(|t| t.amount).sum();
-    let total_credits: f64 = stmt.transactions.iter().filter(|t| t.tx_type == "Credit").map(|t| t.amount).sum();
+    let total_debits = stmt.total_debits();
+    let total_credits = stmt.total_credits();
     
     // Validation against summary
     let tolerance = 0.05; // 5 paise tolerance
@@ -204,34 +198,29 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<BankAccountStatement, String> {
         }
     }
     
-    if let (Some(expected), Some(computed)) = (parsed_summary_opening, stmt.opening_balance) {
+    if let (Some(expected), Some(computed)) = (parsed_summary_opening, stmt.summary.opening_balance) {
         if (computed - expected).abs() > tolerance {
             return Err(format!("Opening balance validation failed: computed {}, expected {}", computed, expected));
         }
     }
     
-    if let (Some(expected), Some(computed)) = (parsed_summary_closing, stmt.closing_balance) {
+    if let (Some(expected), Some(computed)) = (parsed_summary_closing, stmt.summary.current_balance) {
         if (computed - expected).abs() > tolerance {
             return Err(format!("Closing balance validation failed: computed {}, expected {}", computed, expected));
         }
     }
 
-    if !stmt.transactions.is_empty() {
-        stmt.total_debits = Some(total_debits);
-        stmt.total_credits = Some(total_credits);
-    }
-
     Ok(stmt)
 }
 
-fn parse_date(date_str: &str) -> String {
+fn parse_date(date_str: &str) -> NaiveDate {
     // Try DD/MM/YY
     if let Ok(parsed) = NaiveDate::parse_from_str(date_str, "%d/%m/%y") {
-        return parsed.format("%Y-%m-%d").to_string();
+        return parsed;
     }
     // Try DD/MM/YYYY
     if let Ok(parsed) = NaiveDate::parse_from_str(date_str, "%d/%m/%Y") {
-        return parsed.format("%Y-%m-%d").to_string();
+        return parsed;
     }
-    date_str.to_string()
+    NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()
 }
