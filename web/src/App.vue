@@ -52,7 +52,7 @@ const requiresPassword = computed(() => {
 const getFileFormat = computed(() => {
     if (selectedCategory.value === 'Mutual Funds') return 'PDF';
     if (selectedCategory.value === 'Bank Accounts') {
-        if (selectedSource.value === 'HDFC' || selectedSource.value === 'ICICI') return 'Excel';
+        if (selectedSource.value === 'HDFC' || selectedSource.value === 'ICICI' || selectedSource.value === 'BoB') return 'Excel';
         return 'PDF';
     }
     if (selectedCategory.value === 'Credit Cards') {
@@ -66,7 +66,7 @@ const getFileFormat = computed(() => {
 const getAcceptString = computed(() => {
     if (selectedCategory.value === 'Mutual Funds') return '.pdf';
     if (selectedCategory.value === 'Bank Accounts') {
-        if (selectedSource.value === 'HDFC' || selectedSource.value === 'ICICI') return '.xls,.xlsx';
+        if (selectedSource.value === 'HDFC' || selectedSource.value === 'ICICI' || selectedSource.value === 'BoB') return '.xls,.xlsx';
         return '.pdf';
     }
     if (selectedCategory.value === 'Credit Cards') {
@@ -169,13 +169,13 @@ const getCurrencySymbol = () => {
 const formatCurrency = (val) => {
     if (val === null || val === undefined) return '-';
     const num = Number(val);
-    const formatted = Math.abs(num).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const formatted = Math.abs(num).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     return (num < 0 ? '-' : '') + getCurrencySymbol() + formatted;
 };
 
 const formatNumber = (val) => {
     if (val === null || val === undefined) return '-';
-    return Number(val).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 4 });
+    return Number(val).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 4 });
 };
 
 const formatDateLocal = (dateStr) => {
@@ -316,7 +316,7 @@ const hasRewards = (stmt) => {
                  <Button :variant="selectedSource === 'HDFC' ? 'default' : 'outline'" @click="selectedSource = 'HDFC'">HDFC Bank</Button>
                  <Button :variant="selectedSource === 'ICICI' ? 'default' : 'outline'" @click="selectedSource = 'ICICI'">ICICI Bank</Button>
                  <Button :variant="selectedSource === 'SBI' ? 'default' : 'outline'" @click="selectedSource = 'SBI'">State Bank of India</Button>
-
+                 <Button :variant="selectedSource === 'BoB' ? 'default' : 'outline'" @click="selectedSource = 'BoB'">Bank of Baroda</Button>
                </div>
              </div>
 
@@ -658,17 +658,17 @@ const hasRewards = (stmt) => {
         <!-- Standardized Header -->
         <StatementHeader
           :customerName="bankStatement.profile?.holders?.holder?.[0]?.name || 'Customer'"
-          :institutionName="bankStatement.statement?.institutionName || 'Bank'"
+          :institutionName="bankStatement.xfina?.institutionName || 'Bank'"
           statementType="Bank Account Statement"
-          :accountNumber="bankStatement.statement?.accountNumber || ''"
-          :meta="[
-            ...(bankStatement.statement?.startDate ? [{ label: 'From', value: formatDateLocal(bankStatement.statement.startDate) }] : []),
-            ...(bankStatement.statement?.endDate ? [{ label: 'To', value: formatDateLocal(bankStatement.statement.endDate) }] : []),
-            ...(bankStatement.statement?.generatedDate ? [{ label: 'Generated', value: formatDateLocal(bankStatement.statement.generatedDate) }] : [])
+          :accountNumber="bankStatement.maskedAccNumber || ''"
+          :statementDetails="[
+            ...(bankStatement.transactions?.startDate ? [{ label: 'From', value: formatDateLocal(bankStatement.transactions.startDate) }] : []),
+            ...(bankStatement.transactions?.endDate ? [{ label: 'To', value: formatDateLocal(bankStatement.transactions.endDate) }] : []),
+            ...(bankStatement.xfina?.generatedDate ? [{ label: 'Generated', value: formatDateLocal(bankStatement.xfina.generatedDate) }] : [])
           ]"
         />
 
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" v-if="bankStatement.summary?.openingBalance !== null && bankStatement.summary?.openingBalance !== undefined">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" v-if="bankStatement.summary?.xfina?.openingBalance !== null && bankStatement.summary?.xfina?.openingBalance !== undefined">
           <Card class="bg-card text-card-foreground shadow-sm">
             <CardHeader class="pb-2">
               <CardTitle class="text-sm text-muted-foreground font-semibold uppercase tracking-wider">Account Summary</CardTitle>
@@ -677,22 +677,22 @@ const hasRewards = (stmt) => {
               <div class="space-y-2">
                 <div class="flex justify-between items-center mb-2 border-b pb-2">
                   <span class="text-sm font-medium">Opening Balance</span>
-                  <span class="font-bold font-mono text-lg text-foreground">{{ formatCurrency(bankStatement.summary.openingBalance) }}</span>
+                  <span class="font-bold font-mono text-lg text-foreground">{{ formatCurrency(bankStatement.summary?.xfina?.openingBalance) }}</span>
                 </div>
                 
                 <div class="flex justify-between items-center">
                   <span class="text-sm text-muted-foreground">Credits / Deposits</span>
-                  <span class="font-medium font-mono text-emerald-500">+{{ formatCurrency(bankStatement.transactions?.filter(t => t.type === 'CREDIT').reduce((s, t) => s + t.amount, 0) || 0) }}</span>
+                  <span class="font-medium font-mono text-emerald-500">+{{ formatCurrency(bankStatement.transactions?.transaction?.filter(t => t.type === 'CREDIT').reduce((s, t) => s + Number(t.amount || 0), 0) || 0) }}</span>
                 </div>
                 
                 <div class="flex justify-between items-center">
                   <span class="text-sm text-muted-foreground">Debits / Withdrawals</span>
-                  <span class="font-medium font-mono text-rose-500">-{{ formatCurrency(bankStatement.transactions?.filter(t => t.type === 'DEBIT').reduce((s, t) => s + t.amount, 0) || 0) }}</span>
+                  <span class="font-medium font-mono text-foreground">{{ formatCurrency(bankStatement.transactions?.transaction?.filter(t => t.type === 'DEBIT').reduce((s, t) => s + Number(t.amount || 0), 0) || 0) }}</span>
                 </div>
                 
                 <div class="flex justify-between items-center mt-2 border-t pt-2">
                   <span class="text-sm font-medium">Closing Balance</span>
-                  <span class="font-bold font-mono text-lg text-primary">{{ formatCurrency(bankStatement.summary.currentBalance) }}</span>
+                  <span class="font-bold font-mono text-lg text-primary">{{ formatCurrency(bankStatement.summary?.currentBalance) }}</span>
                 </div>
               </div>
             </CardContent>
@@ -700,13 +700,13 @@ const hasRewards = (stmt) => {
         </div>
 
         <Accordion type="single" collapsible class="w-full">
-          <AccordionItem value="transactions" class="border rounded-lg bg-card text-card-foreground shadow-sm overflow-hidden" :disabled="!bankStatement.transactions?.length">
+          <AccordionItem value="transactions" class="border rounded-lg bg-card text-card-foreground shadow-sm overflow-hidden" :disabled="!bankStatement.transactions?.transaction?.length">
             <AccordionTrigger class="group hover:no-underline px-4 py-4 data-[state=open]:border-b border-border">
               <span class="font-medium text-foreground text-lg text-left w-full pr-4">Transactions</span>
               <template #icon>
                 <div class="flex items-center gap-1.5 text-xs font-mono bg-primary/10 text-primary pl-2.5 pr-2 py-1.5 rounded shrink-0 ml-2">
-                  <span>{{ bankStatement.transactions?.length || 0 }} {{ bankStatement.transactions?.length === 1 ? 'Txn' : 'Txns' }}</span>
-                  <ChevronDown v-if="bankStatement.transactions?.length" class="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                  <span>{{ bankStatement.transactions?.transaction?.length || 0 }} {{ bankStatement.transactions?.transaction?.length === 1 ? 'Txn' : 'Txns' }}</span>
+                  <ChevronDown v-if="bankStatement.transactions?.transaction?.length" class="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
                 </div>
               </template>
             </AccordionTrigger>
@@ -722,12 +722,11 @@ const hasRewards = (stmt) => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  <TableRow v-for="(txn, idx) in bankStatement.transactions" :key="idx" class="hover:bg-muted/50 transition-colors">
-                    <TableCell class="font-medium whitespace-nowrap">{{ formatDateLocal(txn.date) }}</TableCell>
+                  <TableRow v-for="(txn, idx) in bankStatement.transactions?.transaction" :key="idx" class="hover:bg-muted/50 transition-colors">
+                    <TableCell class="font-medium whitespace-nowrap">{{ formatDateLocal(txn.xfina?.parsedDate || txn.transactionTimestamp) }}</TableCell>
                     <TableCell class="text-foreground text-sm">{{ txn.narration }}</TableCell>
                     <TableCell class="text-right font-mono whitespace-nowrap" :class="{'text-emerald-500': txn.type === 'CREDIT', 'text-foreground': txn.type !== 'CREDIT'}">
                         <span v-if="txn.type === 'CREDIT'">+</span>
-                        <span v-else-if="txn.type === 'DEBIT'">-</span>
                         {{ formatCurrency(txn.amount) }}
                     </TableCell>
                     <TableCell class="text-right font-mono font-medium whitespace-nowrap">{{ txn.currentBalance !== null && txn.currentBalance !== undefined ? formatCurrency(txn.currentBalance) : '-' }}</TableCell>

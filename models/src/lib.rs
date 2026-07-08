@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 pub mod credit_card;
 pub use credit_card::*;
 
-pub mod bank_account;
-pub use bank_account::*;
+pub mod deposit;
+pub use deposit::*;
 
 pub fn parse_indian_date(input: &str) -> String {
     let input = input.trim();
