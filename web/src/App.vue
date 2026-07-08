@@ -656,19 +656,19 @@ const hasRewards = (stmt) => {
       <div v-if="bankStatement" class="space-y-6">
         
         <!-- Standardized Header -->
-        <StatementHeader 
-          :customerName="bankStatement.customer_info?.name || 'Customer'"
-          :institutionName="bankStatement.bank_name || 'Bank'"
-          statementType="Bank Account"
-          :accountNumber="bankStatement.account_number || ''"
-          :statementDetails="[
-            ...(bankStatement.statement_start_date ? [{ label: 'From', value: formatDateLocal(bankStatement.statement_start_date) }] : []),
-            ...(bankStatement.statement_end_date ? [{ label: 'To', value: formatDateLocal(bankStatement.statement_end_date) }] : []),
-            ...(bankStatement.generated_date ? [{ label: 'Generated', value: formatDateLocal(bankStatement.generated_date) }] : [])
+        <StatementHeader
+          :customerName="bankStatement.profile?.holders?.holder?.[0]?.name || 'Customer'"
+          :institutionName="bankStatement.statement?.institutionName || 'Bank'"
+          statementType="Bank Account Statement"
+          :accountNumber="bankStatement.statement?.accountNumber || ''"
+          :meta="[
+            ...(bankStatement.statement?.startDate ? [{ label: 'From', value: formatDateLocal(bankStatement.statement.startDate) }] : []),
+            ...(bankStatement.statement?.endDate ? [{ label: 'To', value: formatDateLocal(bankStatement.statement.endDate) }] : []),
+            ...(bankStatement.statement?.generatedDate ? [{ label: 'Generated', value: formatDateLocal(bankStatement.statement.generatedDate) }] : [])
           ]"
         />
 
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" v-if="bankStatement.opening_balance !== null && bankStatement.opening_balance !== undefined">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" v-if="bankStatement.summary?.openingBalance !== null && bankStatement.summary?.openingBalance !== undefined">
           <Card class="bg-card text-card-foreground shadow-sm">
             <CardHeader class="pb-2">
               <CardTitle class="text-sm text-muted-foreground font-semibold uppercase tracking-wider">Account Summary</CardTitle>
@@ -677,22 +677,22 @@ const hasRewards = (stmt) => {
               <div class="space-y-2">
                 <div class="flex justify-between items-center mb-2 border-b pb-2">
                   <span class="text-sm font-medium">Opening Balance</span>
-                  <span class="font-bold font-mono text-lg text-foreground">{{ formatCurrency(bankStatement.opening_balance) }}</span>
+                  <span class="font-bold font-mono text-lg text-foreground">{{ formatCurrency(bankStatement.summary.openingBalance) }}</span>
                 </div>
                 
-                <div v-if="bankStatement.total_credits !== null && bankStatement.total_credits !== undefined" class="flex justify-between items-center">
+                <div class="flex justify-between items-center">
                   <span class="text-sm text-muted-foreground">Credits / Deposits</span>
-                  <span class="font-medium font-mono text-emerald-500">+{{ formatCurrency(bankStatement.total_credits) }}</span>
+                  <span class="font-medium font-mono text-emerald-500">+{{ formatCurrency(bankStatement.transactions?.filter(t => t.type === 'CREDIT').reduce((s, t) => s + t.amount, 0) || 0) }}</span>
                 </div>
                 
-                <div v-if="bankStatement.total_debits !== null && bankStatement.total_debits !== undefined" class="flex justify-between items-center">
+                <div class="flex justify-between items-center">
                   <span class="text-sm text-muted-foreground">Debits / Withdrawals</span>
-                  <span class="font-medium font-mono text-rose-500">-{{ formatCurrency(bankStatement.total_debits) }}</span>
+                  <span class="font-medium font-mono text-rose-500">-{{ formatCurrency(bankStatement.transactions?.filter(t => t.type === 'DEBIT').reduce((s, t) => s + t.amount, 0) || 0) }}</span>
                 </div>
                 
                 <div class="flex justify-between items-center mt-2 border-t pt-2">
                   <span class="text-sm font-medium">Closing Balance</span>
-                  <span class="font-bold font-mono text-lg text-primary">{{ formatCurrency(bankStatement.closing_balance) }}</span>
+                  <span class="font-bold font-mono text-lg text-primary">{{ formatCurrency(bankStatement.summary.currentBalance) }}</span>
                 </div>
               </div>
             </CardContent>
@@ -717,28 +717,20 @@ const hasRewards = (stmt) => {
                   <TableRow class="hover:bg-transparent">
                     <TableHead class="text-muted-foreground whitespace-nowrap">Date</TableHead>
                     <TableHead class="text-muted-foreground whitespace-nowrap">Description</TableHead>
-                    <TableHead class="text-muted-foreground whitespace-nowrap">Reference No.</TableHead>
                     <TableHead class="text-right text-muted-foreground whitespace-nowrap">Amount</TableHead>
                     <TableHead class="text-right text-muted-foreground whitespace-nowrap">Balance</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   <TableRow v-for="(txn, idx) in bankStatement.transactions" :key="idx" class="hover:bg-muted/50 transition-colors">
-                    <TableCell class="text-foreground whitespace-nowrap">
-                      <div class="flex flex-col">
-                        <span>{{ formatDateLocal(txn.date) }}</span>
-                        <span v-if="txn.value_date && txn.date !== txn.value_date" class="text-[10px] text-muted-foreground mt-0.5" title="Value Date">Val: {{ formatDateLocal(txn.value_date) }}</span>
-                      </div>
+                    <TableCell class="font-medium whitespace-nowrap">{{ formatDateLocal(txn.date) }}</TableCell>
+                    <TableCell class="text-foreground text-sm">{{ txn.narration }}</TableCell>
+                    <TableCell class="text-right font-mono whitespace-nowrap" :class="{'text-emerald-500': txn.type === 'CREDIT', 'text-foreground': txn.type !== 'CREDIT'}">
+                        <span v-if="txn.type === 'CREDIT'">+</span>
+                        <span v-else-if="txn.type === 'DEBIT'">-</span>
+                        {{ formatCurrency(txn.amount) }}
                     </TableCell>
-                    <TableCell class="text-foreground text-sm">{{ txn.description }}</TableCell>
-                    <TableCell class="text-muted-foreground font-mono text-xs">{{ txn.reference_number || '' }}</TableCell>
-                    <TableCell class="text-right font-mono whitespace-nowrap" :class="{'text-emerald-500': txn.tx_type === 'Credit', 'text-foreground': txn.tx_type !== 'Credit'}">
-                      <div class="inline-flex items-baseline justify-end">
-                        <span v-if="txn.tx_type === 'Credit'">+</span>
-                        <span>{{ formatCurrency(txn.amount) }}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell class="text-right font-mono">{{ formatCurrency(txn.balance) }}</TableCell>
+                    <TableCell class="text-right font-mono font-medium whitespace-nowrap">{{ txn.currentBalance !== null && txn.currentBalance !== undefined ? formatCurrency(txn.currentBalance) : '-' }}</TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
