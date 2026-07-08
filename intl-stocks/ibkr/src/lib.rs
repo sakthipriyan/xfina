@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use finx_models::{Portfolio, Asset, Transaction, InvestorInfo};
+use xfina_models::{Portfolio, Asset, Transaction, InvestorInfo};
 use csv::ReaderBuilder;
 use chrono::{NaiveDate, NaiveDateTime, TimeZone, LocalResult, Utc};
 use chrono_tz::America::New_York;

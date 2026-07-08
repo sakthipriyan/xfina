@@ -1,7 +1,7 @@
 use clap::Parser;
 use std::fs;
-use finx_mf_cams::parser::extract_spatial_pages;
-use finx_mf_cams::layout::group_into_lines;
+use xfina_mf_cams::parser::extract_spatial_pages;
+use xfina_mf_cams::layout::group_into_lines;
 
 #[derive(Parser, Debug)]
 struct Args {

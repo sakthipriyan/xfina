@@ -1,4 +1,4 @@
-use finx_models::{BankAccountStatement, BankTransaction};
+use xfina_models::{BankAccountStatement, BankTransaction};
 use crate::{pdf_parser, layout};
 use regex::Regex;
 use chrono::NaiveDate;
@@ -195,7 +195,7 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>) -> Result<
         }
     }
 
-    use finx_models::CustomerInfo;
+    use xfina_models::CustomerInfo;
 
     Ok(BankAccountStatement {
         bank_name: "SBI".to_string(),

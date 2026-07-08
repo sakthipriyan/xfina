@@ -1,10 +1,10 @@
 use std::fs;
 use std::path::Path;
-use finx_ba_icici::parse_icici_xls;
+use xfina_ba_icici::parse_icici_xls;
 
 #[test]
 fn test_icici_bank_accounts() {
-    let test_data_dir = Path::new("../../../financial-extract-test-data/bank-accounts/icici");
+    let test_data_dir = Path::new("../../../xfina-test-data/bank-accounts/icici");
     
     // If the test data repo is not checked out alongside, gracefully skip
     if !test_data_dir.exists() {
@@ -23,7 +23,7 @@ fn test_icici_bank_accounts() {
             let file_name = path.file_stem().unwrap().to_str().unwrap();
             let bytes = fs::read(&path).expect("Failed to read file");
             
-            let parsed_statement = parse_icici_xls(&bytes).expect("Failed to parse statement");
+            let parsed_statement = parse_icici_xls(&bytes, path.file_name().and_then(|n| n.to_str())).expect("Failed to parse statement");
             
             let expected_file_path = expected_dir.join(format!("{}.json", file_name));
             

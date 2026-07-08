@@ -1,4 +1,4 @@
-use finx_models::BankAccountStatement;
+use xfina_models::BankAccountStatement;
 
 pub fn parse_bob_bank_statement(bytes: &[u8]) -> Result<BankAccountStatement, String> {
     Ok(BankAccountStatement {

@@ -1,5 +1,5 @@
 use crate::layout::Line;
-use finx_models::{Portfolio, InvestorInfo, Asset, Transaction};
+use xfina_models::{Portfolio, InvestorInfo, Asset, Transaction};
 use regex::Regex;
 
 pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>) -> Result<Portfolio, String> {
@@ -32,8 +32,8 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>) -> Result<Portfolio, String>
                         let p1 = original_parts[0].trim().to_string();
                         let p2 = original_parts[1][1..].trim().to_string(); // Skip the 'o ' in 'To '
                         if date_re.is_match(&p1) {
-                            portfolio.statement_start_date = Some(finx_models::parse_indian_date(&p1));
-                            portfolio.statement_end_date = Some(finx_models::parse_indian_date(&p2));
+                            portfolio.statement_start_date = Some(xfina_models::parse_indian_date(&p1));
+                            portfolio.statement_end_date = Some(xfina_models::parse_indian_date(&p2));
                         }
                     }
                 }
@@ -131,7 +131,7 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>) -> Result<Portfolio, String>
                             asset.total_cost_basis = parts[i+1].replace(",", "").parse().unwrap_or(0.0);
                         }
                         if p.to_lowercase() == "nav" && i + 2 < parts.len() && parts[i+1].to_lowercase() == "on" {
-                            asset.current_nav_date = Some(finx_models::parse_indian_date(&parts[i+2].replace(":", "")));
+                            asset.current_nav_date = Some(xfina_models::parse_indian_date(&parts[i+2].replace(":", "")));
                         }
                         
                         // Parse "INR <value>"
@@ -216,7 +216,7 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>) -> Result<Portfolio, String>
                     };
                     
                     asset.transactions.push(Transaction {
-                        date: finx_models::parse_indian_date(&date),
+                        date: xfina_models::parse_indian_date(&date),
                         tx_type,
                         description: Some(raw_desc),
                         amount,

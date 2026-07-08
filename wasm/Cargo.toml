@@ -1,5 +1,5 @@
 [package]
-name = "finx-wasm"
+name = "xfina-wasm"
 version.workspace = true
 edition.workspace = true
 
@@ -9,12 +9,12 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 wasm-bindgen.workspace = true
 serde_json.workspace = true
-finx-models.workspace = true
-finx-intl-stocks-ibkr = { path = "../intl-stocks/ibkr" }
-finx-mf-cams = { path = "../mutual-funds/cams" }
-finx-cc-hdfc = { path = "../credit-cards/hdfc" }
-finx-cc-icici = { path = "../credit-cards/icici" }
-finx-ba-hdfc = { path = "../bank-accounts/hdfc" }
-finx-ba-icici = { path = "../bank-accounts/icici" }
-finx-ba-sbi = { path = "../bank-accounts/sbi" }
-finx-ba-bob = { path = "../bank-accounts/bob" }
+xfina-models.workspace = true
+xfina-intl-stocks-ibkr = { path = "../intl-stocks/ibkr" }
+xfina-mf-cams = { path = "../mutual-funds/cams" }
+xfina-cc-hdfc = { path = "../credit-cards/hdfc" }
+xfina-cc-icici = { path = "../credit-cards/icici" }
+xfina-ba-hdfc = { path = "../bank-accounts/hdfc" }
+xfina-ba-icici = { path = "../bank-accounts/icici" }
+xfina-ba-sbi = { path = "../bank-accounts/sbi" }
+xfina-ba-bob = { path = "../bank-accounts/bob" }

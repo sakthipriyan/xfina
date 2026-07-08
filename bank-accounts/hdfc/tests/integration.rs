@@ -1,10 +1,10 @@
 use std::fs;
 use std::path::Path;
-use finx_ba_hdfc::parse_hdfc_xls;
+use xfina_ba_hdfc::parse_hdfc_xls;
 
 #[test]
 fn test_hdfc_bank_accounts() {
-    let test_data_dir = Path::new("../../../financial-extract-test-data/bank-accounts/hdfc");
+    let test_data_dir = Path::new("../../../xfina-test-data/bank-accounts/hdfc");
     
     // If the test data repo is not checked out alongside, gracefully skip
     if !test_data_dir.exists() {

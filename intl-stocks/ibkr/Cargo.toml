@@ -1,10 +1,10 @@
 [package]
-name = "finx-intl-stocks-ibkr"
+name = "xfina-intl-stocks-ibkr"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-finx-models.workspace = true
+xfina-models.workspace = true
 csv.workspace = true
 chrono = "0.4.45"
 chrono-tz = "0.10.4"

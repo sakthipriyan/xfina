@@ -1,7 +1,7 @@
 use calamine::{Reader, open_workbook_auto_from_rs};
 use chrono::{NaiveDate, NaiveDateTime};
-use finx_models::{BankAccountStatement, BankTransaction};
-use finx_models::credit_card::CustomerInfo;
+use xfina_models::{BankAccountStatement, BankTransaction};
+use xfina_models::credit_card::CustomerInfo;
 use std::io::Cursor;
 use regex::Regex;
 
