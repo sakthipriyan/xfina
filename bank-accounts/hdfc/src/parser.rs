@@ -19,7 +19,7 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<BankAccountStatement, String> {
         .map_err(|e| format!("Error reading sheet: {}", e))?;
 
     let mut stmt = BankAccountStatement::default();
-    stmt.statement.institution_name = "HDFC Bank".to_string();
+    stmt.statement.institution_name = Some("HDFC Bank".to_string());
 
     let mut in_transactions = false;
     let mut in_summary = false;
@@ -161,17 +161,32 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<BankAccountStatement, String> {
                 }
             }
 
-            stmt.summary.current_balance = balance; // Updates with each transaction so it holds the final one
+            stmt.summary.current_balance = balance.unwrap_or(0.0); // Updates with each transaction so it holds the final one
+
+            let mode = if description.starts_with("UPI-") || description.contains("UPI") {
+                Some("UPI".to_string())
+            } else if description.starts_with("IB FUNDS TRANSFER") {
+                Some("FT".to_string())
+            } else if description.starts_with("IB BILLPAY") {
+                Some("BILLPAY".to_string())
+            } else if description.starts_with("POS ") || description.contains("CCPAY") {
+                Some("CARD".to_string())
+            } else if description.contains("ATM") || description.contains("CASH") {
+                Some("CASH".to_string())
+            } else {
+                None
+            };
 
             stmt.transactions.push(DepositTransaction {
                 txn_id: None,
                 date,
                 value_date,
-                narration: description,
-                reference: if ref_no.is_empty() { None } else { Some(ref_no) },
+                narration: description.to_string(),
+                reference: if ref_no.is_empty() { None } else { Some(ref_no.to_string()) },
+                mode,
                 r#type: tx_type,
                 amount,
-                current_balance: balance,
+                current_balance: balance.unwrap_or(0.0),
             });
         }
     }
@@ -204,8 +219,8 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<BankAccountStatement, String> {
         }
     }
     
-    if let (Some(expected), Some(computed)) = (parsed_summary_closing, stmt.summary.current_balance) {
-        if (computed - expected).abs() > tolerance {
+    if let (Some(expected), computed) = (parsed_summary_closing, stmt.summary.current_balance) {
+        if (expected - computed).abs() > 0.01 {
             return Err(format!("Closing balance validation failed: computed {}, expected {}", computed, expected));
         }
     }
