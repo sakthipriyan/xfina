@@ -4,11 +4,14 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct StatementMetadata {
-    pub institution_name: String,
+    pub institution_name: Option<String>,
     pub account_number: Option<String>,
     pub start_date: Option<NaiveDate>,
     pub end_date: Option<NaiveDate>,
     pub generated_date: Option<DateTime<Utc>>,
+    pub branch: Option<String>,
+    pub ifsc: Option<String>,
+    pub micr: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -26,11 +29,18 @@ pub struct Holders {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
+pub struct Nominee {
+    pub registered: bool,
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct Holder {
     pub name: String,
     pub dob: Option<NaiveDate>,
     pub mobile: Option<String>,
-    pub nomineename: Option<String>,
+    pub nominee: Option<Nominee>,
     pub landline: Option<String>,
     pub address: Option<String>,
     pub email: Option<String>,
@@ -41,7 +51,7 @@ pub struct Holder {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct DepositSummary {
-    pub current_balance: Option<f64>,
+    pub current_balance: f64,
     pub currency: Option<String>,
     pub balance_date_time: Option<DateTime<Utc>>,
     pub opening_date: Option<NaiveDate>,
@@ -52,7 +62,7 @@ pub struct DepositSummary {
     pub opening_balance: Option<f64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct DepositTransaction {
     pub txn_id: Option<String>,
@@ -60,9 +70,10 @@ pub struct DepositTransaction {
     pub date: NaiveDate,
     pub value_date: Option<NaiveDate>,
     pub r#type: String, // "CREDIT" or "DEBIT"
+    pub mode: Option<String>, // e.g. "UPI", "CARD", "ATM", "CASH"
     pub narration: String, // replaces 'description'
     pub reference: Option<String>, // replaces 'reference_number'
-    pub current_balance: Option<f64>, // replaces 'balance'
+    pub current_balance: f64, // replaces 'balance'
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

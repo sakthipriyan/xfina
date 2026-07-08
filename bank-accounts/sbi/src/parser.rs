@@ -7,7 +7,7 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>) -> Result<
     let pages = pdf_parser::extract_spatial_pages(bytes, password)?;
     
     let mut statement = BankAccountStatement::default();
-    statement.statement.institution_name = "SBI".to_string();
+    statement.statement.institution_name = Some("SBI".to_string());
 
     let mut account_number = String::new();
     let mut account_name = String::new();
@@ -82,7 +82,7 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>) -> Result<
                     if let Some(caps) = summary_re.captures(text) {
                         statement.summary.opening_balance = parse_amt_summary(caps.get(1).unwrap().as_str());
                         // total_debits and total_credits not saved to fields anymore, computed on the fly
-                        statement.summary.current_balance = parse_amt_summary(caps.get(4).unwrap().as_str());
+                        statement.summary.current_balance = parse_amt_summary(caps.get(4).unwrap().as_str()).unwrap_or(0.0);
                     }
                 }
 
@@ -178,6 +178,18 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>) -> Result<
                 let date = NaiveDate::parse_from_str(&date_str, "%d/%m/%Y").unwrap_or_else(|_| NaiveDate::from_ymd_opt(1970, 1, 1).unwrap());
                 let value_date = NaiveDate::parse_from_str(&val_date_str, "%d/%m/%Y").ok();
                 
+                let mode = if narration.starts_with("UPI/") || narration.starts_with("TRANSFER TO UPI/") || narration.starts_with("TRANSFER FROM UPI/") {
+                    Some("UPI".to_string())
+                } else if narration.starts_with("NEFT") {
+                    Some("NEFT".to_string())
+                } else if narration.starts_with("IMPS") || narration.starts_with("IMPS/") {
+                    Some("IMPS".to_string())
+                } else if narration.contains("ATM") || narration.contains("CASH") {
+                    Some("CASH".to_string())
+                } else {
+                    None
+                };
+
                 let tx = DepositTransaction {
                     txn_id: None,
                     date,
@@ -186,7 +198,8 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>) -> Result<
                     reference: None,
                     r#type: tx_type,
                     amount,
-                    current_balance: balance,
+                    mode,
+                    current_balance: balance.unwrap_or(0.0),
                 };
                 statement.transactions.push(tx);
             }
