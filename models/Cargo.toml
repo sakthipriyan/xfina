@@ -5,3 +5,5 @@ edition.workspace = true
 
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
+chrono = { workspace = true, features = ["serde"] }
+rust_decimal = { version = "1.42.1", features = ["serde", "serde-with-float", "serde-with-str"] }

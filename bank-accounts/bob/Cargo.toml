@@ -4,4 +4,11 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+calamine = "0.36.0"
+chrono.workspace = true
+regex.workspace = true
+rust_decimal = "1.42.1"
 xfina-models = { workspace = true }
+
+[dev-dependencies]
+serde_json.workspace = true
