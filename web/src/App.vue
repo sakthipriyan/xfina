@@ -231,7 +231,7 @@ const hasRewards = (stmt) => {
         <div class="space-y-2">
           <h1 class="text-3xl font-bold tracking-tight">Xfina<span class="text-xl font-medium text-muted-foreground ml-2">sakthipriyan.com</span></h1>
           <p class="text-muted-foreground mt-2 leading-relaxed">
-            Parse financial statements entirely in your browser with Rust/Wasm<br />
+            e<strong>X</strong>tract <strong>fina</strong>ncial statements entirely in your browser with Rust/Wasm<br />
             Fast, private, zero-setup, and without uploading your files to any server.
           </p>
         </div>
@@ -259,7 +259,7 @@ const hasRewards = (stmt) => {
       <Card v-if="wasmLoaded" class="bg-card border-border shadow-sm">
         <CardHeader class="flex flex-row items-start justify-between space-y-0 pb-4">
           <div class="space-y-1.5">
-            <CardTitle>Parse Statement</CardTitle>
+            <CardTitle>Extract Statement</CardTitle>
             <CardDescription>Upload your statement to securely extract and view your financial data directly in the browser.</CardDescription>
           </div>
           <div v-if="isProcessing" class="flex items-center text-sm font-medium text-muted-foreground gap-2 whitespace-nowrap mt-0.5">
