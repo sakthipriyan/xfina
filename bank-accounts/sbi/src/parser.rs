@@ -5,7 +5,7 @@ use crate::{pdf_parser, layout};
 use regex::Regex;
 use chrono::{NaiveDate, TimeZone, Utc};
 
-pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>) -> Result<DepositAccount, String> {
+pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>, filename: Option<&str>) -> Result<DepositAccount, String> {
     let pages = pdf_parser::extract_spatial_pages(bytes, password)?;
     
     let mut statement = DepositAccount::default();
@@ -17,6 +17,34 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>) -> Result<
 
     let mut account_number = String::new();
     let mut account_name = String::new();
+    let mut branch_name = String::new();
+    let mut ifsc_code = String::new();
+    let mut micr_code = String::new();
+    let mut product = String::new();
+    let mut customer_id = String::new();
+    let mut currency = String::new();
+    let mut nominee = String::new();
+    let mut opening_date: Option<NaiveDate> = None;
+    let mut address_lines: Vec<String> = Vec::new();
+    let mut in_address = false;
+    
+    if let Some(fname) = filename {
+        // e.g. AccountStatement_05072026_211225.pdf
+        let re = Regex::new(r"(\d{2})(\d{2})(\d{4})_(\d{2})(\d{2})(\d{2})").unwrap();
+        if let Some(caps) = re.captures(fname) {
+            let day = caps.get(1).unwrap().as_str().parse::<u32>().unwrap();
+            let month = caps.get(2).unwrap().as_str().parse::<u32>().unwrap();
+            let year = caps.get(3).unwrap().as_str().parse::<i32>().unwrap();
+            let hour = caps.get(4).unwrap().as_str().parse::<u32>().unwrap();
+            let min = caps.get(5).unwrap().as_str().parse::<u32>().unwrap();
+            let sec = caps.get(6).unwrap().as_str().parse::<u32>().unwrap();
+            if let Some(d) = NaiveDate::from_ymd_opt(year, month, day) {
+                let dt = d.and_hms_opt(hour, min, sec).unwrap();
+                let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
+                xfina_account.generated_date = chrono::TimeZone::from_local_datetime(&ist_offset, &dt).single().map(|dt| dt.with_timezone(&Utc));
+            }
+        }
+    }
     
     let date_re = Regex::new(r"^(\d{2}/\d{2}/\d{4})\s+(\d{2}/\d{2}/\d{4})").unwrap();
     let gen_date_re = Regex::new(r"Date of Statement\s*:\s*(\d{2}-\d{2}-\d{4})").unwrap();
@@ -70,8 +98,12 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>) -> Result<
                 let text = line.text.trim();
                 
                 if let Some(caps) = gen_date_re.captures(text) {
-                    if let Ok(parsed) = NaiveDate::parse_from_str(caps.get(1).unwrap().as_str(), "%d-%m-%Y") {
-                        xfina_account.generated_date = Some(Utc.from_utc_datetime(&parsed.and_hms_opt(0, 0, 0).unwrap()));
+                    if xfina_account.generated_date.is_none() {
+                        if let Ok(parsed) = NaiveDate::parse_from_str(caps.get(1).unwrap().as_str(), "%d-%m-%Y") {
+                            let dt = parsed.and_hms_opt(0, 0, 0).unwrap();
+                            let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
+                            xfina_account.generated_date = chrono::TimeZone::from_local_datetime(&ist_offset, &dt).single().map(|dt| dt.with_timezone(&Utc));
+                        }
                     }
                 }
                 if let Some(caps) = stmt_from_re.captures(text) {
@@ -108,9 +140,49 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>) -> Result<
                     }
                     is_header_or_footer = true;
                 }
+                
+                let x0 = line.chars.first().map(|c| c.x0).unwrap_or(0.0);
+                
+                if text.starts_with("Branch Name :") {
+                    branch_name = text.split(':').nth(1).unwrap_or("").trim().to_string();
+                } else if text.starts_with("CIF Number :") || text.contains("CIF Number :") {
+                    if let Some(idx) = text.find("CIF Number :") {
+                        customer_id = text[idx + 12..].trim().to_string();
+                    }
+                } else if text.starts_with("Product :") {
+                    product = text.split(':').nth(1).unwrap_or("").trim().to_string();
+                } else if text.starts_with("IFSC Code :") {
+                    ifsc_code = text.split(':').nth(1).unwrap_or("").trim().to_string();
+                } else if text.starts_with("Currency :") {
+                    currency = text.split(':').nth(1).unwrap_or("").trim().to_string();
+                } else if text.starts_with("MICR Code :") || text.contains("MICR Code :") {
+                    if let Some(idx) = text.find("MICR Code :") {
+                        micr_code = text[idx + 11..].trim().to_string();
+                    }
+                } else if text.starts_with("Nominee Name :") {
+                    nominee = text.split(':').nth(1).unwrap_or("").trim().to_string();
+                } else if text.starts_with("Account open Date :") || text.contains("Account open Date :") {
+                    if let Some(idx) = text.find("Account open Date :") {
+                        let d_str = text[idx + 19..].trim();
+                        if let Ok(parsed) = NaiveDate::parse_from_str(d_str, "%d/%m/%Y") {
+                            opening_date = Some(parsed);
+                        }
+                    }
+                }
+                
+                if text.starts_with("Date of Statement") || text.starts_with("Clear Balance") || text.starts_with("Branch Code :") {
+                    in_address = false;
+                }
+                
                 if text.starts_with("Mr.") || text.starts_with("Mrs.") {
-                    if account_name.is_empty() {
+                    if account_name.is_empty() && x0 < 300.0 {
                         account_name = text.to_string();
+                        // Assume customer address follows name on the left side
+                        in_address = true;
+                    }
+                } else if in_address && x0 < 300.0 && !text.starts_with("Not Available") {
+                    if !text.is_empty() {
+                        address_lines.push(text.to_string());
                     }
                 }
                 if text.contains("Balance") && text.len() < 10 {
@@ -225,13 +297,52 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>) -> Result<
     if let Some(last) = parsed_transactions.last() {
         summary.current_balance = last.current_balance;
     }
-
-    if !account_number.is_empty() {
+if !account_number.is_empty() {
         statement.masked_acc_number = mask_account_number(&account_number);
     }
     
+    if !branch_name.is_empty() {
+        summary.branch = Some(branch_name);
+    }
+    if !ifsc_code.is_empty() {
+        summary.ifsc_code = Some(ifsc_code);
+    }
+    if !micr_code.is_empty() {
+        summary.micr_code = Some(micr_code);
+    }
+    if !currency.is_empty() {
+        summary.currency = Some(currency);
+    }
+    if let Some(od) = opening_date {
+        summary.opening_date = Some(od);
+    }
+    if let Some(mut xfina_summary) = summary.xfina.take() {
+        if !product.is_empty() {
+            xfina_summary.account_product = Some(product);
+        }
+        summary.xfina = Some(xfina_summary);
+    } else if !product.is_empty() {
+        summary.xfina = Some(XfinaSummary {
+            account_product: Some(product),
+            ..Default::default()
+        });
+    }
+
     let mut holder = Holder::default();
     holder.name = account_name;
+    if !address_lines.is_empty() {
+        holder.address = Some(address_lines.join(", "));
+    }
+    if !nominee.is_empty() && nominee != "Not Available" {
+        holder.nominee = Some(HoldingNominee::Registered); // Usually XXXXX implies registered
+    }
+    
+    use xfina_models::deposit::XfinaHolder;
+    let mut xfina_holder = XfinaHolder::default();
+    if !customer_id.is_empty() {
+        xfina_holder.customer_id = Some(customer_id);
+    }
+    holder.xfina = Some(xfina_holder);
     
     let mut profile = Profile::default();
     profile.holders = Holders {

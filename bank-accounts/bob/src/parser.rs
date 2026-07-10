@@ -2,7 +2,7 @@ use calamine::{Reader, open_workbook_auto_from_rs};
 use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc, FixedOffset};
 use std::io::Cursor;
 use rust_decimal::Decimal;
-use xfina_models::deposit::{DepositAccount, Transaction, XfinaDepositAccount, XfinaTransactions, XfinaSummary, Profile, Holders, Holder, Summary, Transactions, HoldersType, TransactionType, TransactionMode, FiType};
+use xfina_models::deposit::{DepositAccount, Transaction, XfinaDepositAccount, XfinaTransactions, XfinaSummary, Profile, Holders, Holder, Summary, Transactions, HoldersType, TransactionType, TransactionMode, FiType, HoldingNominee, XfinaHolder};
 use xfina_models::mask_account_number;
 use regex::Regex;
 
@@ -25,6 +25,12 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
     let mut micr_code = String::new();
     let mut branch_name = String::new();
     let mut name = String::new();
+    let mut address = String::new();
+    let mut customer_id = String::new();
+    let mut nominee = String::new();
+    let mut account_product = String::new();
+    
+    let re_prod = Regex::new(r"Statement of transactions in\s+(.*?)\s+\d+").unwrap();
     
     let mut start_date: Option<NaiveDate> = None;
     let mut end_date: Option<NaiveDate> = None;
@@ -47,8 +53,8 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
         
         // Extract Metadata
         if first_col.starts_with("Customer Id:") {
-            if row_vec.len() > 3 {
-                // Not really useful for ReBIT but good for metadata if needed
+            if row_vec.len() > 4 {
+                customer_id = row_vec[4].trim().to_string();
             }
             if let Some(idx) = row_vec.iter().position(|s| s.trim() == "Account No:") {
                 if row_vec.len() > idx + 6 {
@@ -56,8 +62,8 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
                 }
             }
         } else if first_col.starts_with("Branch Name:") {
-            if row_vec.len() > 3 {
-                branch_name = row_vec[3].trim().to_string();
+            if row_vec.len() > 4 {
+                branch_name = row_vec[4].trim().to_string();
             }
             if let Some(idx) = row_vec.iter().position(|s| s.trim() == "MICR Code:") {
                 if row_vec.len() > idx + 6 {
@@ -67,6 +73,18 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
         } else if first_col.starts_with("IFSC Code:") {
             if row_vec.len() > 4 {
                 ifsc_code = row_vec[4].trim().to_string();
+            }
+            if row_vec.len() > 20 {
+                let nom_str = row_vec[20].trim();
+                if nom_str.eq_ignore_ascii_case("Yes") || nom_str.eq_ignore_ascii_case("Registered") {
+                    nominee = "REGISTERED".to_string();
+                } else if nom_str.eq_ignore_ascii_case("No") || nom_str.eq_ignore_ascii_case("Not Registered") {
+                    nominee = "NOT_REGISTERED".to_string();
+                }
+            }
+        } else if first_col.starts_with("Statement of transactions in") {
+            if let Some(caps) = re_prod.captures(first_col) {
+                account_product = caps[1].trim().to_string();
             }
         } else if first_col.starts_with("Your Account Statement as on") {
             let parts: Vec<&str> = first_col.split("as on").collect();
@@ -101,13 +119,18 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
         }
         
         // Sometimes Name is at row 12 or 1
-        if row_idx == 0 && row_vec.len() > 3 && row_vec[0].is_empty() {
+        if row_idx == 0 && row_vec.len() > 13 {
              if row_vec[1].contains("Holder Name") {
                  let parts: Vec<&str> = row_vec[1].split(':').collect();
                  if parts.len() > 1 {
                      name = parts[1].trim().to_string();
                  }
              }
+        }
+        if row_idx == 1 && row_vec.len() > 13 {
+            if !row_vec[13].is_empty() {
+                address = row_vec[13].replace('\n', ", ").trim().to_string();
+            }
         }
         if row_idx == 9 && first_col.len() > 5 {
              name = first_col.to_string();
@@ -208,7 +231,7 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
     let mut summary = Summary::default();
     if let Some(first) = parsed_transactions.first() {
         let ob = if first.r#type == TransactionType::Credit { first.current_balance - first.amount } else { first.current_balance + first.amount };
-        summary.xfina = Some(XfinaSummary { opening_balance: Some(ob), ..Default::default() });
+        xfina_summary.opening_balance = Some(ob);
     }
     if let Some(last) = parsed_transactions.last() {
         summary.current_balance = last.current_balance;
@@ -228,6 +251,13 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
         statement.masked_acc_number = mask_account_number(&account_number);
     }
     
+    if !account_product.is_empty() {
+        xfina_summary.account_product = Some(account_product);
+    }
+    
+    // Always assign xfina_summary back to summary.xfina as it contains at least defaults/opening balance
+    summary.xfina = Some(xfina_summary);
+    
     let mut transactions_obj = Transactions::default();
     transactions_obj.start_date = start_date;
     transactions_obj.end_date = end_date;
@@ -244,6 +274,21 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
     
     let mut holder = Holder::default();
     holder.name = name;
+    if !address.is_empty() {
+        holder.address = Some(address.replace("  ", " ").replace(" ,", ","));
+    }
+    if nominee == "REGISTERED" {
+        holder.nominee = Some(HoldingNominee::Registered);
+    } else if nominee == "NOT_REGISTERED" {
+        holder.nominee = Some(HoldingNominee::NotRegistered);
+    }
+    
+    let mut xfina_holder = XfinaHolder::default();
+    if !customer_id.is_empty() {
+        xfina_holder.customer_id = Some(customer_id);
+    }
+    holder.xfina = Some(xfina_holder);
+    
     let holders = vec![holder];
     
     let mut profile = Profile::default();

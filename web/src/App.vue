@@ -123,7 +123,7 @@ const onFileSelect = async (event) => {
             } else if (selectedSource.value === 'ICICI') {
                 jsonString = parse_icici_ba(uint8Array, file.name);
             } else if (selectedSource.value === 'SBI') {
-                jsonString = parse_sbi_ba(uint8Array, password.value ? password.value : null);
+                jsonString = parse_sbi_ba(uint8Array, password.value ? password.value : null, file.name);
             } else if (selectedSource.value === 'BoB') {
                 jsonString = parse_bob_ba(uint8Array);
             }
@@ -701,7 +701,7 @@ const hasRewards = (stmt) => {
           </Card>
 
           <!-- Account Details Card -->
-          <Card class="bg-card text-card-foreground shadow-sm lg:col-span-2">
+          <Card class="bg-card text-card-foreground shadow-sm lg:col-span-2" v-if="bankStatement.summary?.xfina?.accountProduct || bankStatement.profile?.holders?.holder?.[0]?.nominee || bankStatement.summary?.branch || bankStatement.summary?.ifscCode || bankStatement.summary?.micrCode || bankStatement.summary?.openingDate">
             <CardHeader class="pb-2">
               <CardTitle class="text-sm text-muted-foreground font-semibold uppercase tracking-wider">Account Details</CardTitle>
             </CardHeader>

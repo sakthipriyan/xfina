@@ -71,8 +71,8 @@ pub fn parse_icici_ba(bytes: &[u8], filename: Option<String>) -> Result<String, 
 
 use xfina_ba_sbi::parse_sbi_bank_statement;
 #[wasm_bindgen]
-pub fn parse_sbi_ba(bytes: &[u8], password: Option<String>) -> Result<String, JsValue> {
-    match parse_sbi_bank_statement(bytes, password.as_deref()) {
+pub fn parse_sbi_ba(bytes: &[u8], password: Option<String>, filename: Option<String>) -> Result<String, JsValue> {
+    match parse_sbi_bank_statement(bytes, password.as_deref(), filename.as_deref()) {
         Ok(stmt) => serde_json::to_string(&stmt).map_err(|e| JsValue::from_str(&format!("JSON serialization error: {}", e))),
         Err(e) => Err(JsValue::from_str(&e)),
     }
