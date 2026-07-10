@@ -18,7 +18,8 @@ fn test_sbi_pdf_parser() {
 
         if path.extension().and_then(|s| s.to_str()) == Some("pdf") {
             let bytes = fs::read(&path).unwrap();
-            let statement = parse_sbi_bank_statement(&bytes, Some(password)).unwrap();
+            let filename_str = path.file_name().and_then(|s| s.to_str());
+            let statement = parse_sbi_bank_statement(&bytes, Some(password), filename_str).unwrap();
 
             let json = serde_json::to_string_pretty(&statement).unwrap();
 
