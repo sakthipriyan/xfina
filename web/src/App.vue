@@ -666,7 +666,7 @@ const hasRewards = (stmt) => {
           :statementDetails="[
             ...(bankStatement.transactions?.startDate ? [{ label: 'From', value: formatDateLocal(bankStatement.transactions.startDate) }] : []),
             ...(bankStatement.transactions?.endDate ? [{ label: 'To', value: formatDateLocal(bankStatement.transactions.endDate) }] : []),
-            ...(bankStatement.xfina?.generatedDate ? [{ label: 'Generated', value: formatDateLocal(bankStatement.xfina.generatedDate) }] : [])
+            ...(bankStatement.xfina?.generatedDate ? [{ label: 'Generated', value: formatDateLocal(bankStatement.xfina.generatedDate, bankStatement.xfina.dateOnly) }] : [])
           ]"
         />
 
