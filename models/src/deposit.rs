@@ -1,43 +1,40 @@
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, Utc, NaiveDate};
 use serde::{Deserialize, Serialize};
 use rust_decimal::Decimal;
+use serde_with::skip_serializing_none;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum HoldershipType {
-    #[default]
-    Single,
-    Joint,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum NomineeStatus {
-    Registered,
-    #[default]
-    #[serde(rename = "NOT-REGISTERED")]
-    NotRegistered,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum AccountStatus {
-    Active,
-    Inactive,
-    Dormant,
-    Closed,
-}
+// -----------------------------------------------------------------------------
+// ReBIT Schema Enums
+// -----------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum AccountType {
     Savings,
     Current,
-    Overdraft,
-    CashCredit,
-    Nre,
-    Nro,
-    Fcnr,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum HoldingNominee {
+    Registered,
+    #[serde(rename = "NOT-REGISTERED")]
+    NotRegistered,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum HoldersType {
+    #[default]
+    Single,
+    Joint,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum SummaryFacility {
+    Od,
+    Cc,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -50,40 +47,34 @@ pub enum TransactionType {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum StatusTypes {
+    Active,
+    Inactive,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TransactionMode {
     Cash,
     Atm,
     Card,
     Upi,
-    Imps,
-    Neft,
-    Rtgs,
-    Cheque,
+    Ft,
     Others,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum FiType {
+    #[default]
     Deposit,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum Facility {
-    Od,
-    Cc,
-}
+// -----------------------------------------------------------------------------
+// ReBIT Schema Structs
+// -----------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct DepositPending {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub transaction_type: Option<TransactionType>,
-    #[serde(with = "rust_decimal::serde::float")]
-    pub amount: Decimal,
-}
-
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DepositAccount {
@@ -93,11 +84,155 @@ pub struct DepositAccount {
     pub version: f32, // typically 1.1
     pub linked_acc_ref: Option<String>,
     pub profile: Option<Profile>,
-    pub summary: Option<DepositSummary>,
-    pub transactions: Option<DepositTransactions>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<Summary>,
+    pub transactions: Option<Transactions>,
+    
+    // Xfina Extension
     pub xfina: Option<XfinaDepositAccount>,
 }
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Profile {
+    pub holders: Holders,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Summary {
+    pub pending: Option<Pending>,
+    #[serde(with = "rust_decimal::serde::float")]
+    pub current_balance: Decimal,
+    pub currency: Option<String>,
+    #[serde(with = "rust_decimal::serde::float_option", default)]
+    #[serde(rename = "exchgeRate")]
+    pub exchange_rate: Option<Decimal>,
+    pub balance_date_time: Option<DateTime<Utc>>,
+    #[serde(rename = "type")]
+    pub r#type: Option<AccountType>,
+    pub branch: Option<String>,
+    pub facility: Option<SummaryFacility>,
+    pub ifsc_code: Option<String>,
+    pub micr_code: Option<String>,
+    pub opening_date: Option<NaiveDate>,
+    #[serde(with = "rust_decimal::serde::float_option", default)]
+    pub current_od_limit: Option<Decimal>,
+    #[serde(with = "rust_decimal::serde::float_option", default)]
+    pub drawing_limit: Option<Decimal>,
+    pub status: Option<StatusTypes>,
+    
+    // Xfina Extension
+    pub xfina: Option<XfinaSummary>,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Pending {
+    pub transaction_type: Option<TransactionType>,
+    #[serde(with = "rust_decimal::serde::float")]
+    pub amount: Decimal,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Holders {
+    #[serde(rename = "type")]
+    pub r#type: HoldersType, // e.g., "SINGLE", "JOINT"
+    pub holder: Vec<Holder>,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Holder {
+    pub name: String,
+    pub dob: Option<NaiveDate>,
+    pub mobile: Option<String>,
+    pub nominee: Option<HoldingNominee>, // "REGISTERED" or "NOT-REGISTERED"
+    pub landline: Option<String>,
+    pub address: Option<String>,
+    pub email: Option<String>,
+    pub pan: Option<String>,
+    pub ckyc_compliance: Option<bool>,
+    
+    // Xfina Extension
+    pub xfina: Option<XfinaHolder>,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Transactions {
+    pub start_date: Option<NaiveDate>,
+    pub end_date: Option<NaiveDate>,
+    pub transaction: Vec<Transaction>,
+    
+    // Xfina Extension
+    pub xfina: Option<XfinaTransactions>,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Transaction {
+    #[serde(rename = "type")]
+    pub r#type: TransactionType, // "DEBIT" or "CREDIT"
+    pub mode: Option<TransactionMode>, // e.g., "CASH", "UPI"
+    #[serde(with = "rust_decimal::serde::float")]
+    pub amount: Decimal,
+    #[serde(with = "rust_decimal::serde::float")]
+    pub current_balance: Decimal,
+    pub transaction_timestamp: Option<DateTime<Utc>>,
+    pub value_date: Option<NaiveDate>,
+    pub txn_id: Option<String>,
+    pub narration: String,
+    pub reference: Option<String>,
+}
+
+// -----------------------------------------------------------------------------
+// Xfina Custom Structs
+// -----------------------------------------------------------------------------
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct XfinaHolder {
+    pub customer_id: Option<String>,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct XfinaDepositAccount {
+    pub institution_name: Option<String>,
+    pub generated_date: Option<DateTime<Utc>>,
+}
+
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct XfinaSummary {
+    #[serde(with = "rust_decimal::serde::float_option", default)]
+    pub opening_balance: Option<Decimal>,
+    pub balance_date_only: Option<bool>,
+    pub account_product: Option<String>,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct XfinaTransactions {
+    pub date_only: Option<bool>,
+}
+
+// -----------------------------------------------------------------------------
+// Implementations
+// -----------------------------------------------------------------------------
 
 impl Default for DepositAccount {
     fn default() -> Self {
@@ -112,114 +247,6 @@ impl Default for DepositAccount {
             xfina: None,
         }
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct XfinaDepositAccount {
-    pub institution_name: Option<String>,
-    pub generated_date: Option<DateTime<Utc>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct Profile {
-    pub holders: Holders,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct Holders {
-    #[serde(rename = "type")]
-    pub r#type: HoldershipType, // e.g., "SINGLE", "JOINT"
-    pub holder: Vec<Holder>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct Holder {
-    pub name: String,
-    pub dob: Option<NaiveDate>,
-    pub mobile: Option<String>,
-    pub nominee: NomineeStatus, // "REGISTERED" or "NOT-REGISTERED"
-    pub landline: Option<String>,
-    pub address: Option<String>,
-    pub email: Option<String>,
-    pub pan: Option<String>,
-    pub ckyc_compliance: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub xfina: Option<XfinaHolder>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct XfinaHolder {
-    pub nominee_name: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct DepositSummary {
-    #[serde(with = "rust_decimal::serde::str")]
-    pub current_balance: Decimal, // According to ReBIT this is String
-    pub currency: Option<String>,
-    pub exchge_rate: Option<String>,
-    pub balance_date_time: Option<DateTime<Utc>>,
-    pub opening_date: Option<NaiveDate>,
-    pub status: Option<AccountStatus>,
-    pub account_type: Option<AccountType>,
-    pub branch: Option<String>,
-    pub facility: Option<Facility>,
-    pub ifsc_code: Option<String>,
-    pub micr_code: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", with = "rust_decimal::serde::str_option")]
-    pub current_od_limit: Option<Decimal>,
-    #[serde(default, skip_serializing_if = "Option::is_none", with = "rust_decimal::serde::str_option")]
-    pub drawing_limit: Option<Decimal>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pending: Option<DepositPending>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub xfina: Option<XfinaSummary>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct XfinaSummary {
-    pub opening_balance: Option<Decimal>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct DepositTransactions {
-    pub start_date: Option<NaiveDate>,
-    pub end_date: Option<NaiveDate>,
-    pub transaction: Vec<DepositTransaction>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct DepositTransaction {
-    pub txn_id: Option<String>,
-    #[serde(with = "rust_decimal::serde::float")]
-    pub amount: Decimal,
-    pub transaction_timestamp: Option<DateTime<Utc>>,
-    pub value_date: Option<NaiveDate>,
-    #[serde(rename = "type")]
-    pub r#type: TransactionType, // "CREDIT" or "DEBIT"
-    pub mode: Option<TransactionMode>, // e.g. "UPI", "CARD", "ATM", "CASH"
-    pub narration: String,
-    pub reference: Option<String>,
-    #[serde(with = "rust_decimal::serde::str")]
-    pub current_balance: Decimal,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub xfina: Option<XfinaTransaction>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct XfinaTransaction {
-    // Fields beyond ReBIT
-    pub posting_date: Option<NaiveDate>, // Since ReBIT uses DateTime for timestamp but we only have Date
 }
 
 impl DepositAccount {
@@ -261,7 +288,6 @@ impl DepositAccount {
                 expected_balance -= txn.amount;
             }
             if expected_balance != txn.current_balance {
-                // Ignore small floating errors? No, we use exact Decimal now!
                 return Err(format!("Balance mismatch after txn {}: expected {}, got {}", txn.narration, expected_balance, txn.current_balance));
             }
         }
