@@ -1,5 +1,6 @@
 use rust_decimal::Decimal;
-use xfina_models::deposit::{DepositAccount, DepositTransaction, XfinaDepositAccount, XfinaTransaction, XfinaSummary, Profile, Holders, Holder, DepositSummary, DepositTransactions, HoldershipType, TransactionType, TransactionMode, FiType};
+use xfina_models::deposit::{DepositAccount, Transaction, XfinaDepositAccount, XfinaTransactions, XfinaSummary, Profile, Holders, Holder, Summary, Transactions, HoldersType, TransactionType, TransactionMode, FiType, HoldingNominee};
+use xfina_models::mask_account_number;
 use crate::{pdf_parser, layout};
 use regex::Regex;
 use chrono::{NaiveDate, TimeZone, Utc};
@@ -24,8 +25,8 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>) -> Result<
 
     let mut inside_table = false;
     let mut parsed_transactions = Vec::new();
-    let mut summary = DepositSummary::default();
-    let mut transactions_obj = DepositTransactions::default();
+    let mut summary = Summary::default();
+    let mut transactions_obj = Transactions::default();
     
     let parse_amount = |s: &str| -> Option<Decimal> {
         s.replace(",", "").replace("CR", "").replace("DR", "").parse().ok()
@@ -89,7 +90,7 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>) -> Result<
                 if text.len() > 30 && (text.contains("CR") || text.contains("DR")) {
                     if let Some(caps) = summary_re.captures(text) {
                         if let Some(ob) = parse_amount(caps.get(1).unwrap().as_str()) {
-                            summary.xfina = Some(XfinaSummary { opening_balance: Some(ob) });
+                            summary.xfina = Some(XfinaSummary { opening_balance: Some(ob), ..Default::default() });
                         }
                         if let Some(cb) = parse_amount(caps.get(4).unwrap().as_str()) {
                             summary.current_balance = cb;
@@ -191,17 +192,17 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>) -> Result<
                 
                 let mode = if narration.starts_with("UPI/") || narration.starts_with("TRANSFER TO UPI/") || narration.starts_with("TRANSFER FROM UPI/") {
                     Some(TransactionMode::Upi)
-                } else if narration.starts_with("NEFT") {
-                    Some(TransactionMode::Neft)
-                } else if narration.starts_with("IMPS") || narration.starts_with("IMPS/") {
-                    Some(TransactionMode::Imps)
+                } else if narration.contains("NEFT") {
+                    Some(TransactionMode::Ft)
+                } else if narration.contains("IMPS") {
+                    Some(TransactionMode::Ft)
                 } else if narration.contains("ATM") || narration.contains("CASH") {
                     Some(TransactionMode::Cash)
                 } else {
                     None
                 };
 
-                let tx = DepositTransaction {
+                let tx = Transaction {
                     txn_id: None,
                     transaction_timestamp: Some(Utc.from_utc_datetime(&date.and_hms_opt(0, 0, 0).unwrap())),
                     value_date,
@@ -211,9 +212,6 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>) -> Result<
                     amount,
                     current_balance: balance.unwrap_or(Decimal::from(0)),
                     mode,
-                    xfina: Some(XfinaTransaction {
-                        posting_date: Some(date),
-                    }),
                 };
                 parsed_transactions.push(tx);
             }
@@ -222,14 +220,14 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>) -> Result<
     
     if let Some(first) = parsed_transactions.first() {
         let ob = if first.r#type == TransactionType::Credit { first.current_balance - first.amount } else { first.current_balance + first.amount };
-        summary.xfina = Some(XfinaSummary { opening_balance: Some(ob) });
+        summary.xfina = Some(XfinaSummary { opening_balance: Some(ob), ..Default::default() });
     }
     if let Some(last) = parsed_transactions.last() {
         summary.current_balance = last.current_balance;
     }
 
     if !account_number.is_empty() {
-        statement.masked_acc_number = account_number;
+        statement.masked_acc_number = mask_account_number(&account_number);
     }
     
     let mut holder = Holder::default();
@@ -237,11 +235,12 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>) -> Result<
     
     let mut profile = Profile::default();
     profile.holders = Holders {
-        r#type: HoldershipType::Single, // Adjust as necessary
+        r#type: HoldersType::Single, // Adjust as necessary
         holder: vec![holder],
     };
 
     transactions_obj.transaction = parsed_transactions;
+    transactions_obj.xfina = Some(XfinaTransactions { date_only: Some(true) });
     
     statement.profile = Some(profile);
     statement.summary = Some(summary);

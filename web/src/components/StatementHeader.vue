@@ -21,6 +21,14 @@ const props = defineProps({
     type: String,
     default: ''
   },
+  address: {
+    type: String,
+    default: ''
+  },
+  customerId: {
+    type: String,
+    default: ''
+  },
   
   // Statement Card (Array of { label, value })
   statementDetails: {
@@ -41,10 +49,14 @@ const props = defineProps({
           <span v-if="statementType">{{ statementType }}</span>
         </div>
       </CardHeader>
-      <CardContent class="mt-1">
+      <CardContent class="mt-1 flex-1">
         <div class="flex flex-col gap-1">
           <span class="text-xl font-bold">{{ customerName }}</span>
-          <span class="text-sm text-muted-foreground font-mono bg-muted/20 rounded px-2 py-1" v-if="accountNumber">{{ accountNumber }}</span>
+          <span class="text-xs text-muted-foreground leading-snug" v-if="address">{{ address }}</span>
+          <div class="flex items-center gap-2 mt-1 flex-wrap">
+            <span class="text-xs text-muted-foreground font-mono border rounded px-1.5 py-0.5" v-if="accountNumber">{{ accountNumber }}</span>
+            <span class="text-xs text-muted-foreground font-mono border rounded px-1.5 py-0.5" v-if="customerId">CUST ID: {{ customerId }}</span>
+          </div>
         </div>
       </CardContent>
     </Card>
