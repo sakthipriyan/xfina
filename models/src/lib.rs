@@ -66,6 +66,18 @@ pub fn parse_indian_date(input: &str) -> String {
     input.to_string()
 }
 
+pub fn mask_account_number(acc: &str) -> String {
+    let acc = acc.trim();
+    let len = acc.len();
+    if len <= 6 {
+        return acc.to_string();
+    }
+    let first = &acc[0..2];
+    let last = &acc[len-4..len];
+    let middle = "X".repeat(len - 6);
+    format!("{}{}{}", first, middle, last)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct InvestorInfo {
     pub account_number: Option<String>,

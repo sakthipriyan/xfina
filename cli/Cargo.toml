@@ -1,0 +1,7 @@
+[package]
+name = "xfina-cli"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+calamine = "0.36.0"

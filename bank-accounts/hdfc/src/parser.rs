@@ -1,8 +1,9 @@
 use calamine::{Reader, open_workbook_auto_from_rs};
-use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc};
+use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc, FixedOffset};
 use std::io::Cursor;
 use rust_decimal::Decimal;
-use xfina_models::deposit::{DepositAccount, DepositTransaction, XfinaDepositAccount, XfinaTransaction, XfinaSummary, Profile, Holders, Holder, DepositSummary, DepositTransactions, HoldershipType, TransactionType, TransactionMode, FiType};
+use xfina_models::deposit::{DepositAccount, Transaction, XfinaDepositAccount, XfinaTransactions, XfinaSummary, Profile, Holders, Holder, Summary, Transactions, HoldersType, TransactionType, TransactionMode, FiType, StatusTypes, HoldingNominee};
+use xfina_models::mask_account_number;
 use regex::Regex;
 
 pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
@@ -28,48 +29,58 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
 
     let mut in_transactions = false;
     let mut in_summary = false;
-    let mut parsed_summary_opening: Option<f64> = None;
-    let mut parsed_summary_closing: Option<f64> = None;
-    let mut parsed_summary_debits: Option<f64> = None;
-    let mut parsed_summary_credits: Option<f64> = None;
+    let mut parsed_summary_opening: Option<Decimal> = None;
+    let mut parsed_summary_closing: Option<Decimal> = None;
+    let mut parsed_summary_debits: Option<Decimal> = None;
+    let mut parsed_summary_credits: Option<Decimal> = None;
 
-    let re_dates = Regex::new(r"Statement From\s*:\s*(\d{2}/\d{2}/\d{4})\s*To\s*:\s*(\d{2}/\d{2}/\d{4})").unwrap();
-    let mut name = String::new();
-    
     let mut parsed_transactions = Vec::new();
-    let mut transactions_obj = DepositTransactions::default();
-    let mut xfina_summary = XfinaSummary::default();
+    let mut transactions_obj = Transactions::default();
+    let mut summary = Summary::default();
+    let mut holder = Holder::default();
+
+    // Regexes for header extraction
+    let re_nomination = Regex::new(r"Nomination\s*:\s*(Registered|Not[-\s]Registered)").unwrap();
+    let re_dates = Regex::new(r"Statement From\s*:\s*(\d{2}/\d{2}/\d{4})\s*To\s*:\s*(\d{2}/\d{2}/\d{4})").unwrap();
+    let re_branch = Regex::new(r"(?:Account Branch|Branch)\s*:\s*([^|]+)").unwrap();
+    let re_od_limit = Regex::new(r"OD Limit\s*:\s*([\d\.]+)").unwrap();
+    let re_currency = Regex::new(r"Currency\s*:\s*([A-Za-z]+)").unwrap();
+    let re_ifsc = Regex::new(r"(?:RTGS/NEFT IFSC|IFSC)\s*:\s*([A-Z0-9]+)").unwrap();
+    let re_micr = Regex::new(r"MICR\s*:\s*(\d+)").unwrap();
+    let re_open_date = Regex::new(r"A/C Open Date\s*:\s*(\d{2}/\d{2}/\d{4})").unwrap();
+    let re_account_no = Regex::new(r"Account No\s*:\s*([\w]+)").unwrap();
+    let re_cust_id = Regex::new(r"Cust ID\s*:\s*(\d+)").unwrap();
+    let re_account_product = Regex::new(r"Account No\s*:\s*[\w]+\s+([^|]+)").unwrap();
+
+    let mut header_text = String::new();
+    let mut address_lines = Vec::new();
+    let mut name = String::new();
 
     for (row_idx, row) in sheet.rows().enumerate() {
-        let row_vec: Vec<String> = row.iter().map(|c| c.to_string()).collect();
-        if row_vec.is_empty() {
+        let row_vec: Vec<String> = row.iter().map(|c| c.to_string().replace("\u{0}", "").trim().to_string()).collect();
+        if row_vec.is_empty() || row_vec.iter().all(|s| s.is_empty()) {
             continue;
         }
 
-        // Extract Customer Name
-        if row_idx == 5 && !row_vec[0].is_empty() {
-            name = row_vec[0].replace("MR", "").replace("MS", "").trim().to_string();
-        }
-
-        // Extract Account Number
-        if row_idx == 14 && row_vec.len() > 4 {
-            let acct_str = &row_vec[4];
-            if acct_str.contains("Account No :") {
-                let parts: Vec<&str> = acct_str.split(':').collect();
-                if parts.len() > 1 {
-                    stmt.masked_acc_number = parts[1].trim().split_whitespace().next().unwrap_or("").to_string();
+        // Header parsing logic (first 20 rows)
+        if row_idx < 20 {
+            for cell in &row_vec {
+                if !cell.is_empty() {
+                    header_text.push_str(cell);
+                    header_text.push_str(" | ");
                 }
             }
-        }
 
-        // Extract Dates
-        if row_idx == 15 && !row_vec[0].is_empty() {
-            if let Some(caps) = re_dates.captures(&row_vec[0]) {
-                if let Some(start) = caps.get(1) {
-                    transactions_obj.start_date = Some(parse_date(start.as_str()));
-                }
-                if let Some(end) = caps.get(2) {
-                    transactions_obj.end_date = Some(parse_date(end.as_str()));
+            // Customer Name
+            if row_idx == 5 && !row_vec[0].is_empty() {
+                name = row_vec[0].replace("MR", "").replace("MS", "").trim().to_string();
+            }
+
+            // Address logic: usually left side from rows 5 to 10
+            if row_idx >= 5 && row_idx <= 10 {
+                let col0 = row_vec[0].trim();
+                if !col0.is_empty() && !col0.contains("JOINT HOLDERS") && !col0.contains("Nomination") && !col0.contains("MR") && !col0.contains("MS") {
+                    address_lines.push(col0.to_string());
                 }
             }
         }
@@ -93,12 +104,12 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
         }
 
         if in_summary {
-            if let Ok(ob) = row_vec[0].trim().parse::<f64>() {
+            if let Ok(ob) = row_vec[0].trim().replace(",", "").parse::<Decimal>() {
                 parsed_summary_opening = Some(ob);
                 if row_vec.len() >= 7 {
-                    parsed_summary_debits = row_vec[4].trim().parse::<f64>().ok();
-                    parsed_summary_credits = row_vec[5].trim().parse::<f64>().ok();
-                    parsed_summary_closing = row_vec[6].trim().parse::<f64>().ok();
+                    parsed_summary_debits = row_vec[4].trim().replace(",", "").parse::<Decimal>().ok();
+                    parsed_summary_credits = row_vec[5].trim().replace(",", "").parse::<Decimal>().ok();
+                    parsed_summary_closing = row_vec[6].trim().replace(",", "").parse::<Decimal>().ok();
                 }
                 in_summary = false; // we got the values
             }
@@ -108,10 +119,11 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
         if row_vec[0].contains("Generated On:") {
             if row_vec.len() > 1 {
                 let gen_str = row_vec[1].trim();
+                let ist_offset = FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
                 if let Ok(dt) = NaiveDateTime::parse_from_str(gen_str, "%d-%b-%Y %H:%M:%S") {
-                    xfina_account.generated_date = Some(Utc.from_utc_datetime(&dt));
+                    xfina_account.generated_date = ist_offset.from_local_datetime(&dt).single().map(|d| d.with_timezone(&Utc));
                 } else if let Ok(d) = NaiveDate::parse_from_str(gen_str, "%d-%b-%Y") {
-                    xfina_account.generated_date = Some(Utc.from_utc_datetime(&d.and_hms_opt(0, 0, 0).unwrap()));
+                    xfina_account.generated_date = ist_offset.from_local_datetime(&d.and_hms_opt(0, 0, 0).unwrap()).single().map(|d| d.with_timezone(&Utc));
                 }
             }
             continue;
@@ -172,9 +184,14 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
                 None
             };
 
-            parsed_transactions.push(DepositTransaction {
+            // Convert IST to UTC for transactions
+            let ist_offset = FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
+            let tx_dt = date.and_hms_opt(0, 0, 0).unwrap();
+            let utc_tx_dt = ist_offset.from_local_datetime(&tx_dt).single().map(|d| d.with_timezone(&Utc));
+
+            parsed_transactions.push(Transaction {
                 txn_id: None,
-                transaction_timestamp: Some(Utc.from_utc_datetime(&date.and_hms_opt(0, 0, 0).unwrap())),
+                transaction_timestamp: utc_tx_dt,
                 value_date: value_date,
                 narration: description.to_string(),
                 reference: if ref_no.is_empty() { None } else { Some(ref_no.to_string()) },
@@ -182,33 +199,125 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
                 r#type: tx_type,
                 amount,
                 current_balance: balance,
-                xfina: Some(XfinaTransaction {
-                    posting_date: Some(date),
-                }),
             });
         }
     }
 
-    let mut summary = DepositSummary::default();
-    if let Some(first) = parsed_transactions.first() {
-        let ob = if first.r#type == TransactionType::Credit { first.current_balance - first.amount } else { first.current_balance + first.amount };
-        summary.xfina = Some(XfinaSummary { opening_balance: Some(ob) });
+    // Process extracted header variables
+    if let Some(caps) = re_nomination.captures(&header_text) {
+        let value = caps[1].to_uppercase();
+        if value == "REGISTERED" {
+            holder.nominee = Some(HoldingNominee::Registered);
+        } else if value == "NOT REGISTERED" || value.contains("NOT") {
+            holder.nominee = Some(HoldingNominee::NotRegistered);
+        }
     }
-    if let Some(last) = parsed_transactions.last() {
+    
+    if let Some(caps) = re_dates.captures(&header_text) {
+        transactions_obj.start_date = Some(parse_date(&caps[1]));
+        transactions_obj.end_date = Some(parse_date(&caps[2]));
+    }
+    
+    if let Some(caps) = re_branch.captures(&header_text) {
+        summary.branch = Some(caps[1].trim().to_string());
+    }
+
+    if let Some(caps) = re_od_limit.captures(&header_text) {
+        if let Ok(limit) = caps[1].parse::<Decimal>() {
+            summary.current_od_limit = Some(limit);
+        }
+    }
+    
+    if let Some(caps) = re_currency.captures(&header_text) {
+        summary.currency = Some(caps[1].trim().to_string());
+    }
+    
+    if let Some(caps) = re_ifsc.captures(&header_text) {
+        summary.ifsc_code = Some(caps[1].trim().to_string());
+    }
+    
+    if let Some(caps) = re_micr.captures(&header_text) {
+        summary.micr_code = Some(caps[1].trim().to_string());
+    }
+    
+    if let Some(caps) = re_open_date.captures(&header_text) {
+        summary.opening_date = Some(parse_date(&caps[1]));
+    }
+    
+    if let Some(caps) = re_account_no.captures(&header_text) {
+        stmt.masked_acc_number = mask_account_number(caps[1].trim());
+    }
+
+    if let Some(caps) = re_cust_id.captures(&header_text) {
+        holder.xfina = Some(xfina_models::deposit::XfinaHolder {
+            customer_id: Some(caps[1].trim().to_string()),
+        });
+    }
+
+    if !address_lines.is_empty() {
+        holder.address = Some(address_lines.join(", "));
+    }
+    holder.name = name;
+
+    // Statement Summary validation and integration
+    let calc_debits: Decimal = parsed_transactions.iter().filter(|t| t.r#type == TransactionType::Debit).map(|t| t.amount).sum();
+    let calc_credits: Decimal = parsed_transactions.iter().filter(|t| t.r#type == TransactionType::Credit).map(|t| t.amount).sum();
+    
+    if let Some(sd) = parsed_summary_debits {
+        if calc_debits != sd {
+            return Err(format!("Total debits mismatch: expected {}, got {}", sd, calc_debits));
+        }
+    }
+    if let Some(sc) = parsed_summary_credits {
+        if calc_credits != sc {
+            return Err(format!("Total credits mismatch: expected {}, got {}", sc, calc_credits));
+        }
+    }
+    
+    let mut account_product: Option<String> = None;
+    if let Some(caps) = re_account_product.captures(&header_text) {
+        let product = caps[1].trim().to_string();
+        if !product.is_empty() {
+            account_product = Some(product);
+        }
+    }
+
+    let mut ob_val = None;
+    if let Some(ob) = parsed_summary_opening {
+        ob_val = Some(ob);
+    } else if let Some(first) = parsed_transactions.first() {
+        ob_val = Some(if first.r#type == TransactionType::Credit { first.current_balance - first.amount } else { first.current_balance + first.amount });
+    }
+    
+    let mut xfina_sum = XfinaSummary::default();
+    xfina_sum.opening_balance = ob_val;
+    xfina_sum.account_product = account_product;
+    
+    if xfina_sum.opening_balance.is_some() || xfina_sum.account_product.is_some() {
+        summary.xfina = Some(xfina_sum);
+    }
+
+    if let Some(cb) = parsed_summary_closing {
+        summary.current_balance = cb;
+        if let Some(last) = parsed_transactions.last() {
+            if summary.current_balance != last.current_balance {
+                return Err(format!("Closing balance mismatch: expected {}, got {}", summary.current_balance, last.current_balance));
+            }
+        }
+    } else if let Some(last) = parsed_transactions.last() {
         summary.current_balance = last.current_balance;
     }
     
     transactions_obj.transaction = parsed_transactions;
+    transactions_obj.xfina = Some(XfinaTransactions { date_only: Some(true) });
     
-    let mut holder = Holder::default();
-    holder.name = name;
-    let holders = vec![holder];
-    
+    let holders_list = vec![holder];
     let mut profile = Profile::default();
-    profile.holders = Holders {
-        r#type: if holders.len() > 1 { HoldershipType::Joint } else { HoldershipType::Single },
-        holder: holders,
-    };
+    let mut holders = Holders::default();
+    holders.r#type = HoldersType::Single;
+    holders.holder = holders_list;
+    
+    profile.holders = holders;
     
     stmt.profile = Some(profile);
     stmt.summary = Some(summary);
@@ -219,11 +328,9 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
 }
 
 fn parse_date(date_str: &str) -> NaiveDate {
-    // Try DD/MM/YY
     if let Ok(parsed) = NaiveDate::parse_from_str(date_str, "%d/%m/%y") {
         return parsed;
     }
-    // Try DD/MM/YYYY
     if let Ok(parsed) = NaiveDate::parse_from_str(date_str, "%d/%m/%Y") {
         return parsed;
     }

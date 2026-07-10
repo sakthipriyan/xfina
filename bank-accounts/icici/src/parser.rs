@@ -2,7 +2,8 @@ use chrono::{NaiveDate, TimeZone, Utc};
 use calamine::{Reader, open_workbook_auto_from_rs};
 use std::io::Cursor;
 use rust_decimal::Decimal;
-use xfina_models::deposit::{DepositAccount, DepositTransaction, XfinaDepositAccount, XfinaTransaction, XfinaSummary, Profile, Holders, Holder, DepositSummary, DepositTransactions, HoldershipType, TransactionType, TransactionMode, FiType};
+use xfina_models::deposit::{DepositAccount, Transaction, XfinaDepositAccount, XfinaTransactions, XfinaSummary, Profile, Holders, Holder, Summary, Transactions, HoldersType, TransactionType, TransactionMode, FiType};
+use xfina_models::mask_account_number;
 use regex::Regex;
 
 pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAccount, String> {
@@ -51,7 +52,7 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAc
             if let Some(parts) = account_str.split_once(" - ") {
                 let left_part = parts.0;
                 let acc_no = left_part.split(' ').next().unwrap_or(left_part);
-                statement.masked_acc_number = acc_no.trim().to_string();
+                statement.masked_acc_number = mask_account_number(acc_no.trim());
                 
                 let mut holder = Holder::default();
                 holder.name = parts.1.trim().to_string();
@@ -113,19 +114,20 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAc
                     continue; // Zero amount transaction? Skip.
                 };
 
+                let narration_upper = desc.to_uppercase();
                 let mode = if desc.starts_with("UPI/") {
                     Some(TransactionMode::Upi)
-                } else if desc.starts_with("MMT/") || desc.starts_with("IMPS/") {
-                    Some(TransactionMode::Imps)
-                } else if desc.starts_with("NEFT/") {
-                    Some(TransactionMode::Neft)
+                } else if narration_upper.contains("IMPS") {
+                    Some(TransactionMode::Ft)
+                } else if narration_upper.contains("NEFT") {
+                    Some(TransactionMode::Ft)
                 } else if desc.contains("ATM") || desc.starts_with("CASH") {
                     Some(TransactionMode::Cash)
                 } else {
                     None
                 };
 
-                parsed_transactions.push(DepositTransaction {
+                parsed_transactions.push(Transaction {
                     transaction_timestamp: Some(Utc.from_utc_datetime(&parsed_date.and_hms_opt(0, 0, 0).unwrap())),
                     value_date: Some(parsed_date),
                     narration: desc.to_string(),
@@ -135,24 +137,21 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAc
                     mode,
                     current_balance: balance,
                     txn_id: None,
-                    xfina: Some(XfinaTransaction {
-                        posting_date: Some(parsed_date),
-                    }),
                 });
             }
         }
     }
     
-    let mut summary = DepositSummary::default();
+    let mut summary = Summary::default();
 
     // Set opening and closing balance
     if let Some(first) = parsed_transactions.first() {
         if first.r#type == TransactionType::Credit {
             let ob = first.current_balance - first.amount;
-            summary.xfina = Some(XfinaSummary { opening_balance: Some(ob) });
+            summary.xfina = Some(XfinaSummary { opening_balance: Some(ob), ..Default::default() });
         } else {
             let ob = first.current_balance + first.amount;
-            summary.xfina = Some(XfinaSummary { opening_balance: Some(ob) });
+            summary.xfina = Some(XfinaSummary { opening_balance: Some(ob), ..Default::default() });
         }
     }
     
@@ -160,21 +159,22 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAc
         summary.current_balance = last.current_balance;
     }
     
-    let mut transactions_obj = DepositTransactions::default();
+    let mut transactions_obj = Transactions::default();
     
     // Set statement period from transactions if available
     if let Some(first) = parsed_transactions.first() {
-        transactions_obj.start_date = first.xfina.as_ref().and_then(|x| x.posting_date);
+        transactions_obj.start_date = first.value_date;
     }
     if let Some(last) = parsed_transactions.last() {
-        transactions_obj.end_date = last.xfina.as_ref().and_then(|x| x.posting_date);
+        transactions_obj.end_date = last.value_date;
     }
     
     transactions_obj.transaction = parsed_transactions;
+    transactions_obj.xfina = Some(XfinaTransactions { date_only: Some(true) });
 
     let mut profile = Profile::default();
     profile.holders = Holders {
-        r#type: if holders.len() > 1 { HoldershipType::Joint } else { HoldershipType::Single },
+        r#type: if holders.len() > 1 { HoldersType::Joint } else { HoldersType::Single },
         holder: holders,
     };
     

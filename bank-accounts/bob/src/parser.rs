@@ -1,8 +1,9 @@
 use calamine::{Reader, open_workbook_auto_from_rs};
-use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc};
+use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc, FixedOffset};
 use std::io::Cursor;
 use rust_decimal::Decimal;
-use xfina_models::deposit::{DepositAccount, DepositTransaction, XfinaDepositAccount, XfinaTransaction, XfinaSummary, Profile, Holders, Holder, DepositSummary, DepositTransactions, HoldershipType, TransactionType, TransactionMode, FiType};
+use xfina_models::deposit::{DepositAccount, Transaction, XfinaDepositAccount, XfinaTransactions, XfinaSummary, Profile, Holders, Holder, Summary, Transactions, HoldersType, TransactionType, TransactionMode, FiType};
+use xfina_models::mask_account_number;
 use regex::Regex;
 
 pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
@@ -28,9 +29,10 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
     let mut start_date: Option<NaiveDate> = None;
     let mut end_date: Option<NaiveDate> = None;
     let mut generated_date: Option<NaiveDate> = None;
+    let mut generated_date_time: Option<NaiveDateTime> = None;
     
     let mut parsed_transactions = Vec::new();
-    let mut transactions_obj = DepositTransactions::default();
+    let mut transactions_obj = Transactions::default();
     let mut xfina_summary = XfinaSummary::default();
 
     let mut in_transactions = false;
@@ -79,6 +81,20 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
                     if d_parts.len() == 2 {
                         start_date = NaiveDate::parse_from_str(d_parts[0].trim(), "%d/%m/%Y").ok();
                         end_date = NaiveDate::parse_from_str(d_parts[1].trim(), "%d/%m/%Y").ok();
+                    }
+                }
+            }
+        } else if let Ok(excel_date) = first_col.parse::<f64>() {
+            if excel_date > 40000.0 && excel_date < 60000.0 {
+                let days = excel_date.trunc() as i64;
+                let fraction = excel_date.fract();
+                let seconds = (fraction * 86400.0).round() as i64;
+                let base_date = NaiveDate::from_ymd_opt(1899, 12, 30).unwrap();
+                if let Some(date) = base_date.checked_add_signed(chrono::Duration::days(days)) {
+                    if let Some(dt) = date.and_hms_opt(0, 0, 0) {
+                        if let Some(dt_with_time) = dt.checked_add_signed(chrono::Duration::seconds(seconds)) {
+                            generated_date_time = Some(dt_with_time);
+                        }
                     }
                 }
             }
@@ -150,12 +166,13 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
                 continue; // If both empty, maybe a continuation row, but BoB usually fits in one row.
             }
             
-            let mode = if narration.contains("UPI") {
+            let desc_upper = narration.to_uppercase();
+            let mode = if desc_upper.contains("UPI") {
                 Some(TransactionMode::Upi)
-            } else if narration.contains("NEFT") {
-                Some(TransactionMode::Neft)
-            } else if narration.contains("IMPS") {
-                Some(TransactionMode::Imps)
+            } else if desc_upper.contains("NEFT") {
+                Some(TransactionMode::Ft)
+            } else if desc_upper.contains("IMPS") {
+                Some(TransactionMode::Ft)
             } else if narration.contains("CASH") {
                 Some(TransactionMode::Cash)
             } else {
@@ -168,9 +185,13 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
             }
 
             if let Some(dt) = date {
-                let tx = DepositTransaction {
+                let ist_offset = FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
+                let txn_dt = dt.and_hms_opt(0, 0, 0).unwrap();
+                let txn_timestamp = ist_offset.from_local_datetime(&txn_dt).single().map(|d| d.with_timezone(&Utc));
+                
+                let tx = Transaction {
                     txn_id: None,
-                    transaction_timestamp: Some(Utc.from_utc_datetime(&dt.and_hms_opt(0, 0, 0).unwrap())),
+                    transaction_timestamp: txn_timestamp,
                     value_date,
                     narration,
                     reference: None,
@@ -178,19 +199,16 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
                     amount,
                     current_balance,
                     mode,
-                    xfina: Some(XfinaTransaction {
-                        posting_date: Some(dt),
-                    }),
                 };
                 parsed_transactions.push(tx);
             }
         }
     }
 
-    let mut summary = DepositSummary::default();
+    let mut summary = Summary::default();
     if let Some(first) = parsed_transactions.first() {
         let ob = if first.r#type == TransactionType::Credit { first.current_balance - first.amount } else { first.current_balance + first.amount };
-        summary.xfina = Some(XfinaSummary { opening_balance: Some(ob) });
+        summary.xfina = Some(XfinaSummary { opening_balance: Some(ob), ..Default::default() });
     }
     if let Some(last) = parsed_transactions.last() {
         summary.current_balance = last.current_balance;
@@ -207,13 +225,22 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
     }
 
     if !account_number.is_empty() {
-        statement.masked_acc_number = account_number;
+        statement.masked_acc_number = mask_account_number(&account_number);
     }
     
-    transactions_obj.transaction = parsed_transactions;
+    let mut transactions_obj = Transactions::default();
     transactions_obj.start_date = start_date;
     transactions_obj.end_date = end_date;
-    xfina_account.generated_date = generated_date.map(|d| Utc.from_utc_datetime(&d.and_hms_opt(0, 0, 0).unwrap()));
+    transactions_obj.transaction = parsed_transactions;
+    transactions_obj.xfina = Some(XfinaTransactions { date_only: Some(true) });
+
+    let ist_offset = FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
+    if let Some(dt) = generated_date_time {
+        xfina_account.generated_date = ist_offset.from_local_datetime(&dt).single().map(|d| d.with_timezone(&Utc));
+    } else if let Some(d) = generated_date {
+        let dt = d.and_hms_opt(0, 0, 0).unwrap();
+        xfina_account.generated_date = ist_offset.from_local_datetime(&dt).single().map(|d| d.with_timezone(&Utc));
+    }
     
     let mut holder = Holder::default();
     holder.name = name;
@@ -221,7 +248,7 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
     
     let mut profile = Profile::default();
     profile.holders = Holders {
-        r#type: if holders.len() > 1 { HoldershipType::Joint } else { HoldershipType::Single },
+        r#type: HoldersType::Single,
         holder: holders,
     };
 

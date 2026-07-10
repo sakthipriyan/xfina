@@ -59,7 +59,7 @@ const getFileFormat = computed(() => {
         if (selectedSource.value === 'ICICI') return 'Excel';
         return 'CSV';
     }
-    if (selectedCategory.value === 'Intl Stocks') return 'CSV';
+    if (selectedCategory.value === 'Intl Brokers') return 'CSV';
     return 'File';
 });
 
@@ -83,7 +83,7 @@ const setCategory = (cat) => {
     bankStatement.value = null;
     error.value = null;
     if (cat === 'Mutual Funds') selectedSource.value = 'CAMS';
-    else if (cat === 'Intl Stocks') selectedSource.value = 'IBKR';
+    else if (cat === 'Intl Brokers') selectedSource.value = 'IBKR';
     else if (cat === 'Credit Cards') selectedSource.value = 'HDFC';
     else if (cat === 'Bank Accounts') selectedSource.value = 'HDFC';
 };
@@ -178,7 +178,7 @@ const formatNumber = (val) => {
     return Number(val).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 4 });
 };
 
-const formatDateLocal = (dateStr) => {
+const formatDateLocal = (dateStr, forceDateOnly = false) => {
     if (!dateStr) return '-';
     
     let parseStr = dateStr.trim();
@@ -190,7 +190,7 @@ const formatDateLocal = (dateStr) => {
     const d = new Date(parseStr);
     if (isNaN(d)) return dateStr;
 
-    const hasTime = dateStr.includes(':') || (dateStr.includes('T') && !dateStr.endsWith('T00:00:00.000Z') && !dateStr.endsWith('T00:00:00Z') && !dateStr.endsWith('T00:00:00'));
+    const hasTime = !forceDateOnly && (dateStr.includes(':') || (dateStr.includes('T') && !dateStr.endsWith('T00:00:00.000Z') && !dateStr.endsWith('T00:00:00Z') && !dateStr.endsWith('T00:00:00')));
 
     if (hasTime) {
         return new Intl.DateTimeFormat(undefined, { 
@@ -273,21 +273,21 @@ const hasRewards = (stmt) => {
         <CardContent>
           <div class="flex flex-wrap gap-4 mb-6">
             <Button 
-              :variant="selectedCategory === 'Mutual Funds' ? 'default' : 'outline'"
-              @click="setCategory('Mutual Funds')"
-            >Mutual Funds</Button>
-            <Button 
-              :variant="selectedCategory === 'Intl Stocks' ? 'default' : 'outline'"
-              @click="setCategory('Intl Stocks')"
-            >Intl Stocks</Button>
+              :variant="selectedCategory === 'Bank Accounts' ? 'default' : 'outline'"
+              @click="setCategory('Bank Accounts')"
+            >Bank Accounts</Button>
             <Button 
               :variant="selectedCategory === 'Credit Cards' ? 'default' : 'outline'"
               @click="setCategory('Credit Cards')"
             >Credit Cards</Button>
             <Button 
-              :variant="selectedCategory === 'Bank Accounts' ? 'default' : 'outline'"
-              @click="setCategory('Bank Accounts')"
-            >Bank Accounts</Button>
+              :variant="selectedCategory === 'Mutual Funds' ? 'default' : 'outline'"
+              @click="setCategory('Mutual Funds')"
+            >Mutual Funds</Button>
+            <Button 
+              :variant="selectedCategory === 'Intl Brokers' ? 'default' : 'outline'"
+              @click="setCategory('Intl Brokers')"
+            >Intl Brokers</Button>
           </div>
 
           <div class="flex flex-col md:flex-row gap-6 items-end">
@@ -297,7 +297,7 @@ const hasRewards = (stmt) => {
                  <Button :variant="selectedSource === 'CAMS' ? 'default' : 'outline'" @click="selectedSource = 'CAMS'">CAMS</Button>
                </div>
              </div>
-             <div class="space-y-2" v-if="selectedCategory === 'Intl Stocks'">
+             <div class="space-y-2" v-if="selectedCategory === 'Intl Brokers'">
                <Label>Broker</Label>
                <div class="flex flex-wrap gap-4">
                  <Button :variant="selectedSource === 'IBKR' ? 'default' : 'outline'" @click="selectedSource = 'IBKR'">IBKR</Button>
@@ -313,10 +313,10 @@ const hasRewards = (stmt) => {
              <div class="space-y-2" v-if="selectedCategory === 'Bank Accounts'">
                <Label>Bank</Label>
                <div class="flex flex-wrap gap-4">
+                 <Button :variant="selectedSource === 'BoB' ? 'default' : 'outline'" @click="selectedSource = 'BoB'">Bank of Baroda</Button>
                  <Button :variant="selectedSource === 'HDFC' ? 'default' : 'outline'" @click="selectedSource = 'HDFC'">HDFC Bank</Button>
                  <Button :variant="selectedSource === 'ICICI' ? 'default' : 'outline'" @click="selectedSource = 'ICICI'">ICICI Bank</Button>
                  <Button :variant="selectedSource === 'SBI' ? 'default' : 'outline'" @click="selectedSource = 'SBI'">State Bank of India</Button>
-                 <Button :variant="selectedSource === 'BoB' ? 'default' : 'outline'" @click="selectedSource = 'BoB'">Bank of Baroda</Button>
                </div>
              </div>
 
@@ -658,6 +658,8 @@ const hasRewards = (stmt) => {
         <!-- Standardized Header -->
         <StatementHeader
           :customerName="bankStatement.profile?.holders?.holder?.[0]?.name || 'Customer'"
+          :address="bankStatement.profile?.holders?.holder?.[0]?.address || ''"
+          :customerId="bankStatement.profile?.holders?.holder?.[0]?.xfina?.customerId || ''"
           :institutionName="bankStatement.xfina?.institutionName || 'Bank'"
           statementType="Bank Account Statement"
           :accountNumber="bankStatement.maskedAccNumber || ''"
@@ -668,10 +670,10 @@ const hasRewards = (stmt) => {
           ]"
         />
 
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" v-if="bankStatement.summary?.xfina?.openingBalance !== null && bankStatement.summary?.xfina?.openingBalance !== undefined">
-          <Card class="bg-card text-card-foreground shadow-sm">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <Card class="bg-card text-card-foreground shadow-sm h-full" v-if="bankStatement.summary?.xfina?.openingBalance !== null && bankStatement.summary?.xfina?.openingBalance !== undefined">
             <CardHeader class="pb-2">
-              <CardTitle class="text-sm text-muted-foreground font-semibold uppercase tracking-wider">Account Summary</CardTitle>
+              <CardTitle class="text-sm text-muted-foreground font-semibold uppercase tracking-wider">Transaction Summary</CardTitle>
             </CardHeader>
             <CardContent>
               <div class="space-y-2">
@@ -695,6 +697,41 @@ const hasRewards = (stmt) => {
                   <span class="font-bold font-mono text-lg text-primary">{{ formatCurrency(bankStatement.summary?.currentBalance) }}</span>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          <!-- Account Details Card -->
+          <Card class="bg-card text-card-foreground shadow-sm lg:col-span-2">
+            <CardHeader class="pb-2">
+              <CardTitle class="text-sm text-muted-foreground font-semibold uppercase tracking-wider">Account Details</CardTitle>
+            </CardHeader>
+            <CardContent>
+               <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 text-sm mt-1">
+                 <div class="flex flex-col" v-if="bankStatement.summary?.xfina?.accountProduct">
+                   <span class="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Product</span>
+                   <span class="font-medium mt-0.5">{{ bankStatement.summary?.xfina?.accountProduct }}</span>
+                 </div>
+                 <div class="flex flex-col" v-if="bankStatement.profile?.holders?.holder?.[0]?.nominee">
+                   <span class="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Nominee</span>
+                   <span class="font-medium mt-0.5">{{ bankStatement.profile?.holders?.holder?.[0]?.nominee === 'REGISTERED' ? 'Registered' : 'Not Registered' }}</span>
+                 </div>
+                 <div class="flex flex-col" v-if="bankStatement.summary?.branch">
+                   <span class="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Branch</span>
+                   <span class="font-medium mt-0.5">{{ bankStatement.summary?.branch }}</span>
+                 </div>
+                 <div class="flex flex-col" v-if="bankStatement.summary?.ifscCode">
+                   <span class="text-muted-foreground text-xs uppercase tracking-wider font-semibold">IFSC Code</span>
+                   <span class="font-medium font-mono mt-0.5">{{ bankStatement.summary?.ifscCode }}</span>
+                 </div>
+                 <div class="flex flex-col" v-if="bankStatement.summary?.micrCode">
+                   <span class="text-muted-foreground text-xs uppercase tracking-wider font-semibold">MICR Code</span>
+                   <span class="font-medium font-mono mt-0.5">{{ bankStatement.summary?.micrCode }}</span>
+                 </div>
+                 <div class="flex flex-col" v-if="bankStatement.summary?.openingDate">
+                   <span class="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Opening Date</span>
+                   <span class="font-medium mt-0.5">{{ formatDateLocal(bankStatement.summary?.openingDate) }}</span>
+                 </div>
+               </div>
             </CardContent>
           </Card>
         </div>
@@ -723,7 +760,7 @@ const hasRewards = (stmt) => {
                 </TableHeader>
                 <TableBody>
                   <TableRow v-for="(txn, idx) in bankStatement.transactions?.transaction" :key="idx" class="hover:bg-muted/50 transition-colors">
-                    <TableCell class="font-medium whitespace-nowrap">{{ formatDateLocal(txn.xfina?.parsedDate || txn.transactionTimestamp) }}</TableCell>
+                    <TableCell class="font-medium whitespace-nowrap">{{ formatDateLocal(txn.xfina?.parsedDate || txn.transactionTimestamp, bankStatement.transactions?.xfina?.dateOnly) }}</TableCell>
                     <TableCell class="text-foreground text-sm">{{ txn.narration }}</TableCell>
                     <TableCell class="text-right font-mono whitespace-nowrap" :class="{'text-emerald-500': txn.type === 'CREDIT', 'text-foreground': txn.type !== 'CREDIT'}">
                         <span v-if="txn.type === 'CREDIT'">+</span>
