@@ -210,6 +210,7 @@ pub struct XfinaHolder {
 pub struct XfinaDepositAccount {
     pub institution_name: Option<String>,
     pub generated_date: Option<DateTime<Utc>>,
+    pub date_only: Option<bool>,
 }
 
 

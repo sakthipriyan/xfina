@@ -29,7 +29,10 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAc
         if let Some(caps) = re.captures(fname) {
             if let Some(m) = caps.get(1) {
                 if let Ok(d) = NaiveDate::parse_from_str(m.as_str(), "%d-%m-%Y") {
-                    xfina_account.generated_date = Some(Utc.from_utc_datetime(&d.and_hms_opt(0, 0, 0).unwrap()));
+                    let dt = d.and_hms_opt(0, 0, 0).unwrap();
+                    let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
+                    xfina_account.generated_date = chrono::TimeZone::from_local_datetime(&ist_offset, &dt).single().map(|dt| dt.with_timezone(&Utc));
+                    xfina_account.date_only = Some(true);
                 }
             }
         }
@@ -98,8 +101,9 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAc
                     continue; // Skip empty rows
                 }
 
-                // Parse dates (fallback to 1970 if failure, but usually this won't happen)
-                let parsed_date = NaiveDate::parse_from_str(date_str, "%d-%b-%Y")
+                // Parse dates using the robust parse_indian_date which handles multiple formats
+                let iso_date = xfina_models::parse_indian_date(date_str);
+                let parsed_date = NaiveDate::parse_from_str(&iso_date, "%Y-%m-%d")
                     .unwrap_or_else(|_| NaiveDate::from_ymd_opt(1970, 1, 1).unwrap());
                     
                 let withdrawal: Decimal = withdrawal_str.parse().unwrap_or(Decimal::from(0));

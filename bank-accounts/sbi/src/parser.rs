@@ -103,6 +103,7 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>, filename: 
                             let dt = parsed.and_hms_opt(0, 0, 0).unwrap();
                             let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
                             xfina_account.generated_date = chrono::TimeZone::from_local_datetime(&ist_offset, &dt).single().map(|dt| dt.with_timezone(&Utc));
+                            xfina_account.date_only = Some(true);
                         }
                     }
                 }
