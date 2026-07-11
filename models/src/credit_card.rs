@@ -38,7 +38,7 @@ pub struct XfinaCreditCardAccount {
     pub institution_name: Option<String>,
     pub aan: Option<String>,
     pub generated_date: Option<DateTime<Utc>>,
-    pub date_only: Option<bool>,
+    pub date_only_paths: Option<Vec<String>>,
 }
 
 #[skip_serializing_none]
