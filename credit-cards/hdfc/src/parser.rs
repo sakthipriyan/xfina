@@ -57,7 +57,7 @@ pub fn parse_hdfc_statement(content: &str, filename: Option<&str>) -> Result<Cre
 
     while idx < lines.len() {
         let line = lines[idx];
-        if line == "Account CcSummary" {
+        if line == "Account Summary" {
             current_section = Section::AccountCcSummary;
             idx += 1;
             continue;
@@ -69,11 +69,11 @@ pub fn parse_hdfc_statement(content: &str, filename: Option<&str>) -> Result<Cre
             current_section = Section::CcTransactions;
             idx += 1;
             continue;
-        } else if line == "Reward Points CcSummary" {
+        } else if line == "Reward Points Summary" {
             current_section = Section::RewardCcSummary;
             idx += 1;
             continue;
-        } else if line == "Rewards Program Points CcSummary" {
+        } else if line == "Rewards Program Points Summary" {
             current_section = Section::RewardProgram;
             idx += 1;
             continue;

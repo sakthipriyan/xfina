@@ -24,14 +24,14 @@ fn test_hdfc_credit_cards() {
         let entry = entry.expect("Failed to read directory entry");
         let path = entry.path();
         
-        if path.extension().and_then(|e| e.to_str()) == Some("pdf") {
+        if path.extension().and_then(|e| e.to_str()) == Some("csv") {
             let file_name = path.file_stem().unwrap().to_str().unwrap();
             
-            // Extract text from PDF first
-            let content = match extract_text(&path) {
+            // Read CSV content directly
+            let content = match fs::read_to_string(&path) {
                 Ok(text) => text,
                 Err(e) => {
-                    println!("Failed to extract text from {:?}: {:?}", path, e);
+                    println!("Failed to read text from {:?}: {:?}", path, e);
                     continue;
                 }
             };

@@ -1666,6 +1666,7 @@ dependencies = [
  "chrono",
  "num-traits",
  "pdf-extract",
+ "regex",
  "rust_decimal",
  "serde",
  "serde_json",
