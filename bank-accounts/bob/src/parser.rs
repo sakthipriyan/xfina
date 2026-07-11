@@ -275,8 +275,8 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
     } else if let Some(d) = generated_date {
         let dt = d.and_hms_opt(0, 0, 0).unwrap();
         xfina_account.generated_date = ist_offset.from_local_datetime(&dt).single().map(|d| d.with_timezone(&Utc));
-        if !date_only_paths.contains(&"generatedDate".to_string()) {
-            date_only_paths.push("generatedDate".to_string());
+        if !date_only_paths.contains(&"xfina.generatedDate".to_string()) {
+            date_only_paths.push("xfina.generatedDate".to_string());
         }
     }
     
