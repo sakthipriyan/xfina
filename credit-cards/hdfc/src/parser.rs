@@ -20,6 +20,8 @@ pub fn parse_hdfc_statement(content: &str, filename: Option<&str>) -> Result<Cre
     let mut xfina_account = XfinaCreditCardAccount::default();
     xfina_account.institution_name = Some("HDFC".to_string());
     
+    let mut date_only_paths = Vec::new();
+    
     if let Some(fname) = filename {
         let re = Regex::new(r"(\d{2}-\d{2}-\d{4})").unwrap();
         if let Some(caps) = re.captures(fname) {
@@ -28,7 +30,7 @@ pub fn parse_hdfc_statement(content: &str, filename: Option<&str>) -> Result<Cre
                     let dt = d.and_hms_opt(0, 0, 0).unwrap();
                     let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
                     xfina_account.generated_date = chrono::TimeZone::from_local_datetime(&ist_offset, &dt).single().map(|dt| dt.with_timezone(&Utc));
-                    xfina_account.date_only = Some(true);
+                    date_only_paths.push("generatedDate".to_string());
                 }
             }
         }
@@ -107,7 +109,9 @@ pub fn parse_hdfc_statement(content: &str, filename: Option<&str>) -> Result<Cre
                                 let dt = date.and_hms_opt(0, 0, 0).unwrap();
                                 let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
                                 xfina_account.generated_date = chrono::TimeZone::from_local_datetime(&ist_offset, &dt).single().map(|dt| dt.with_timezone(&Utc));
-                                xfina_account.date_only = Some(true);
+                                if !date_only_paths.contains(&"generatedDate".to_string()) {
+                                    date_only_paths.push("generatedDate".to_string());
+                                }
                             }
                         }
                         "Total Amount Due" => summary.total_due_amount = parse_decimal(val),
@@ -260,24 +264,37 @@ pub fn parse_hdfc_statement(content: &str, filename: Option<&str>) -> Result<Cre
     xfina_summary.owner_credit_breakdown = owner_credit_breakdown;
     xfina_summary.owner_debit_breakdown = owner_debit_breakdown;
     
+    let stmt_date_opt = summary.last_statement_date.clone();
     summary.xfina = Some(xfina_summary);
     stmt.summary = Some(summary);
 
     transactions_list.sort_by(|a, b| a.txn_date.cmp(&b.txn_date));
 
     let mut txns = CcTransactions::default();
-    if let Some(first) = transactions_list.first() {
-        txns.start_date = first.txn_date.clone();
+    
+    if let Some(stmt_date) = stmt_date_opt {
+        let (start, end) = xfina_models::date_utils::derive_statement_period(stmt_date);
+        txns.start_date = Some(start);
+        txns.end_date = Some(end);
         xfina_txns.start_date_derived = Some(true);
-    }
-    if let Some(last) = transactions_list.last() {
-        txns.end_date = last.txn_date.clone();
         xfina_txns.end_date_derived = Some(true);
+    } else {
+        if let Some(first) = transactions_list.first() {
+            txns.start_date = first.txn_date.clone();
+            xfina_txns.start_date_derived = Some(true);
+        }
+        if let Some(last) = transactions_list.last() {
+            txns.end_date = last.txn_date.clone();
+            xfina_txns.end_date_derived = Some(true);
+        }
     }
     txns.transaction = transactions_list;
     txns.xfina = Some(xfina_txns);
     
     stmt.transactions = Some(txns);
+    if !date_only_paths.is_empty() {
+        xfina_account.date_only_paths = Some(date_only_paths);
+    }
     stmt.xfina = Some(xfina_account);
     
     Ok(stmt)

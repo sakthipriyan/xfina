@@ -40,6 +40,8 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
     let mut parsed_transactions = Vec::new();
     let mut transactions_obj = Transactions::default();
     let mut xfina_summary = XfinaSummary::default();
+    
+    let mut date_only_paths = Vec::new();
 
     let mut in_transactions = false;
 
@@ -224,6 +226,10 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
                     mode,
                 };
                 parsed_transactions.push(tx);
+                
+                if !date_only_paths.contains(&"transactions.transaction.transactionTimestamp".to_string()) {
+                    date_only_paths.push("transactions.transaction.transactionTimestamp".to_string());
+                }
             }
         }
     }
@@ -262,7 +268,6 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
     transactions_obj.start_date = start_date;
     transactions_obj.end_date = end_date;
     transactions_obj.transaction = parsed_transactions;
-    transactions_obj.xfina = Some(XfinaTransactions { date_only: Some(true) });
 
     let ist_offset = FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
     if let Some(dt) = generated_date_time {
@@ -270,6 +275,9 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
     } else if let Some(d) = generated_date {
         let dt = d.and_hms_opt(0, 0, 0).unwrap();
         xfina_account.generated_date = ist_offset.from_local_datetime(&dt).single().map(|d| d.with_timezone(&Utc));
+        if !date_only_paths.contains(&"generatedDate".to_string()) {
+            date_only_paths.push("generatedDate".to_string());
+        }
     }
     
     let mut holder = Holder::default();
@@ -300,6 +308,9 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
     statement.profile = Some(profile);
     statement.summary = Some(summary);
     statement.transactions = Some(transactions_obj);
+    if !date_only_paths.is_empty() {
+        xfina_account.date_only_paths = Some(date_only_paths);
+    }
     statement.xfina = Some(xfina_account);
 
     Ok(statement)

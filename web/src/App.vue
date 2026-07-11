@@ -178,7 +178,7 @@ const formatNumber = (val) => {
     return Number(val).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 4 });
 };
 
-const formatDateLocal = (dateStr, forceDateOnly = false) => {
+const formatDateLocal = (dateStr, path = null, dateOnlyPaths = []) => {
     if (!dateStr) return '-';
     
     let parseStr = dateStr.trim();
@@ -189,6 +189,11 @@ const formatDateLocal = (dateStr, forceDateOnly = false) => {
 
     const d = new Date(parseStr);
     if (isNaN(d)) return dateStr;
+
+    let forceDateOnly = false;
+    if (path && dateOnlyPaths && dateOnlyPaths.includes(path)) {
+        forceDateOnly = true;
+    }
 
     const hasTime = !forceDateOnly && (dateStr.includes(':') || (dateStr.includes('T') && !dateStr.endsWith('T00:00:00.000Z') && !dateStr.endsWith('T00:00:00Z') && !dateStr.endsWith('T00:00:00')));
 
@@ -360,10 +365,10 @@ const hasRewards = (stmt) => {
           statementType="Credit Card"
           :accountNumber="ccStatement.maskedAccNumber || ''"
           :statementDetails="[
-            ...(ccStatement.transactions?.startDate ? [{ label: 'From', value: formatDateLocal(ccStatement.transactions.startDate), derived: ccStatement.transactions?.xfina?.startDateDerived }] : []),
-            ...(ccStatement.transactions?.endDate ? [{ label: 'To', value: formatDateLocal(ccStatement.transactions.endDate), derived: ccStatement.transactions?.xfina?.endDateDerived }] : []),
-            ...(ccStatement.xfina?.generatedDate ? [{ label: 'Generated', value: formatDateLocal(ccStatement.xfina.generatedDate) }] : []),
-            ...(ccStatement.summary?.dueDate ? [{ label: 'Due Date', value: formatDateLocal(ccStatement.summary.dueDate) }] : [])
+            ...(ccStatement.transactions?.startDate ? [{ label: 'From', value: formatDateLocal(ccStatement.transactions.startDate, 'transactions.startDate', ccStatement.xfina?.dateOnlyPaths), derived: ccStatement.transactions?.xfina?.startDateDerived }] : []),
+            ...(ccStatement.transactions?.endDate ? [{ label: 'To', value: formatDateLocal(ccStatement.transactions.endDate, 'transactions.endDate', ccStatement.xfina?.dateOnlyPaths), derived: ccStatement.transactions?.xfina?.endDateDerived }] : []),
+            ...(ccStatement.xfina?.generatedDate ? [{ label: 'Generated', value: formatDateLocal(ccStatement.xfina.generatedDate, 'xfina.generatedDate', ccStatement.xfina?.dateOnlyPaths) }] : []),
+            ...(ccStatement.summary?.dueDate ? [{ label: 'Due Date', value: formatDateLocal(ccStatement.summary.dueDate, 'summary.dueDate', ccStatement.xfina?.dateOnlyPaths) }] : [])
           ]"
         />
 
@@ -491,7 +496,7 @@ const hasRewards = (stmt) => {
                 </TableHeader>
                 <TableBody>
                   <TableRow v-for="(txn, idx) in ccStatement.transactions?.transaction" :key="idx" class="hover:bg-muted/50 transition-colors">
-                    <TableCell class="text-foreground whitespace-nowrap">{{ formatDateLocal(txn.txnDate) }}</TableCell>
+                    <TableCell class="text-foreground whitespace-nowrap">{{ formatDateLocal(txn.txnDate, 'transactions.transaction.txnDate', ccStatement.xfina?.dateOnlyPaths) }}</TableCell>
                     <TableCell class="text-foreground text-sm">
                       <span v-if="txn.xfina?.category" class="mr-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-muted text-muted-foreground">{{ txn.xfina.category }}</span>
                       {{ txn.narration }}
@@ -524,9 +529,9 @@ const hasRewards = (stmt) => {
           statementType="Mutual Funds"
           :accountNumber="portfolio.investor_info.account_number || ''"
           :statementDetails="[
-            ...(portfolio.statement_start_date ? [{ label: 'From', value: formatDateLocal(portfolio.statement_start_date) }] : []),
-            ...(portfolio.statement_end_date ? [{ label: 'To', value: formatDateLocal(portfolio.statement_end_date) }] : []),
-            ...(portfolio.generated_date ? [{ label: 'Generated', value: formatDateLocal(portfolio.generated_date) }] : [])
+            ...(portfolio.statement_start_date ? [{ label: 'From', value: formatDateLocal(portfolio.statement_start_date, 'statement_start_date', portfolio.date_only_paths) }] : []),
+            ...(portfolio.statement_end_date ? [{ label: 'To', value: formatDateLocal(portfolio.statement_end_date, 'statement_end_date', portfolio.date_only_paths) }] : []),
+            ...(portfolio.generated_date ? [{ label: 'Generated', value: formatDateLocal(portfolio.generated_date, 'generated_date', portfolio.date_only_paths) }] : [])
           ]"
         />
 
@@ -595,7 +600,7 @@ const hasRewards = (stmt) => {
                              <span class="font-medium font-mono">{{ formatCurrency(asset.current_nav) }}</span>
                              <div v-if="asset.current_nav_date" class="flex items-baseline gap-1 mt-0.5">
                                <span class="text-[10px] text-muted-foreground">on</span>
-                               <span class="font-medium font-mono text-sm">{{ formatDateLocal(asset.current_nav_date) }}</span>
+                               <span class="font-medium font-mono text-sm">{{ formatDateLocal(asset.current_nav_date, 'current_nav_date', portfolio.date_only_paths) }}</span>
                              </div>
                            </div>
                          </div>
@@ -631,7 +636,7 @@ const hasRewards = (stmt) => {
                      </TableHeader>
                      <TableBody>
                        <TableRow v-for="(txn, idx) in asset.transactions" :key="idx" class="hover:bg-muted/50 transition-colors">
-                         <TableCell class="text-foreground whitespace-nowrap">{{ formatDateLocal(txn.date) }}</TableCell>
+                         <TableCell class="text-foreground whitespace-nowrap">{{ formatDateLocal(txn.date, 'transactions.date', portfolio.date_only_paths) }}</TableCell>
                          <TableCell class="text-foreground">
                             <span :class="{'text-emerald-500': txn.tx_type === 'BUY', 'text-rose-500': txn.tx_type === 'SELL'}">
                               {{ txn.tx_type || '-' }}
@@ -664,9 +669,9 @@ const hasRewards = (stmt) => {
           statementType="Bank Account Statement"
           :accountNumber="bankStatement.maskedAccNumber || ''"
           :statementDetails="[
-            ...(bankStatement.transactions?.startDate ? [{ label: 'From', value: formatDateLocal(bankStatement.transactions.startDate) }] : []),
-            ...(bankStatement.transactions?.endDate ? [{ label: 'To', value: formatDateLocal(bankStatement.transactions.endDate) }] : []),
-            ...(bankStatement.xfina?.generatedDate ? [{ label: 'Generated', value: formatDateLocal(bankStatement.xfina.generatedDate, bankStatement.xfina.dateOnly) }] : [])
+            ...(bankStatement.transactions?.startDate ? [{ label: 'From', value: formatDateLocal(bankStatement.transactions.startDate, 'transactions.startDate', bankStatement.xfina?.dateOnlyPaths) }] : []),
+            ...(bankStatement.transactions?.endDate ? [{ label: 'To', value: formatDateLocal(bankStatement.transactions.endDate, 'transactions.endDate', bankStatement.xfina?.dateOnlyPaths) }] : []),
+            ...(bankStatement.xfina?.generatedDate ? [{ label: 'Generated', value: formatDateLocal(bankStatement.xfina.generatedDate, 'xfina.generatedDate', bankStatement.xfina?.dateOnlyPaths) }] : [])
           ]"
         />
 
@@ -729,7 +734,7 @@ const hasRewards = (stmt) => {
                  </div>
                  <div class="flex flex-col" v-if="bankStatement.summary?.openingDate">
                    <span class="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Opening Date</span>
-                   <span class="font-medium mt-0.5">{{ formatDateLocal(bankStatement.summary?.openingDate) }}</span>
+                   <span class="font-medium mt-0.5">{{ formatDateLocal(bankStatement.summary?.openingDate, 'summary.openingDate', bankStatement.xfina?.dateOnlyPaths) }}</span>
                  </div>
                </div>
             </CardContent>
@@ -760,7 +765,7 @@ const hasRewards = (stmt) => {
                 </TableHeader>
                 <TableBody>
                   <TableRow v-for="(txn, idx) in bankStatement.transactions?.transaction" :key="idx" class="hover:bg-muted/50 transition-colors">
-                    <TableCell class="font-medium whitespace-nowrap">{{ formatDateLocal(txn.xfina?.parsedDate || txn.transactionTimestamp, bankStatement.transactions?.xfina?.dateOnly) }}</TableCell>
+                    <TableCell class="font-medium whitespace-nowrap">{{ formatDateLocal(txn.xfina?.parsedDate || txn.transactionTimestamp, 'transactions.transaction.transactionTimestamp', bankStatement.xfina?.dateOnlyPaths) }}</TableCell>
                     <TableCell class="text-foreground text-sm">{{ txn.narration }}</TableCell>
                     <TableCell class="text-right font-mono whitespace-nowrap" :class="{'text-emerald-500': txn.type === 'CREDIT', 'text-foreground': txn.type !== 'CREDIT'}">
                         <span v-if="txn.type === 'CREDIT'">+</span>

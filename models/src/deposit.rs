@@ -210,7 +210,7 @@ pub struct XfinaHolder {
 pub struct XfinaDepositAccount {
     pub institution_name: Option<String>,
     pub generated_date: Option<DateTime<Utc>>,
-    pub date_only: Option<bool>,
+    pub date_only_paths: Option<Vec<String>>,
 }
 
 
@@ -220,7 +220,6 @@ pub struct XfinaDepositAccount {
 pub struct XfinaSummary {
     #[serde(with = "rust_decimal::serde::float_option", default)]
     pub opening_balance: Option<Decimal>,
-    pub balance_date_only: Option<bool>,
     pub account_product: Option<String>,
 }
 
@@ -228,7 +227,6 @@ pub struct XfinaSummary {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct XfinaTransactions {
-    pub date_only: Option<bool>,
 }
 
 // -----------------------------------------------------------------------------
