@@ -211,14 +211,14 @@ const formatDateLocal = (dateStr, forceDateOnly = false) => {
 };
 
 const hasRewards = (stmt) => {
-    if (!stmt?.reward_points_summary) return false;
-    const s = stmt.reward_points_summary;
-    return s.opening_balance !== 0 || 
+    if (!stmt?.summary?.xfina?.rewardPointsSummary) return false;
+    const s = stmt.summary.xfina.rewardPointsSummary;
+    return s.openingBalance !== 0 || 
            s.earned !== 0 || 
            s.disbursed !== 0 || 
-           s.adjusted_lapsed !== 0 || 
-           s.closing_balance !== 0 || 
-           s.default_rewards !== 0;
+           s.adjustedLapsed !== 0 || 
+           s.closingBalance !== 0 || 
+           s.defaultRewards !== 0;
 };
 </script>
 
@@ -355,15 +355,15 @@ const hasRewards = (stmt) => {
         
         <!-- Standardized Header -->
         <StatementHeader 
-          :customerName="ccStatement.customer_info?.name || 'Customer'"
+          :customerName="ccStatement.profile?.holders?.holder?.[0]?.name || 'Customer'"
           :institutionName="selectedSource"
           statementType="Credit Card"
-          :accountNumber="ccStatement.card_no || ''"
+          :accountNumber="ccStatement.maskedAccNumber || ''"
           :statementDetails="[
-            ...(ccStatement.statement_start_date ? [{ label: 'From', value: formatDateLocal(ccStatement.statement_start_date), derived: ccStatement.statement_start_date_derived }] : []),
-            ...(ccStatement.statement_end_date ? [{ label: 'To', value: formatDateLocal(ccStatement.statement_end_date), derived: ccStatement.statement_end_date_derived }] : []),
-            ...(ccStatement.statement_date ? [{ label: 'Generated', value: formatDateLocal(ccStatement.statement_date) }] : []),
-            ...(ccStatement.payment_due_date ? [{ label: 'Due Date', value: formatDateLocal(ccStatement.payment_due_date) }] : [])
+            ...(ccStatement.transactions?.startDate ? [{ label: 'From', value: formatDateLocal(ccStatement.transactions.startDate), derived: ccStatement.transactions?.xfina?.startDateDerived }] : []),
+            ...(ccStatement.transactions?.endDate ? [{ label: 'To', value: formatDateLocal(ccStatement.transactions.endDate), derived: ccStatement.transactions?.xfina?.endDateDerived }] : []),
+            ...(ccStatement.xfina?.generatedDate ? [{ label: 'Generated', value: formatDateLocal(ccStatement.xfina.generatedDate) }] : []),
+            ...(ccStatement.summary?.dueDate ? [{ label: 'Due Date', value: formatDateLocal(ccStatement.summary.dueDate) }] : [])
           ]"
         />
 
@@ -372,20 +372,20 @@ const hasRewards = (stmt) => {
             <CardHeader class="pb-2">
               <CardTitle class="text-sm text-muted-foreground font-semibold uppercase tracking-wider">Account Summary</CardTitle>
             </CardHeader>
-            <CardContent v-if="ccStatement.account_summary">
+            <CardContent v-if="ccStatement.summary">
               <div class="space-y-2">
                 <div class="flex justify-between items-center mb-2 border-b pb-2">
                   <span class="text-sm font-medium">Opening Balance</span>
-                  <span class="font-bold font-mono text-lg text-primary">{{ formatCurrency(ccStatement.account_summary.opening_balance) }}</span>
+                  <span class="font-bold font-mono text-lg text-primary">{{ formatCurrency(ccStatement.summary.xfina?.openingBalance) }}</span>
                 </div>
                 
                 <div class="flex justify-between items-center">
                   <span class="text-sm text-muted-foreground">Payment / Credit</span>
-                  <span class="font-medium font-mono text-emerald-500">-{{ formatCurrency(ccStatement.account_summary.payment_credit) }}</span>
+                  <span class="font-medium font-mono text-emerald-500">-{{ formatCurrency(ccStatement.summary.xfina?.paymentCredit) }}</span>
                 </div>
 
-                <div v-if="ccStatement.account_summary.owner_credit_breakdown && Object.keys(ccStatement.account_summary.owner_credit_breakdown).length > 1" class="pl-4 border-l-2 border-muted space-y-1 my-1">
-                  <div v-for="(amount, owner) in ccStatement.account_summary.owner_credit_breakdown" :key="owner" class="flex justify-between items-center">
+                <div v-if="ccStatement.summary.xfina?.ownerCreditBreakdown && Object.keys(ccStatement.summary.xfina.ownerCreditBreakdown).length > 1" class="pl-4 border-l-2 border-muted space-y-1 my-1">
+                  <div v-for="(amount, owner) in ccStatement.summary.xfina.ownerCreditBreakdown" :key="owner" class="flex justify-between items-center">
                     <span class="text-sm text-muted-foreground truncate mr-2">{{ owner }}</span>
                     <span class="font-medium font-mono text-sm text-emerald-500">-{{ formatCurrency(amount) }}</span>
                   </div>
@@ -393,29 +393,29 @@ const hasRewards = (stmt) => {
                 
                 <div class="flex justify-between items-center">
                   <span class="text-sm text-muted-foreground">Purchases / Debits</span>
-                  <span class="font-medium font-mono text-rose-500">+{{ formatCurrency(ccStatement.account_summary.purchases_debits) }}</span>
+                  <span class="font-medium font-mono text-rose-500">+{{ formatCurrency(ccStatement.summary.xfina?.purchasesDebits) }}</span>
                 </div>
                 
-                <div v-if="ccStatement.account_summary.owner_debit_breakdown && Object.keys(ccStatement.account_summary.owner_debit_breakdown).length > 1" class="pl-4 border-l-2 border-muted space-y-1 my-1">
-                  <div v-for="(amount, owner) in ccStatement.account_summary.owner_debit_breakdown" :key="owner" class="flex justify-between items-center">
+                <div v-if="ccStatement.summary.xfina?.ownerDebitBreakdown && Object.keys(ccStatement.summary.xfina.ownerDebitBreakdown).length > 1" class="pl-4 border-l-2 border-muted space-y-1 my-1">
+                  <div v-for="(amount, owner) in ccStatement.summary.xfina.ownerDebitBreakdown" :key="owner" class="flex justify-between items-center">
                     <span class="text-sm text-muted-foreground truncate mr-2">{{ owner }}</span>
                     <span class="font-medium font-mono text-sm text-rose-500">+{{ formatCurrency(amount) }}</span>
                   </div>
                 </div>
 
-                <div v-if="ccStatement.account_summary.finance_charges > 0" class="flex justify-between items-center">
+                <div v-if="ccStatement.summary.financeCharges > 0" class="flex justify-between items-center">
                   <span class="text-sm text-muted-foreground">Finance Charges</span>
-                  <span class="font-medium font-mono text-rose-500">+{{ formatCurrency(ccStatement.account_summary.finance_charges) }}</span>
+                  <span class="font-medium font-mono text-rose-500">+{{ formatCurrency(ccStatement.summary.financeCharges) }}</span>
                 </div>
                 
                 <div class="flex justify-between items-center mt-2 border-t pt-2">
                   <span class="text-sm font-medium">Total Dues</span>
-                  <span class="font-bold font-mono text-lg text-primary">{{ formatCurrency(ccStatement.account_summary.total_dues) }}</span>
+                  <span class="font-bold font-mono text-lg text-primary">{{ formatCurrency(ccStatement.summary.totalDueAmount) }}</span>
                 </div>
                 
                 <div class="flex justify-between items-center mt-1">
                   <span class="text-xs text-muted-foreground">Min Amount Due</span>
-                  <span class="font-medium font-mono text-xs">{{ formatCurrency(ccStatement.minimum_amount_due) }}</span>
+                  <span class="font-medium font-mono text-xs">{{ formatCurrency(ccStatement.summary.minDueAmount) }}</span>
                 </div>
               </div>
             </CardContent>
@@ -427,9 +427,9 @@ const hasRewards = (stmt) => {
             </CardHeader>
             <CardContent>
               <div class="space-y-2">
-                <div class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Credit Limit</span><span class="font-medium font-mono">{{ formatCurrency(ccStatement.credit_limit) }}</span></div>
-                <div class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Available Limit</span><span class="font-medium font-mono">{{ formatCurrency(ccStatement.available_limit) }}</span></div>
-                <div class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Cash Limit</span><span class="font-medium font-mono">{{ formatCurrency(ccStatement.available_cash_limit) }}</span></div>
+                <div class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Credit Limit</span><span class="font-medium font-mono">{{ formatCurrency(ccStatement.summary?.creditLimit) }}</span></div>
+                <div class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Available Limit</span><span class="font-medium font-mono">{{ formatCurrency(ccStatement.summary?.availableCredit) }}</span></div>
+                <div class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Cash Limit</span><span class="font-medium font-mono">{{ formatCurrency(ccStatement.summary?.cashLimit) }}</span></div>
               </div>
             </CardContent>
           </Card>
@@ -440,40 +440,40 @@ const hasRewards = (stmt) => {
             </CardHeader>
             <CardContent>
               <div class="space-y-2">
-                <div v-if="ccStatement.reward_points_summary.opening_balance !== 0 || ccStatement.reward_points_summary.closing_balance !== 0" class="flex justify-between items-center mb-2 border-b pb-2"><span class="text-sm font-medium">Opening Balance</span><span class="font-bold font-mono text-lg text-primary">{{ formatNumber(ccStatement.reward_points_summary.opening_balance) }}</span></div>
+                <div v-if="ccStatement.summary.xfina.rewardPointsSummary.openingBalance !== 0 || ccStatement.summary.xfina.rewardPointsSummary.closingBalance !== 0" class="flex justify-between items-center mb-2 border-b pb-2"><span class="text-sm font-medium">Opening Balance</span><span class="font-bold font-mono text-lg text-primary">{{ formatNumber(ccStatement.summary.xfina.rewardPointsSummary.openingBalance) }}</span></div>
                 
-                <div class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Earned</span><span class="font-medium font-mono text-emerald-500">+{{ formatNumber(ccStatement.reward_points_summary.earned) }}</span></div>
+                <div class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Earned</span><span class="font-medium font-mono text-emerald-500">+{{ formatNumber(ccStatement.summary.xfina.rewardPointsSummary.earned) }}</span></div>
                 
-                <div v-if="ccStatement.reward_programs && ccStatement.reward_programs.length > 0" class="pl-4 border-l-2 border-muted space-y-1 my-1">
+                <div v-if="ccStatement.summary.xfina.rewardPrograms && ccStatement.summary.xfina.rewardPrograms.length > 0" class="pl-4 border-l-2 border-muted space-y-1 my-1">
                   <div class="flex justify-between items-center">
                     <span class="text-sm text-muted-foreground truncate mr-2">Rewards</span>
-                    <span class="font-medium font-mono text-sm text-emerald-500">+{{ formatNumber(ccStatement.reward_points_summary.default_rewards) }}</span>
+                    <span class="font-medium font-mono text-sm text-emerald-500">+{{ formatNumber(ccStatement.summary.xfina.rewardPointsSummary.defaultRewards) }}</span>
                   </div>
-                  <div v-for="(prog, idx) in ccStatement.reward_programs" :key="idx" class="flex justify-between items-center">
+                  <div v-for="(prog, idx) in ccStatement.summary.xfina.rewardPrograms" :key="idx" class="flex justify-between items-center">
                     <span class="text-sm text-muted-foreground truncate mr-2" :title="prog.program">{{ prog.program }}</span>
-                    <span class="font-medium font-mono text-sm text-emerald-500">+{{ formatNumber(prog.bonus_points) }}</span>
+                    <span class="font-medium font-mono text-sm text-emerald-500">+{{ formatNumber(prog.bonusPoints) }}</span>
                   </div>
                 </div>
 
-                <div v-if="ccStatement.reward_points_summary.disbursed > 0" class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Disbursed</span><span class="font-medium font-mono text-rose-500">-{{ formatNumber(ccStatement.reward_points_summary.disbursed) }}</span></div>
-                <div v-if="ccStatement.reward_points_summary.adjusted_lapsed > 0" class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Adjusted / Lapsed</span><span class="font-medium font-mono text-rose-500">-{{ formatNumber(ccStatement.reward_points_summary.adjusted_lapsed) }}</span></div>
+                <div v-if="ccStatement.summary.xfina.rewardPointsSummary.disbursed > 0" class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Disbursed</span><span class="font-medium font-mono text-rose-500">-{{ formatNumber(ccStatement.summary.xfina.rewardPointsSummary.disbursed) }}</span></div>
+                <div v-if="ccStatement.summary.xfina.rewardPointsSummary.adjustedLapsed > 0" class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Adjusted / Lapsed</span><span class="font-medium font-mono text-rose-500">-{{ formatNumber(ccStatement.summary.xfina.rewardPointsSummary.adjustedLapsed) }}</span></div>
                 
-                <div v-if="ccStatement.reward_points_summary.opening_balance !== 0 || ccStatement.reward_points_summary.closing_balance !== 0" class="flex justify-between items-center mt-2 border-t pt-2"><span class="text-sm font-medium">Closing Balance</span><span class="font-bold font-mono text-lg text-primary">{{ formatNumber(ccStatement.reward_points_summary.closing_balance) }}</span></div>
-                <div v-if="ccStatement.reward_points_summary.expiring_in_30_days" class="flex justify-between items-center text-rose-500"><span class="text-xs">Expiring (30d)</span><span class="font-medium font-mono text-xs">{{ formatNumber(ccStatement.reward_points_summary.expiring_in_30_days) }}</span></div>
-                <div v-if="ccStatement.reward_points_summary.expiring_in_60_days" class="flex justify-between items-center text-rose-500"><span class="text-xs">Expiring (60d)</span><span class="font-medium font-mono text-xs">{{ formatNumber(ccStatement.reward_points_summary.expiring_in_60_days) }}</span></div>
+                <div v-if="ccStatement.summary.xfina.rewardPointsSummary.openingBalance !== 0 || ccStatement.summary.xfina.rewardPointsSummary.closingBalance !== 0" class="flex justify-between items-center mt-2 border-t pt-2"><span class="text-sm font-medium">Closing Balance</span><span class="font-bold font-mono text-lg text-primary">{{ formatNumber(ccStatement.summary.xfina.rewardPointsSummary.closingBalance) }}</span></div>
+                <div v-if="ccStatement.summary.xfina.rewardPointsSummary.expiringIn30Days" class="flex justify-between items-center text-rose-500"><span class="text-xs">Expiring (30d)</span><span class="font-medium font-mono text-xs">{{ formatNumber(ccStatement.summary.xfina.rewardPointsSummary.expiringIn30Days) }}</span></div>
+                <div v-if="ccStatement.summary.xfina.rewardPointsSummary.expiringIn60Days" class="flex justify-between items-center text-rose-500"><span class="text-xs">Expiring (60d)</span><span class="font-medium font-mono text-xs">{{ formatNumber(ccStatement.summary.xfina.rewardPointsSummary.expiringIn60Days) }}</span></div>
               </div>
             </CardContent>
           </Card>
         </div>
 
         <Accordion type="single" collapsible class="w-full">
-          <AccordionItem value="transactions" class="border rounded-lg bg-card text-card-foreground shadow-sm overflow-hidden" :disabled="!ccStatement.transactions?.length">
+          <AccordionItem value="transactions" class="border rounded-lg bg-card text-card-foreground shadow-sm overflow-hidden" :disabled="!ccStatement.transactions?.transaction?.length">
             <AccordionTrigger class="group hover:no-underline px-4 py-4 data-[state=open]:border-b border-border">
               <span class="font-medium text-foreground text-lg text-left w-full pr-4">Transactions</span>
               <template #icon>
                 <div class="flex items-center gap-1.5 text-xs font-mono bg-primary/10 text-primary pl-2.5 pr-2 py-1.5 rounded shrink-0 ml-2">
-                  <span>{{ ccStatement.transactions?.length || 0 }} {{ ccStatement.transactions?.length === 1 ? 'Txn' : 'Txns' }}</span>
-                  <ChevronDown v-if="ccStatement.transactions?.length" class="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                  <span>{{ ccStatement.transactions?.transaction?.length || 0 }} {{ ccStatement.transactions?.transaction?.length === 1 ? 'Txn' : 'Txns' }}</span>
+                  <ChevronDown v-if="ccStatement.transactions?.transaction?.length" class="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
                 </div>
               </template>
             </AccordionTrigger>
@@ -490,20 +490,20 @@ const hasRewards = (stmt) => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  <TableRow v-for="(txn, idx) in ccStatement.transactions" :key="idx" class="hover:bg-muted/50 transition-colors">
-                    <TableCell class="text-foreground whitespace-nowrap">{{ formatDateLocal(txn.date) }}</TableCell>
+                  <TableRow v-for="(txn, idx) in ccStatement.transactions?.transaction" :key="idx" class="hover:bg-muted/50 transition-colors">
+                    <TableCell class="text-foreground whitespace-nowrap">{{ formatDateLocal(txn.txnDate) }}</TableCell>
                     <TableCell class="text-foreground text-sm">
-                      <span v-if="txn.category" class="mr-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-muted text-muted-foreground">{{ txn.category }}</span>
-                      {{ txn.description }}
+                      <span v-if="txn.xfina?.category" class="mr-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-muted text-muted-foreground">{{ txn.xfina.category }}</span>
+                      {{ txn.narration }}
                     </TableCell>
-                    <TableCell class="text-foreground text-xs text-muted-foreground whitespace-nowrap">{{ txn.owner }}</TableCell>
-                    <TableCell class="text-right font-mono whitespace-nowrap" :class="{'text-emerald-500': txn.tx_type === 'Credit', 'text-foreground': txn.tx_type !== 'Credit'}">
+                    <TableCell class="text-foreground text-xs text-muted-foreground whitespace-nowrap">{{ txn.xfina?.owner }}</TableCell>
+                    <TableCell class="text-right font-mono whitespace-nowrap" :class="{'text-emerald-500': txn.txnType === 'CREDIT', 'text-foreground': txn.txnType !== 'CREDIT'}">
                       <div class="inline-flex items-baseline justify-end">
-                        <span v-if="txn.tx_type === 'Credit'">+</span>
+                        <span v-if="txn.txnType === 'CREDIT'">+</span>
                         <span>{{ formatCurrency(txn.amount) }}</span>
                       </div>
                     </TableCell>
-                    <TableCell class="text-right font-mono text-emerald-500">{{ txn.reward_points > 0 ? '+' + txn.reward_points : (txn.reward_points || '') }}</TableCell>
+                    <TableCell class="text-right font-mono text-emerald-500">{{ txn.xfina?.rewardPoints > 0 ? '+' + txn.xfina.rewardPoints : (txn.xfina?.rewardPoints || '') }}</TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
