@@ -6,3 +6,10 @@ edition.workspace = true
 [dependencies]
 xfina-models.workspace = true
 serde.workspace = true
+chrono.workspace = true
+rust_decimal = "1.42.1"
+num-traits = "0.2"
+
+[dev-dependencies]
+serde_json.workspace = true
+pdf-extract.workspace = true

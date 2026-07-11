@@ -2,7 +2,7 @@ use std::fs;
 use xfina_cc_icici::parse_icici_statement;
 
 fn main() {
-    let bytes = fs::read("/Users/sakthipriyan/Downloads/CCStatement_Past29-06-2026.xls").unwrap();
+    let bytes = fs::read("../../../xfina-test-data/credit-cards/icici/raw/CCStatement_Current08-07-2026.xls").unwrap();
     use calamine::{Reader, Xlsx, open_workbook_from_rs};
     use std::io::Cursor;
     
