@@ -1680,6 +1680,7 @@ dependencies = [
  "calamine 0.25.0",
  "chrono",
  "num-traits",
+ "regex",
  "rust_decimal",
  "serde",
  "serde_json",
