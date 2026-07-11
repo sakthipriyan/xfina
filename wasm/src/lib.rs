@@ -28,8 +28,8 @@ pub fn parse_cams(bytes: &[u8], password: Option<String>) -> Result<String, JsVa
 use xfina_cc_hdfc::parse_hdfc_statement;
 
 #[wasm_bindgen]
-pub fn parse_hdfc_cc(csv_content: &str) -> Result<String, JsValue> {
-    match parse_hdfc_statement(csv_content) {
+pub fn parse_hdfc_cc(csv_content: &str, filename: Option<String>) -> Result<String, JsValue> {
+    match parse_hdfc_statement(csv_content, filename.as_deref()) {
         Ok(stmt) => {
             serde_json::to_string(&stmt)
                 .map_err(|e| JsValue::from_str(&format!("JSON serialization error: {}", e)))
@@ -41,8 +41,8 @@ pub fn parse_hdfc_cc(csv_content: &str) -> Result<String, JsValue> {
 use xfina_cc_icici::parse_icici_statement;
 
 #[wasm_bindgen]
-pub fn parse_icici_cc(bytes: &[u8]) -> Result<String, JsValue> {
-    match parse_icici_statement(bytes) {
+pub fn parse_icici_cc(bytes: &[u8], filename: Option<String>) -> Result<String, JsValue> {
+    match parse_icici_statement(bytes, filename.as_deref()) {
         Ok(stmt) => {
             serde_json::to_string(&stmt)
                 .map_err(|e| JsValue::from_str(&format!("JSON serialization error: {}", e)))
