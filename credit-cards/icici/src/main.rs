@@ -18,7 +18,7 @@ fn main() {
         println!("Row {}: {:?}", i, cells);
     }
     
-    let result = parse_icici_statement(&bytes);
+    let result = parse_icici_statement(&bytes, Some("CCStatement_Current08-07-2026.xls"));
     match result {
         Ok(stmt) => {
             println!("{:#?}", stmt);

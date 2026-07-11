@@ -8,6 +8,7 @@ use xfina_models::credit_card::{
 };
 use xfina_models::deposit::TransactionType;
 use std::collections::HashMap;
+use xfina_models::date_utils;
 use regex::Regex;
 
 pub fn parse_icici_statement(bytes: &[u8], filename: Option<&str>) -> Result<CreditCardAccount, String> {
@@ -28,6 +29,8 @@ pub fn parse_icici_statement(bytes: &[u8], filename: Option<&str>) -> Result<Cre
     let mut xfina_account = XfinaCreditCardAccount::default();
     xfina_account.institution_name = Some("ICICI".to_string());
     
+    let mut date_only_paths = Vec::new();
+
     if let Some(fname) = filename {
         let re = Regex::new(r"(\d{2}-\d{2}-\d{4})").unwrap();
         if let Some(caps) = re.captures(fname) {
@@ -36,7 +39,7 @@ pub fn parse_icici_statement(bytes: &[u8], filename: Option<&str>) -> Result<Cre
                     let dt = d.and_hms_opt(0, 0, 0).unwrap();
                     let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
                     xfina_account.generated_date = chrono::TimeZone::from_local_datetime(&ist_offset, &dt).single().map(|dt| dt.with_timezone(&Utc));
-                    xfina_account.date_only = Some(true);
+                    date_only_paths.push("generatedDate".to_string());
                 }
             }
         }
@@ -152,7 +155,16 @@ pub fn parse_icici_statement(bytes: &[u8], filename: Option<&str>) -> Result<Cre
             tx_xfina.owner = Some(card_holder_name.clone());
             tx_xfina.reward_points = reward_points;
 
-            let parsed_date = parse_date(date_str);
+            let mut parsed_date = parse_date(date_str);
+            if parsed_date.is_none() {
+                if let Some(stmt_date) = summary.last_statement_date {
+                    parsed_date = parse_partial_date(date_str, stmt_date);
+                }
+            }
+            if !date_only_paths.contains(&"transactions.transaction.txnDate".to_string()) {
+                date_only_paths.push("transactions.transaction.txnDate".to_string());
+                date_only_paths.push("transactions.transaction.valueDate".to_string());
+            }
             transactions_list.push(CcTransaction {
                 txn_date: parsed_date.clone(),
                 value_date: parsed_date,
@@ -199,6 +211,7 @@ pub fn parse_icici_statement(bytes: &[u8], filename: Option<&str>) -> Result<Cre
         expiring_in_60_days: None,
     });
     
+    let stmt_date_opt = summary.last_statement_date.clone();
     summary.xfina = Some(xfina_summary);
     stmt.summary = Some(summary);
     
@@ -210,18 +223,28 @@ pub fn parse_icici_statement(bytes: &[u8], filename: Option<&str>) -> Result<Cre
 
     transactions_list.sort_by(|a, b| a.txn_date.cmp(&b.txn_date));
 
-    // Fallback: derive start/end from transactions if not set from file
     let mut txns = stmt.transactions.unwrap_or_default();
-    if txns.start_date.is_none() {
-        if let Some(first) = transactions_list.first() {
-            txns.start_date = first.txn_date.clone();
+    
+    if txns.start_date.is_none() || txns.end_date.is_none() {
+        if let Some(stmt_date) = stmt_date_opt {
+            let (start, end) = xfina_models::date_utils::derive_statement_period(stmt_date);
+            txns.start_date = Some(start);
+            txns.end_date = Some(end);
             xfina_txns.start_date_derived = Some(true);
-        }
-    }
-    if txns.end_date.is_none() {
-        if let Some(last) = transactions_list.last() {
-            txns.end_date = last.txn_date.clone();
             xfina_txns.end_date_derived = Some(true);
+        } else {
+            if txns.start_date.is_none() {
+                if let Some(first) = transactions_list.first() {
+                    txns.start_date = first.txn_date.clone();
+                    xfina_txns.start_date_derived = Some(true);
+                }
+            }
+            if txns.end_date.is_none() {
+                if let Some(last) = transactions_list.last() {
+                    txns.end_date = last.txn_date.clone();
+                    xfina_txns.end_date_derived = Some(true);
+                }
+            }
         }
     }
     
@@ -229,6 +252,9 @@ pub fn parse_icici_statement(bytes: &[u8], filename: Option<&str>) -> Result<Cre
     txns.xfina = Some(xfina_txns);
     stmt.transactions = Some(txns);
     
+    if !date_only_paths.is_empty() {
+        xfina_account.date_only_paths = Some(date_only_paths);
+    }
     stmt.xfina = Some(xfina_account);
     
     Ok(stmt)
@@ -243,4 +269,40 @@ fn parse_date(val: &str) -> Option<NaiveDate> {
     let iso = xfina_models::parse_indian_date(val);
     let s = iso.split('T').next().unwrap_or(&iso);
     NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()
+}
+
+fn parse_partial_date(val: &str, stmt_date: NaiveDate) -> Option<NaiveDate> {
+    let val = val.trim();
+    let parts: Vec<&str> = if val.contains('/') {
+        val.split('/').collect()
+    } else {
+        val.split('-').collect()
+    };
+    if parts.len() == 2 {
+        let day = parts[0].trim().parse::<u32>().unwrap_or(0);
+        let month_str = parts[1].trim();
+        let month = if month_str.chars().all(|c| c.is_ascii_digit()) {
+            month_str.parse::<u32>().unwrap_or(0)
+        } else {
+            match month_str.to_lowercase().as_str() {
+                "jan" => 1,
+                "feb" => 2,
+                "mar" => 3,
+                "apr" => 4,
+                "may" => 5,
+                "jun" => 6,
+                "jul" => 7,
+                "aug" => 8,
+                "sep" => 9,
+                "oct" => 10,
+                "nov" => 11,
+                "dec" => 12,
+                _ => 0,
+            }
+        };
+        if day > 0 && month > 0 {
+            return Some(date_utils::derive_transaction_date(stmt_date, day, month));
+        }
+    }
+    None
 }
