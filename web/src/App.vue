@@ -139,12 +139,12 @@ const onFileSelect = async (event) => {
             portfolio.value = JSON.parse(jsonString);
         } else if (selectedSource.value === 'HDFC') {
             const text = await file.text();
-            jsonString = parse_hdfc_cc(text);
+            jsonString = parse_hdfc_cc(text, file.name);
             ccStatement.value = JSON.parse(jsonString);
         } else if (selectedSource.value === 'ICICI') {
             const arrayBuffer = await file.arrayBuffer();
             const uint8Array = new Uint8Array(arrayBuffer);
-            jsonString = parse_icici_cc(uint8Array);
+            jsonString = parse_icici_cc(uint8Array, file.name);
             ccStatement.value = JSON.parse(jsonString);
         }
         
