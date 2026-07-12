@@ -1,6 +1,6 @@
 # Xfina
 
-**Xfina** is a collection of Rust libraries for extracting structured financial data from **Indian** bank statements, credit card statements, mutual fund reports, and international brokerage reports.
+**Xfina** is a collection of libraries (Rust, Python, JS) and a web interface for extracting structured financial data from **Indian** bank statements, credit card statements, mutual fund reports, and international brokerage reports.
 
 All parsers are compiled to **WebAssembly (WASM)** and run entirely in the browser — your financial data never leaves your device. 
 
@@ -106,7 +106,7 @@ npm run dev
 
 ### Deployment
 
-Pushed to `main` → GitHub Actions automatically builds WASM + Vue and deploys to GitHub Pages.
+Pushed to `main` → GitHub Actions automatically builds WASM + Vue and deploys to GitHub Pages at [xfina.sakthipriyan.com](https://xfina.sakthipriyan.com/).
 
 ---
 
