@@ -122,9 +122,9 @@ Pushed to `main` → GitHub Actions automatically builds WASM + Vue and deploys 
 | HDFC Bank | ✅ | ✅ | | |
 | IBKR | | | | ✅ |
 | ICICI Bank | ✅ | ✅ | | |
-| State Bank of India (SBI) | ✅ | | | |
+| State Bank of India | ✅ | | | |
 
-
+### Over next few weeks
 - [ ] CSV / JSON export in the web app
 - [ ] Complete robust parsing for IBKR using 
 - [ ] CAMS CAS (Mutual Funds)
@@ -132,10 +132,6 @@ Pushed to `main` → GitHub Actions automatically builds WASM + Vue and deploys 
 - [ ] Publish `xfina` to Rust crates.io
 - [ ] Publish JavaScript/TypeScript WASM bindings to npm
 - [ ] Publish Python bindings (`xfina-py`) via `pyo3` to PyPI
-
-
-
----
 
 ## License
 
