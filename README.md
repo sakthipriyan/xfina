@@ -26,10 +26,12 @@ By building Xfina in **Rust**, we achieve:
 
 | Crate | Institution | Format | Status | Notes |
 |---|---|---|---|---|
-| `xfina-ba-hdfc` | HDFC Bank | Excel (`.xls`/`.xlsx`) | **Production Ready** | Full support. (Joint Accounts not tested) |
-| `xfina-ba-icici` | ICICI Bank | Excel (`.xls`/`.xlsx`) | **Production Ready** | Date extracted from filename |
-| `xfina-ba-sbi` | State Bank of India | PDF (password protected) | **Production Ready** | Full support. (Joint Accounts not tested) |
-| `xfina-ba-bob` | Bank of Baroda | Excel (`.xls`/`.xlsx`) | **Production Ready** | Basic support |
+| `xfina-ba-hdfc` | HDFC Bank | Excel (`.xls`/`.xlsx`) | **Production Ready** | Full support |
+| `xfina-ba-icici` | ICICI Bank | Excel (`.xls`/`.xlsx`) | **Production Ready** | Full support |
+| `xfina-ba-sbi` | State Bank of India | PDF (password protected) | **Production Ready** | Full support |
+| `xfina-ba-bob` | Bank of Baroda | Excel (`.xls`/`.xlsx`) | **Production Ready** | Full support |
+
+*Note: Parsers have not been tested with Joint Accounts.*
 
 ### 💳 Credit Cards
 
