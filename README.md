@@ -112,12 +112,28 @@ Pushed to `main` → GitHub Actions automatically builds WASM + Vue and deploys 
 
 ## Roadmap
 
-- [ ] Complete robust parsing for CAMS CAS (Mutual Funds) and IBKR
+### Initial Launch Targets
+
+| Institution / Provider | Bank Account | Credit Card | Mutual Funds | Intl Brokers |
+|---|:---:|:---:|:---:|:---:|
+| Axis Bank | ✅ | | | |
+| Bank of Baroda | ✅ | | | |
+| CAMS | | | ✅ | |
+| HDFC Bank | ✅ | ✅ | | |
+| IBKR | | | | ✅ |
+| ICICI Bank | ✅ | ✅ | | |
+| State Bank of India (SBI) | ✅ | | | |
+
+
+- [ ] CSV / JSON export in the web app
+- [ ] Complete robust parsing for IBKR using 
+- [ ] CAMS CAS (Mutual Funds)
+- [ ] Add Bank Account Support for Axis Bank
 - [ ] Publish `xfina` to Rust crates.io
 - [ ] Publish JavaScript/TypeScript WASM bindings to npm
 - [ ] Publish Python bindings (`xfina-py`) via `pyo3` to PyPI
-- [ ] CSV / JSON export in the web app
-- [ ] Support for more banks and institutions (Axis Bank, Kotak)
+
+
 
 ---
 
