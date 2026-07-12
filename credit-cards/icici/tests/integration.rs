@@ -15,9 +15,8 @@ fn test_icici_credit_cards() {
     let raw_dir = test_data_dir.join("raw");
     let expected_dir = test_data_dir.join("expected");
 
-    if !expected_dir.exists() {
-        fs::create_dir_all(&expected_dir).expect("Failed to create expected directory");
-    }
+    fs::create_dir_all(expected_dir.join("xfina")).expect("Failed to create xfina directory");
+    fs::create_dir_all(expected_dir.join("rebit")).expect("Failed to create rebit directory");
 
     for entry in fs::read_dir(raw_dir).expect("Failed to read raw directory") {
         let entry = entry.expect("Failed to read directory entry");
@@ -31,15 +30,20 @@ fn test_icici_credit_cards() {
             let parsed_result = parse_icici_statement(&bytes, Some(file_name));
             
             if let Ok(parsed_statement) = parsed_result {
-                let expected_file_path = expected_dir.join(format!("{}.json", file_name));
+                let xfina_path = expected_dir.join("xfina").join(format!("{}.json", file_name));
+                let rebit_path = expected_dir.join("rebit").join(format!("{}.json", file_name));
                 
-                let json = serde_json::to_string_pretty(&parsed_statement).expect("Failed to serialize");
-                fs::write(&expected_file_path, &json).expect("Failed to write expected JSON");
+                let xfina_json = serde_json::to_string_pretty(&parsed_statement.to_xfina_json()).unwrap();
+                let rebit_json = serde_json::to_string_pretty(&parsed_statement.to_rebit_json()).unwrap();
                 
-                let expected_json_str = fs::read_to_string(&expected_file_path).expect("Failed to read expected JSON");
-                let actual_json = serde_json::to_string_pretty(&parsed_statement).unwrap();
+                fs::write(&xfina_path, &xfina_json).expect("Failed to write xfina JSON");
+                fs::write(&rebit_path, &rebit_json).expect("Failed to write rebit JSON");
                 
-                assert_eq!(actual_json, expected_json_str, "Mismatch for file: {}", file_name);
+                let expected_xfina = fs::read_to_string(&xfina_path).expect("Failed to read expected xfina");
+                let expected_rebit = fs::read_to_string(&rebit_path).expect("Failed to read expected rebit");
+                
+                assert_eq!(xfina_json, expected_xfina, "Mismatch for xfina file: {}", file_name);
+                assert_eq!(rebit_json, expected_rebit, "Mismatch for rebit file: {}", file_name);
             } else {
                 println!("Skipping {} due to parsing error: {:?}", file_name, parsed_result.unwrap_err());
             }

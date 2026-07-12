@@ -21,7 +21,7 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAc
     statement.version = 1.1;
     
     let mut xfina_account = XfinaDepositAccount::default();
-    xfina_account.institution_name = Some("ICICI".to_string());
+    xfina_account.institution_name = Some("ICICI Bank".to_string());
 
     let mut date_only_paths = Vec::new();
 
@@ -41,7 +41,7 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAc
     }
 
     let mut in_transactions = false;
-    let mut parsed_transactions = Vec::new();
+    let mut parsed_transactions: Vec<Transaction> = Vec::new();
     let mut holders = Vec::new();
 
     for row in range.rows() {
@@ -71,17 +71,23 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAc
         }
 
         if in_transactions {
-            if row_vec[0].starts_with("Legends Used in Account Statement") || row_vec[0].is_empty() {
-                // End of transaction block, break if we see "Legends"
-                if row_vec[0].starts_with("Legends Used in Account Statement") {
-                    break;
-                }
-                
-                // If it's completely empty or just the first cell is empty but no other data...
+            if row_vec[0].starts_with("Legends Used in Account Statement") {
+                break;
+            }
+            
+            if row_vec[0].is_empty() {
                 let has_data = row_vec.iter().any(|c| !c.is_empty());
                 if !has_data {
                     continue;
                 }
+                
+                // Handle multi-line narration
+                if row_vec.len() >= 5 && !row_vec[4].is_empty() {
+                    if let Some(last_tx) = parsed_transactions.last_mut() {
+                        last_tx.narration.push_str(row_vec[4].trim());
+                    }
+                }
+                continue;
             }
 
             // Parse a transaction line

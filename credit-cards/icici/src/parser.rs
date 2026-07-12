@@ -1,6 +1,6 @@
 use calamine::{Reader, Xlsx, open_workbook_from_rs};
 use std::io::Cursor;
-use chrono::{NaiveDate, Utc};
+use chrono::{NaiveDate, DateTime, Utc, TimeZone};
 use rust_decimal::Decimal;
 use xfina_models::credit_card::{
     CreditCardAccount, CcProfile, CcHolders, CcHolder, CcSummary, PastDues, RewardPointsSummary,
@@ -27,7 +27,7 @@ pub fn parse_icici_statement(bytes: &[u8], filename: Option<&str>) -> Result<Cre
 
     let mut holder = CcHolder::default();
     let mut xfina_account = XfinaCreditCardAccount::default();
-    xfina_account.institution_name = Some("ICICI".to_string());
+    xfina_account.institution_name = Some("ICICI Bank".to_string());
     
     let mut date_only_paths = Vec::new();
 
@@ -155,19 +155,20 @@ pub fn parse_icici_statement(bytes: &[u8], filename: Option<&str>) -> Result<Cre
             tx_xfina.owner = Some(card_holder_name.clone());
             tx_xfina.reward_points = reward_points;
 
-            let mut parsed_date = parse_date(date_str);
+            let mut parsed_date: Option<DateTime<Utc>> = parse_datetime(date_str);
             if parsed_date.is_none() {
                 if let Some(stmt_date) = summary.last_statement_date {
                     parsed_date = parse_partial_date(date_str, stmt_date);
                 }
             }
+            let parsed_naive = parsed_date.map(|dt| dt.with_timezone(&Utc).date_naive());
             if !date_only_paths.contains(&"transactions.transaction.txnDate".to_string()) {
                 date_only_paths.push("transactions.transaction.txnDate".to_string());
                 date_only_paths.push("transactions.transaction.valueDate".to_string());
             }
             transactions_list.push(CcTransaction {
-                txn_date: parsed_date.clone(),
-                value_date: parsed_date,
+                txn_date: parsed_date,
+                value_date: parsed_naive,
                 narration: details,
                 amount,
                 txn_type,
@@ -235,13 +236,13 @@ pub fn parse_icici_statement(bytes: &[u8], filename: Option<&str>) -> Result<Cre
         } else {
             if txns.start_date.is_none() {
                 if let Some(first) = transactions_list.first() {
-                    txns.start_date = first.txn_date.clone();
+                    txns.start_date = first.txn_date.map(|dt| dt.with_timezone(&Utc).date_naive());
                     xfina_txns.start_date_derived = Some(true);
                 }
             }
             if txns.end_date.is_none() {
                 if let Some(last) = transactions_list.last() {
-                    txns.end_date = last.txn_date.clone();
+                    txns.end_date = last.txn_date.map(|dt| dt.with_timezone(&Utc).date_naive());
                     xfina_txns.end_date_derived = Some(true);
                 }
             }
@@ -271,7 +272,18 @@ fn parse_date(val: &str) -> Option<NaiveDate> {
     NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()
 }
 
-fn parse_partial_date(val: &str, stmt_date: NaiveDate) -> Option<NaiveDate> {
+fn parse_datetime(val: &str) -> Option<DateTime<Utc>> {
+    let iso = xfina_models::parse_indian_date(val);
+    let s = iso.split('T').next().unwrap_or(&iso);
+    let naive = NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()?;
+    let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
+    let ndt = naive.and_hms_opt(0, 0, 0).unwrap();
+    chrono::TimeZone::from_local_datetime(&ist_offset, &ndt)
+        .single()
+        .map(|dt| dt.with_timezone(&Utc))
+}
+
+fn parse_partial_date(val: &str, stmt_date: NaiveDate) -> Option<DateTime<Utc>> {
     let val = val.trim();
     let parts: Vec<&str> = if val.contains('/') {
         val.split('/').collect()
@@ -285,18 +297,9 @@ fn parse_partial_date(val: &str, stmt_date: NaiveDate) -> Option<NaiveDate> {
             month_str.parse::<u32>().unwrap_or(0)
         } else {
             match month_str.to_lowercase().as_str() {
-                "jan" => 1,
-                "feb" => 2,
-                "mar" => 3,
-                "apr" => 4,
-                "may" => 5,
-                "jun" => 6,
-                "jul" => 7,
-                "aug" => 8,
-                "sep" => 9,
-                "oct" => 10,
-                "nov" => 11,
-                "dec" => 12,
+                "jan" => 1, "feb" => 2, "mar" => 3, "apr" => 4,
+                "may" => 5, "jun" => 6, "jul" => 7, "aug" => 8,
+                "sep" => 9, "oct" => 10, "nov" => 11, "dec" => 12,
                 _ => 0,
             }
         };
