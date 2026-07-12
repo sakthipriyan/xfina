@@ -44,19 +44,19 @@ const props = defineProps({
     <Card class="bg-card text-card-foreground shadow-sm flex flex-col h-full">
       <CardHeader class="pb-1">
         <div class="text-xs text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-2">
-          <span v-if="institutionName">{{ institutionName }}</span>
-          <span v-if="institutionName && statementType" class="text-muted-foreground/50">|</span>
           <span v-if="statementType">{{ statementType }}</span>
+          <span v-if="institutionName && statementType" class="text-muted-foreground/50">|</span>
+          <span v-if="institutionName">{{ institutionName }}</span>
         </div>
       </CardHeader>
       <CardContent class="mt-1 flex-1">
         <div class="flex flex-col gap-1">
-          <span class="text-xl font-bold">{{ customerName }}</span>
-          <span class="text-xs text-muted-foreground leading-snug" v-if="address">{{ address }}</span>
-          <div class="flex items-center gap-2 mt-1 flex-wrap">
+          <div class="flex items-center gap-2 mb-1 flex-wrap">
             <span class="text-sm font-medium font-mono bg-muted/30 border border-primary/20 rounded px-2.5 py-1 text-primary shadow-sm" v-if="accountNumber">{{ accountNumber }}</span>
             <span class="text-sm font-medium font-mono bg-muted/30 border border-primary/20 rounded px-2.5 py-1 text-primary shadow-sm" v-if="customerId">CUST ID: {{ customerId }}</span>
           </div>
+          <span class="text-xl font-bold">{{ customerName }}</span>
+          <span class="text-xs text-muted-foreground leading-snug" v-if="address">{{ address }}</span>
         </div>
       </CardContent>
     </Card>

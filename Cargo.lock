@@ -1663,7 +1663,13 @@ dependencies = [
 name = "xfina-cc-hdfc"
 version = "0.1.0"
 dependencies = [
+ "chrono",
+ "num-traits",
+ "pdf-extract",
+ "regex",
+ "rust_decimal",
  "serde",
+ "serde_json",
  "xfina-models",
 ]
 
@@ -1672,7 +1678,12 @@ name = "xfina-cc-icici"
 version = "0.1.0"
 dependencies = [
  "calamine 0.25.0",
+ "chrono",
+ "num-traits",
+ "regex",
+ "rust_decimal",
  "serde",
+ "serde_json",
  "xfina-models",
 ]
 
@@ -1711,6 +1722,7 @@ dependencies = [
  "chrono",
  "rust_decimal",
  "serde",
+ "serde_json",
  "serde_with",
 ]
 
