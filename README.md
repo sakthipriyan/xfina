@@ -1,6 +1,6 @@
 # Xfina
 
-**Xfina** is a collection of Rust libraries for extracting structured financial data from bank statements, credit card statements, mutual fund reports, and international brokerage reports.
+**Xfina** is a collection of Rust libraries for extracting structured financial data from **Indian** bank statements, credit card statements, mutual fund reports, and international brokerage reports.
 
 All parsers are compiled to **WebAssembly (WASM)** and run entirely in the browser — your financial data never leaves your device. 
 
@@ -10,11 +10,11 @@ All parsers are compiled to **WebAssembly (WASM)** and run entirely in the brows
 
 ## Motivation & Vision
 
-Most open-source financial parsers are written in Python, which often requires a backend server to process files — raising significant privacy concerns for sensitive financial documents.
+Most open-source financial parsers are written in Python, which often requires a backend server to process files — raising significant privacy concerns for sensitive financial documents. Alternatively, running them locally requires users to set up a Python toolchain and use a command-line interface (CLI).
 
 By building Xfina in **Rust**, we achieve:
 
-1. **Privacy-first WASM Deployment** — Parsers compile to WebAssembly and run *entirely* in the user's browser. Data never leaves the device.
+1. **Privacy-first WASM Deployment** — Parsers compile to WebAssembly and run *entirely* in the user's browser. Data never leaves the device. This zero-setup, browser-based solution empowers anyone who is comfortable with a web browser, Excel, or Google Sheets to easily extract a standardized data format without any technical overhead.
 2. **Universal Bindings** — The goal is to support Python and JS bindings natively so the core logic can be used in any environment. We will start publishing to all 3 package systems (Rust crates, npm, and PyPI) once the Mutual Funds and IBKR parsers are fully wrapped up.
 3. **ReBIT & Sahamati AA Standards** — The internal data schema is heavily built on top of the Sahamati Account Aggregator (AA) and ReBIT standards. Xfina offers a ready-made ReBIT JSON interface out-of-the-box, ensuring interoperability with standard Indian financial ecosystems.
 
