@@ -91,6 +91,23 @@ pub struct DepositAccount {
     pub xfina: Option<XfinaDepositAccount>,
 }
 
+impl DepositAccount {
+    pub fn to_xfina_json(&self) -> serde_json::Value {
+        let mut val = serde_json::to_value(self).unwrap();
+        crate::serializer::transform_to_xfina(&mut val);
+        val
+    }
+
+    pub fn to_rebit_json(&self) -> serde_json::Value {
+        let mut val = serde_json::to_value(self).unwrap();
+        let paths = self.xfina.as_ref()
+            .and_then(|x| x.date_only_paths.clone())
+            .unwrap_or_default();
+        crate::serializer::transform_to_rebit(&mut val, &paths, "".to_string());
+        val
+    }
+}
+
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -210,7 +227,7 @@ pub struct XfinaHolder {
 pub struct XfinaDepositAccount {
     pub institution_name: Option<String>,
     pub generated_date: Option<DateTime<Utc>>,
-    pub date_only: Option<bool>,
+    pub date_only_paths: Option<Vec<String>>,
 }
 
 
@@ -220,7 +237,6 @@ pub struct XfinaDepositAccount {
 pub struct XfinaSummary {
     #[serde(with = "rust_decimal::serde::float_option", default)]
     pub opening_balance: Option<Decimal>,
-    pub balance_date_only: Option<bool>,
     pub account_product: Option<String>,
 }
 
@@ -228,7 +244,6 @@ pub struct XfinaSummary {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct XfinaTransactions {
-    pub date_only: Option<bool>,
 }
 
 // -----------------------------------------------------------------------------

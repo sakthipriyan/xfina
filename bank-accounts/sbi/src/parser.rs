@@ -13,7 +13,7 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>, filename: 
     statement.version = 1.1;
     
     let mut xfina_account = XfinaDepositAccount::default();
-    xfina_account.institution_name = Some("SBI".to_string());
+    xfina_account.institution_name = Some("State Bank of India".to_string());
 
     let mut account_number = String::new();
     let mut account_name = String::new();
@@ -28,6 +28,8 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>, filename: 
     let mut address_lines: Vec<String> = Vec::new();
     let mut in_address = false;
     
+    let mut date_only_paths = Vec::new();
+
     if let Some(fname) = filename {
         // e.g. AccountStatement_05072026_211225.pdf
         let re = Regex::new(r"(\d{2})(\d{2})(\d{4})_(\d{2})(\d{2})(\d{2})").unwrap();
@@ -39,9 +41,12 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>, filename: 
             let min = caps.get(5).unwrap().as_str().parse::<u32>().unwrap();
             let sec = caps.get(6).unwrap().as_str().parse::<u32>().unwrap();
             if let Some(d) = NaiveDate::from_ymd_opt(year, month, day) {
-                let dt = d.and_hms_opt(hour, min, sec).unwrap();
+                let dt = d.and_hms_opt(0, 0, 0).unwrap();
                 let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
                 xfina_account.generated_date = chrono::TimeZone::from_local_datetime(&ist_offset, &dt).single().map(|dt| dt.with_timezone(&Utc));
+                if !date_only_paths.contains(&"xfina.generatedDate".to_string()) {
+                    date_only_paths.push("xfina.generatedDate".to_string());
+                }
             }
         }
     }
@@ -103,7 +108,9 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>, filename: 
                             let dt = parsed.and_hms_opt(0, 0, 0).unwrap();
                             let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
                             xfina_account.generated_date = chrono::TimeZone::from_local_datetime(&ist_offset, &dt).single().map(|dt| dt.with_timezone(&Utc));
-                            xfina_account.date_only = Some(true);
+                            if !date_only_paths.contains(&"xfina.generatedDate".to_string()) {
+                    date_only_paths.push("xfina.generatedDate".to_string());
+                }
                         }
                     }
                 }
@@ -287,6 +294,10 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>, filename: 
                     mode,
                 };
                 parsed_transactions.push(tx);
+                
+                if !date_only_paths.contains(&"transactions.transaction.transactionTimestamp".to_string()) {
+                    date_only_paths.push("transactions.transaction.transactionTimestamp".to_string());
+                }
             }
         }
     }
@@ -352,11 +363,14 @@ if !account_number.is_empty() {
     };
 
     transactions_obj.transaction = parsed_transactions;
-    transactions_obj.xfina = Some(XfinaTransactions { date_only: Some(true) });
+
     
     statement.profile = Some(profile);
     statement.summary = Some(summary);
     statement.transactions = Some(transactions_obj);
+    if !date_only_paths.is_empty() {
+        xfina_account.date_only_paths = Some(date_only_paths);
+    }
     statement.xfina = Some(xfina_account);
 
     Ok(statement)

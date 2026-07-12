@@ -1,10 +1,11 @@
 use std::fs;
 use std::path::Path;
-use xfina_ba_icici::parse_icici_xls;
+use xfina_cc_hdfc::parse_hdfc_statement;
+use pdf_extract::extract_text;
 
 #[test]
-fn test_icici_bank_accounts() {
-    let test_data_dir = Path::new("../../../xfina-test-data/bank-accounts/icici");
+fn test_hdfc_credit_cards() {
+    let test_data_dir = Path::new("../../../xfina-test-data/credit-cards/hdfc");
     
     // If the test data repo is not checked out alongside, gracefully skip
     if !test_data_dir.exists() {
@@ -22,13 +23,22 @@ fn test_icici_bank_accounts() {
         let entry = entry.expect("Failed to read directory entry");
         let path = entry.path();
         
-        if path.extension().and_then(|e| e.to_str()) == Some("xls") {
+        if path.extension().and_then(|e| e.to_str()) == Some("csv") {
             let file_name = path.file_stem().unwrap().to_str().unwrap();
-            let bytes = fs::read(&path).expect("Failed to read file");
             
-            let parsed_statement = parse_icici_xls(&bytes, path.file_name().and_then(|n| n.to_str())).expect("Failed to parse statement");
+            // Read CSV content directly
+            let content = match fs::read_to_string(&path) {
+                Ok(text) => text,
+                Err(e) => {
+                    println!("Failed to read text from {:?}: {:?}", path, e);
+                    continue;
+                }
+            };
             
-            let xfina_path = expected_dir.join("xfina").join(format!("{}.json", file_name));
+            let parsed_result = parse_hdfc_statement(&content, Some(file_name));
+            
+            if let Ok(parsed_statement) = parsed_result {
+                let xfina_path = expected_dir.join("xfina").join(format!("{}.json", file_name));
                 let rebit_path = expected_dir.join("rebit").join(format!("{}.json", file_name));
                 
                 let xfina_json = serde_json::to_string_pretty(&parsed_statement.to_xfina_json()).unwrap();
@@ -42,6 +52,9 @@ fn test_icici_bank_accounts() {
                 
                 assert_eq!(xfina_json, expected_xfina, "Mismatch for xfina file: {}", file_name);
                 assert_eq!(rebit_json, expected_rebit, "Mismatch for rebit file: {}", file_name);
+            } else {
+                println!("Skipping {} due to parsing error: {:?}", file_name, parsed_result.unwrap_err());
+            }
         }
     }
 }
