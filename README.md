@@ -26,9 +26,9 @@ By building Xfina in **Rust**, we achieve:
 
 | Crate | Institution | Format | Status | Notes |
 |---|---|---|---|---|
-| `xfina-ba-hdfc` | HDFC Bank | Excel (`.xls`/`.xlsx`) | **Production Ready** | Full support |
+| `xfina-ba-hdfc` | HDFC Bank | Excel (`.xls`/`.xlsx`) | **Production Ready** | Full support. (Joint Accounts not tested) |
 | `xfina-ba-icici` | ICICI Bank | Excel (`.xls`/`.xlsx`) | **Production Ready** | Date extracted from filename |
-| `xfina-ba-sbi` | State Bank of India | PDF (password protected) | **Production Ready** | Full support |
+| `xfina-ba-sbi` | State Bank of India | PDF (password protected) | **Production Ready** | Full support. (Joint Accounts not tested) |
 | `xfina-ba-bob` | Bank of Baroda | Excel (`.xls`/`.xlsx`) | **Production Ready** | Basic support |
 
 ### 💳 Credit Cards
@@ -36,7 +36,7 @@ By building Xfina in **Rust**, we achieve:
 | Crate | Institution | Format | Status | Notes |
 |---|---|---|---|---|
 | `xfina-cc-hdfc` | HDFC Bank | CSV | **Production Ready** | Full support incl. add-on cardholders, reward points |
-| `xfina-cc-icici` | ICICI Bank | Excel (`.xls`/`.xlsx`) | **Production Ready** | Single & international transactions |
+| `xfina-cc-icici` | ICICI Bank | Excel (`.xls`/`.xlsx`) | **Production Ready** | Tested card without any add-on cards |
 
 ### 📈 Mutual Funds
 
