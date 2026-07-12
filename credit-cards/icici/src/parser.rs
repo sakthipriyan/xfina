@@ -1,8 +1,17 @@
 use calamine::{Reader, Xlsx, open_workbook_from_rs};
 use std::io::Cursor;
-use xfina_models::{CreditCardStatement, AccountSummary, CustomerInfo, CreditCardTransaction, RewardPointsSummary};
+use chrono::{NaiveDate, DateTime, Utc, TimeZone};
+use rust_decimal::Decimal;
+use xfina_models::credit_card::{
+    CreditCardAccount, CcProfile, CcHolders, CcHolder, CcSummary, PastDues, RewardPointsSummary,
+    CcTransactions, CcTransaction, XfinaCreditCardAccount, CcXfinaSummary, CcXfinaTransactions, CcXfinaTransaction,
+};
+use xfina_models::deposit::TransactionType;
+use std::collections::HashMap;
+use xfina_models::date_utils;
+use regex::Regex;
 
-pub fn parse_icici_statement(bytes: &[u8]) -> Result<CreditCardStatement, String> {
+pub fn parse_icici_statement(bytes: &[u8], filename: Option<&str>) -> Result<CreditCardAccount, String> {
     let cursor = Cursor::new(bytes);
     let mut workbook: Xlsx<_> = open_workbook_from_rs(cursor)
         .map_err(|e| format!("Failed to open workbook: {}", e))?;
@@ -12,19 +21,47 @@ pub fn parse_icici_statement(bytes: &[u8]) -> Result<CreditCardStatement, String
     let range = workbook.worksheet_range(first_sheet)
         .map_err(|e| format!("Failed to get worksheet: {}", e))?;
 
-    let mut stmt = CreditCardStatement::default();
+    let mut stmt = CreditCardAccount::default();
+    stmt.r#type = "credit_card".to_string();
+    stmt.version = 1.1;
+
+    let mut holder = CcHolder::default();
+    let mut xfina_account = XfinaCreditCardAccount::default();
+    xfina_account.institution_name = Some("ICICI Bank".to_string());
+    
+    let mut date_only_paths = Vec::new();
+
+    if let Some(fname) = filename {
+        let re = Regex::new(r"(\d{2}-\d{2}-\d{4})").unwrap();
+        if let Some(caps) = re.captures(fname) {
+            if let Some(m) = caps.get(1) {
+                if let Ok(d) = NaiveDate::parse_from_str(m.as_str(), "%d-%m-%Y") {
+                    let dt = d.and_hms_opt(0, 0, 0).unwrap();
+                    let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
+                    xfina_account.generated_date = chrono::TimeZone::from_local_datetime(&ist_offset, &dt).single().map(|dt| dt.with_timezone(&Utc));
+                    date_only_paths.push("xfina.generatedDate".to_string());
+                }
+            }
+        }
+    }
+    let mut summary = CcSummary::default();
+    let mut xfina_summary = CcXfinaSummary::default();
+    
+    let mut transactions_list = Vec::new();
+    let mut xfina_txns = CcXfinaTransactions::default();
+
     let mut in_transactions = false;
 
     let mut card_holder_name = String::new();
-    let mut previous_balance = 0.0;
-    let mut purchases = 0.0;
-    let mut payments = 0.0;
-    let mut total_due = 0.0;
-    let mut min_due = 0.0;
+    let mut previous_balance = Decimal::new(0, 0);
+    let mut purchases = Decimal::new(0, 0);
+    let mut payments = Decimal::new(0, 0);
+    let mut total_due = Decimal::new(0, 0);
+    let mut min_due = Decimal::new(0, 0);
 
     let mut default_rewards = 0;
-    let mut owner_credit_breakdown = std::collections::HashMap::new();
-    let mut owner_debit_breakdown = std::collections::HashMap::new();
+    let mut owner_credit_breakdown = HashMap::new();
+    let mut owner_debit_breakdown = HashMap::new();
 
     for row in range.rows() {
         let cells: Vec<String> = row.iter().map(|c| c.to_string()).collect();
@@ -32,65 +69,74 @@ pub fn parse_icici_statement(bytes: &[u8]) -> Result<CreditCardStatement, String
 
         let col0 = cells.get(0).map(|s| s.trim()).unwrap_or("");
 
-        // Parse key-value headers
         if !in_transactions {
-            match col0 {
-                "Card Holder Name" => {
-                    card_holder_name = cells.get(4).unwrap_or(&String::new()).trim().to_string();
-                    stmt.customer_info = CustomerInfo {
-                        name: card_holder_name.clone(),
-                        ..Default::default()
-                    };
-                }
-                "Previous Balance" => {
-                    let val = cells.get(4).unwrap_or(&String::new()).replace("INR", "").trim().to_string();
-                    previous_balance = val.parse().unwrap_or(0.0);
-                    stmt.statement_date = Some(xfina_models::parse_indian_date(cells.get(12).unwrap_or(&String::new()).trim()));
-                }
-                "Purchases and Other Charges" => {
-                    let val = cells.get(4).unwrap_or(&String::new()).replace("INR", "").trim().to_string();
-                    purchases = val.parse().unwrap_or(0.0);
-                    stmt.payment_due_date = Some(xfina_models::parse_indian_date(cells.get(12).unwrap_or(&String::new()).trim()));
-                }
-                "Payments and Other Credits" => {
-                    let val = cells.get(4).unwrap_or(&String::new()).replace("INR", "").trim().to_string();
-                    payments = val.parse().unwrap_or(0.0);
-                    let limit = cells.get(12).unwrap_or(&String::new()).replace("INR", "").trim().to_string();
-                    stmt.credit_limit = Some(limit.parse().unwrap_or(0.0));
-                }
-                "Total Amount Due" => {
-                    let val = cells.get(4).unwrap_or(&String::new()).replace("INR", "").trim().to_string();
-                    total_due = val.parse().unwrap_or(0.0);
-                    let limit = cells.get(12).unwrap_or(&String::new()).replace("INR", "").trim().to_string();
-                    stmt.available_limit = Some(limit.parse().unwrap_or(0.0));
-                }
-                "Minimum Amount Due" => {
-                    let val = cells.get(4).unwrap_or(&String::new()).replace("INR", "").trim().to_string();
-                    min_due = val.parse().unwrap_or(0.0);
-                    stmt.minimum_amount_due = Some(min_due);
+            for i in [0, 8] {
+                if let (Some(key_str), Some(val_str)) = (cells.get(i), cells.get(i + 4)) {
+                    let key = key_str.trim();
+                    let val = val_str.replace("INR", "").trim().to_string();
                     
-                    let limit = cells.get(12).unwrap_or(&String::new()).replace("INR", "").trim().to_string();
-                    stmt.available_cash_limit = Some(limit.parse().unwrap_or(0.0));
-                }
-                "Cash Advances" => {
-                    let period = cells.get(12).unwrap_or(&String::new()).trim().to_string();
-                    if let Some((start, end)) = period.split_once(" TO ") {
-                        stmt.statement_start_date = Some(xfina_models::parse_indian_date(start.trim()));
-                        stmt.statement_start_date_derived = false;
-                        stmt.statement_end_date = Some(xfina_models::parse_indian_date(end.trim()));
-                        stmt.statement_end_date_derived = false;
+                    match key {
+                        "Card Holder Name" => {
+                            card_holder_name = val.clone();
+                            holder.name = card_holder_name.clone();
+                        }
+                        "Previous Balance" => {
+                            previous_balance = parse_decimal(&val).unwrap_or_default();
+                        }
+                        "Payments and Other Credits" => {
+                            payments = parse_decimal(&val).unwrap_or_default();
+                        }
+                        "Purchases and Other Charges" => {
+                            purchases = parse_decimal(&val).unwrap_or_default();
+                        }
+                        "Total Amount Due" => {
+                            total_due = parse_decimal(&val).unwrap_or_default();
+                            summary.total_due_amount = Some(total_due);
+                        }
+                        "Minimum Amount Due" => {
+                            min_due = parse_decimal(&val).unwrap_or_default();
+                            summary.min_due_amount = Some(min_due);
+                        }
+                        "Available Credit Limit" => {
+                            summary.available_credit = parse_decimal(&val);
+                        }
+                        "Total Credit Limit" => {
+                            summary.credit_limit = parse_decimal(&val);
+                        }
+                        "Available Cash Limit" => {
+                            // in some formats, they might map it differently, we will just use cash_limit for total
+                        }
+                        "Total Cash Limit" => {
+                            summary.cash_limit = parse_decimal(&val);
+                        }
+                        "Statement Date" => {
+                            summary.last_statement_date = parse_date(&val);
+                        }
+                        "Payment Due Date" => {
+                            summary.due_date = parse_date(&val);
+                        }
+                        "Statement Period" => {
+                            if let Some((start, end)) = val.split_once(" TO ") {
+                                let mut txns = CcTransactions::default();
+                                txns.start_date = parse_date(start);
+                                txns.end_date = parse_date(end);
+                                xfina_txns.start_date_derived = Some(false);
+                                xfina_txns.end_date_derived = Some(false);
+                                stmt.transactions = Some(txns);
+                            }
+                        }
+                        "Transaction Date" => {
+                            in_transactions = true;
+                        }
+                        _ => {}
                     }
                 }
-                "Transaction Date" => {
-                    in_transactions = true;
-                }
-                _ => {}
             }
         } else {
             // Parse Transactions
             // 0=Date, 4=Details, 8=Amount, 12=Reward Points, 16=Ref Number
-            let date = cells.get(0).map(|s| s.trim()).unwrap_or("");
-            if date.is_empty() || date == "Transaction Date" { continue; } // skip empty or header
+            let date_str = cells.get(0).map(|s| s.trim()).unwrap_or("");
+            if date_str.is_empty() || date_str == "Transaction Date" { continue; } // skip empty or header
             
             let details = cells.get(4).map(|s| s.trim()).unwrap_or("").to_string();
             let amount_str = cells.get(8).map(|s| s.trim()).unwrap_or("").to_string();
@@ -98,49 +144,64 @@ pub fn parse_icici_statement(bytes: &[u8]) -> Result<CreditCardStatement, String
             // Parse amount and type
             let is_credit = amount_str.ends_with("Cr.");
             let is_debit = amount_str.ends_with("Dr.");
-            let tx_type = if is_credit { "Credit".to_string() } else if is_debit { "Debit".to_string() } else { "Unknown".to_string() };
+            let txn_type = if is_credit { TransactionType::Credit } else { TransactionType::Debit };
             
             let amt_clean = amount_str.replace("Dr.", "").replace("Cr.", "").replace("INR", "").trim().to_string();
-            let amount = amt_clean.parse::<f64>().unwrap_or(0.0).abs();
+            let amount = parse_decimal(&amt_clean).unwrap_or_default().abs();
             
             let reward_points = cells.get(12).and_then(|s| s.trim().parse::<i32>().ok());
             
-            let has_extra_cols = cells.iter().skip(17).any(|s| !s.trim().is_empty());
-            let category = if has_extra_cols { Some("INTL".to_string()) } else { Some("IN".to_string()) };
-            
-            stmt.transactions.push(CreditCardTransaction {
-                owner: card_holder_name.clone(), // default to card holder
-                date: xfina_models::parse_indian_date(date),
-                description: details,
+            let mut tx_xfina = CcXfinaTransaction::default();
+            tx_xfina.owner = Some(card_holder_name.clone());
+            tx_xfina.reward_points = reward_points;
+
+            let mut parsed_date: Option<DateTime<Utc>> = parse_datetime(date_str);
+            if parsed_date.is_none() {
+                if let Some(stmt_date) = summary.last_statement_date {
+                    parsed_date = parse_partial_date(date_str, stmt_date);
+                }
+            }
+            let parsed_naive = parsed_date.map(|dt| dt.with_timezone(&Utc).date_naive());
+            if !date_only_paths.contains(&"transactions.transaction.txnDate".to_string()) {
+                date_only_paths.push("transactions.transaction.txnDate".to_string());
+                date_only_paths.push("transactions.transaction.valueDate".to_string());
+            }
+            transactions_list.push(CcTransaction {
+                txn_date: parsed_date,
+                value_date: parsed_naive,
+                narration: details,
                 amount,
-                tx_type: tx_type.clone(),
-                reward_points,
-                category,
+                txn_type,
+                txn_id: None,
+                statement_date: None,
+                mcc: None,
+                masked_card_number: None,
+                xfina: Some(tx_xfina),
             });
             
             // Aggregations
+            use rust_decimal::prelude::ToPrimitive;
+            let amt_f64 = amount.to_f64().unwrap_or(0.0);
+            
             if let Some(pts) = reward_points {
                 default_rewards += pts;
             }
-            if tx_type == "Credit" {
-                *owner_credit_breakdown.entry(card_holder_name.clone()).or_insert(0.0) += amount;
-            } else if tx_type == "Debit" {
-                *owner_debit_breakdown.entry(card_holder_name.clone()).or_insert(0.0) += amount;
+            if txn_type == TransactionType::Credit {
+                *owner_credit_breakdown.entry(card_holder_name.clone()).or_insert(0.0) += amt_f64;
+            } else if txn_type == TransactionType::Debit {
+                *owner_debit_breakdown.entry(card_holder_name.clone()).or_insert(0.0) += amt_f64;
             }
         }
     }
     
-    stmt.account_summary = Some(AccountSummary {
-        opening_balance: previous_balance,
-        payment_credit: payments,
-        purchases_debits: purchases,
-        finance_charges: 0.0, // not clearly separated in this ICICI extract
-        total_dues: total_due,
-        owner_credit_breakdown,
-        owner_debit_breakdown,
-    });
+    xfina_summary.opening_balance = Some(previous_balance);
+    xfina_summary.payment_credit = Some(payments);
+    xfina_summary.purchases_debits = Some(purchases);
+    summary.finance_charges = Some(Decimal::new(0, 0)); // not clearly separated in this ICICI extract
+    xfina_summary.owner_credit_breakdown = owner_credit_breakdown;
+    xfina_summary.owner_debit_breakdown = owner_debit_breakdown;
     
-    stmt.reward_points_summary = Some(RewardPointsSummary {
+    xfina_summary.reward_points_summary = Some(RewardPointsSummary {
         default_rewards,
         opening_balance: 0,
         earned: default_rewards,
@@ -151,25 +212,100 @@ pub fn parse_icici_statement(bytes: &[u8]) -> Result<CreditCardStatement, String
         expiring_in_60_days: None,
     });
     
-    stmt.transactions.sort_by(|a, b| a.date.cmp(&b.date));
+    let stmt_date_opt = summary.last_statement_date.clone();
+    summary.xfina = Some(xfina_summary);
+    stmt.summary = Some(summary);
+    
+    stmt.profile = Some(CcProfile {
+        holders: CcHolders {
+            holder: vec![holder],
+        }
+    });
 
-    // Fallback: derive start/end from transactions if not set from file
-    if stmt.statement_start_date.is_none() {
-        if let Some(first) = stmt.transactions.first() {
-            stmt.statement_start_date = Some(date_only(&first.date));
-            stmt.statement_start_date_derived = true;
+    transactions_list.sort_by(|a, b| a.txn_date.cmp(&b.txn_date));
+
+    let mut txns = stmt.transactions.unwrap_or_default();
+    
+    if txns.start_date.is_none() || txns.end_date.is_none() {
+        if let Some(stmt_date) = stmt_date_opt {
+            let (start, end) = xfina_models::date_utils::derive_statement_period(stmt_date);
+            txns.start_date = Some(start);
+            txns.end_date = Some(end);
+            xfina_txns.start_date_derived = Some(true);
+            xfina_txns.end_date_derived = Some(true);
+        } else {
+            if txns.start_date.is_none() {
+                if let Some(first) = transactions_list.first() {
+                    txns.start_date = first.txn_date.map(|dt| dt.with_timezone(&Utc).date_naive());
+                    xfina_txns.start_date_derived = Some(true);
+                }
+            }
+            if txns.end_date.is_none() {
+                if let Some(last) = transactions_list.last() {
+                    txns.end_date = last.txn_date.map(|dt| dt.with_timezone(&Utc).date_naive());
+                    xfina_txns.end_date_derived = Some(true);
+                }
+            }
         }
     }
-    if stmt.statement_end_date.is_none() {
-        if let Some(last) = stmt.transactions.last() {
-            stmt.statement_end_date = Some(date_only(&last.date));
-            stmt.statement_end_date_derived = true;
-        }
+    
+    txns.transaction = transactions_list;
+    txns.xfina = Some(xfina_txns);
+    stmt.transactions = Some(txns);
+    
+    if !date_only_paths.is_empty() {
+        xfina_account.date_only_paths = Some(date_only_paths);
     }
+    stmt.xfina = Some(xfina_account);
     
     Ok(stmt)
 }
 
-fn date_only(s: &str) -> String {
-    s.split('T').next().unwrap_or(s).to_string()
+fn parse_decimal(val: &str) -> Option<Decimal> {
+    let clean = val.replace(",", "");
+    clean.parse::<Decimal>().ok()
+}
+
+fn parse_date(val: &str) -> Option<NaiveDate> {
+    let iso = xfina_models::parse_indian_date(val);
+    let s = iso.split('T').next().unwrap_or(&iso);
+    NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()
+}
+
+fn parse_datetime(val: &str) -> Option<DateTime<Utc>> {
+    let iso = xfina_models::parse_indian_date(val);
+    let s = iso.split('T').next().unwrap_or(&iso);
+    let naive = NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()?;
+    let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
+    let ndt = naive.and_hms_opt(0, 0, 0).unwrap();
+    chrono::TimeZone::from_local_datetime(&ist_offset, &ndt)
+        .single()
+        .map(|dt| dt.with_timezone(&Utc))
+}
+
+fn parse_partial_date(val: &str, stmt_date: NaiveDate) -> Option<DateTime<Utc>> {
+    let val = val.trim();
+    let parts: Vec<&str> = if val.contains('/') {
+        val.split('/').collect()
+    } else {
+        val.split('-').collect()
+    };
+    if parts.len() == 2 {
+        let day = parts[0].trim().parse::<u32>().unwrap_or(0);
+        let month_str = parts[1].trim();
+        let month = if month_str.chars().all(|c| c.is_ascii_digit()) {
+            month_str.parse::<u32>().unwrap_or(0)
+        } else {
+            match month_str.to_lowercase().as_str() {
+                "jan" => 1, "feb" => 2, "mar" => 3, "apr" => 4,
+                "may" => 5, "jun" => 6, "jul" => 7, "aug" => 8,
+                "sep" => 9, "oct" => 10, "nov" => 11, "dec" => 12,
+                _ => 0,
+            }
+        };
+        if day > 0 && month > 0 {
+            return Some(date_utils::derive_transaction_date(stmt_date, day, month));
+        }
+    }
+    None
 }

@@ -26,6 +26,8 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
     
     let mut xfina_account = XfinaDepositAccount::default();
     xfina_account.institution_name = Some("HDFC Bank".to_string());
+    
+    let mut date_only_paths = Vec::new();
 
     let mut in_transactions = false;
     let mut in_summary = false;
@@ -200,6 +202,10 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
                 amount,
                 current_balance: balance,
             });
+            
+            if !date_only_paths.contains(&"transactions.transaction.transactionTimestamp".to_string()) {
+                date_only_paths.push("transactions.transaction.transactionTimestamp".to_string());
+            }
         }
     }
 
@@ -309,7 +315,6 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
     }
     
     transactions_obj.transaction = parsed_transactions;
-    transactions_obj.xfina = Some(XfinaTransactions { date_only: Some(true) });
     
     let holders_list = vec![holder];
     let mut profile = Profile::default();
@@ -322,6 +327,10 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
     stmt.profile = Some(profile);
     stmt.summary = Some(summary);
     stmt.transactions = Some(transactions_obj);
+    
+    if !date_only_paths.is_empty() {
+        xfina_account.date_only_paths = Some(date_only_paths);
+    }
     stmt.xfina = Some(xfina_account);
 
     Ok(stmt)

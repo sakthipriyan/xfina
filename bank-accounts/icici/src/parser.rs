@@ -21,7 +21,9 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAc
     statement.version = 1.1;
     
     let mut xfina_account = XfinaDepositAccount::default();
-    xfina_account.institution_name = Some("ICICI".to_string());
+    xfina_account.institution_name = Some("ICICI Bank".to_string());
+
+    let mut date_only_paths = Vec::new();
 
     if let Some(fname) = filename {
         // e.g. OpTransactionHistory05-07-2026.xls
@@ -32,14 +34,14 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAc
                     let dt = d.and_hms_opt(0, 0, 0).unwrap();
                     let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
                     xfina_account.generated_date = chrono::TimeZone::from_local_datetime(&ist_offset, &dt).single().map(|dt| dt.with_timezone(&Utc));
-                    xfina_account.date_only = Some(true);
+                    date_only_paths.push("xfina.generatedDate".to_string());
                 }
             }
         }
     }
 
     let mut in_transactions = false;
-    let mut parsed_transactions = Vec::new();
+    let mut parsed_transactions: Vec<Transaction> = Vec::new();
     let mut holders = Vec::new();
 
     for row in range.rows() {
@@ -69,17 +71,23 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAc
         }
 
         if in_transactions {
-            if row_vec[0].starts_with("Legends Used in Account Statement") || row_vec[0].is_empty() {
-                // End of transaction block, break if we see "Legends"
-                if row_vec[0].starts_with("Legends Used in Account Statement") {
-                    break;
-                }
-                
-                // If it's completely empty or just the first cell is empty but no other data...
+            if row_vec[0].starts_with("Legends Used in Account Statement") {
+                break;
+            }
+            
+            if row_vec[0].is_empty() {
                 let has_data = row_vec.iter().any(|c| !c.is_empty());
                 if !has_data {
                     continue;
                 }
+                
+                // Handle multi-line narration
+                if row_vec.len() >= 5 && !row_vec[4].is_empty() {
+                    if let Some(last_tx) = parsed_transactions.last_mut() {
+                        last_tx.narration.push_str(row_vec[4].trim());
+                    }
+                }
+                continue;
             }
 
             // Parse a transaction line
@@ -142,6 +150,10 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAc
                     current_balance: balance,
                     txn_id: None,
                 });
+                
+                if !date_only_paths.contains(&"transactions.transaction.transactionTimestamp".to_string()) {
+                    date_only_paths.push("transactions.transaction.transactionTimestamp".to_string());
+                }
             }
         }
     }
@@ -174,7 +186,6 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAc
     }
     
     transactions_obj.transaction = parsed_transactions;
-    transactions_obj.xfina = Some(XfinaTransactions { date_only: Some(true) });
 
     let mut profile = Profile::default();
     profile.holders = Holders {
@@ -185,6 +196,9 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAc
     statement.profile = Some(profile);
     statement.summary = Some(summary);
     statement.transactions = Some(transactions_obj);
+    if !date_only_paths.is_empty() {
+        xfina_account.date_only_paths = Some(date_only_paths);
+    }
     statement.xfina = Some(xfina_account);
 
     Ok(statement)

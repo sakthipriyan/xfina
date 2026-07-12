@@ -1,21 +1,57 @@
+use chrono::{NaiveDate, DateTime, Utc, TimeZone};
+use rust_decimal::Decimal;
 use xfina_models::credit_card::{
-    AccountSummary, CreditCardStatement, CreditCardTransaction, PastDues,
-    RewardPointsSummary, RewardProgram,
+    CreditCardAccount, CcProfile, CcHolders, CcHolder, CcCards, CcCard, CardType, TypeChoice,
+    CcSummary, PastDues, RewardPointsSummary, RewardProgram,
+    CcTransactions, CcTransaction, XfinaCreditCardAccount, CcXfinaSummary, CcXfinaTransactions, CcXfinaTransaction,
 };
+use xfina_models::deposit::TransactionType;
+use std::collections::HashMap;
+use num_traits::cast::ToPrimitive;
+use regex::Regex;
 
-pub fn parse_hdfc_statement(content: &str) -> Result<CreditCardStatement, String> {
-    let mut stmt = CreditCardStatement::default();
+pub fn parse_hdfc_statement(content: &str, filename: Option<&str>) -> Result<CreditCardAccount, String> {
+    let mut stmt = CreditCardAccount::default();
+    stmt.r#type = "credit_card".to_string();
+    stmt.version = 1.1;
+
     let mut address_parts = Vec::new();
+    let mut holder = CcHolder::default();
+    let mut xfina_account = XfinaCreditCardAccount::default();
+    xfina_account.institution_name = Some("HDFC Bank".to_string());
+    
+    let mut date_only_paths = Vec::new();
+    
+    if let Some(fname) = filename {
+        let re = Regex::new(r"(\d{2}-\d{2}-\d{4})").unwrap();
+        if let Some(caps) = re.captures(fname) {
+            if let Some(m) = caps.get(1) {
+                if let Ok(d) = NaiveDate::parse_from_str(m.as_str(), "%d-%m-%Y") {
+                    let dt = d.and_hms_opt(0, 0, 0).unwrap();
+                    let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
+                    xfina_account.generated_date = chrono::TimeZone::from_local_datetime(&ist_offset, &dt).single().map(|dt| dt.with_timezone(&Utc));
+                    date_only_paths.push("xfina.generatedDate".to_string());
+                }
+            }
+        }
+    }
+    let mut summary = CcSummary::default();
+    let mut xfina_summary = CcXfinaSummary::default();
+    
+    let mut transactions_list = Vec::new();
+    let mut xfina_txns = CcXfinaTransactions::default();
+    
+    let mut card_no = String::new();
 
     let lines: Vec<&str> = content.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
     let mut idx = 0;
     
     enum Section {
         Top,
-        AccountSummary,
+        AccountCcSummary,
         PastDues,
-        Transactions,
-        RewardSummary,
+        CcTransactions,
+        RewardCcSummary,
         RewardProgram,
         None
     }
@@ -24,7 +60,7 @@ pub fn parse_hdfc_statement(content: &str) -> Result<CreditCardStatement, String
     while idx < lines.len() {
         let line = lines[idx];
         if line == "Account Summary" {
-            current_section = Section::AccountSummary;
+            current_section = Section::AccountCcSummary;
             idx += 1;
             continue;
         } else if line.starts_with("Past Dues") {
@@ -32,11 +68,11 @@ pub fn parse_hdfc_statement(content: &str) -> Result<CreditCardStatement, String
             idx += 1;
             continue;
         } else if line == "Domestic / International Transactions" {
-            current_section = Section::Transactions;
+            current_section = Section::CcTransactions;
             idx += 1;
             continue;
         } else if line == "Reward Points Summary" {
-            current_section = Section::RewardSummary;
+            current_section = Section::RewardCcSummary;
             idx += 1;
             continue;
         } else if line == "Rewards Program Points Summary" {
@@ -46,11 +82,12 @@ pub fn parse_hdfc_statement(content: &str) -> Result<CreditCardStatement, String
         } else if line.starts_with("State account branch GSTN") {
             current_section = Section::None;
         } else if line.starts_with("Card No:") {
-            stmt.card_no = Some(line.replace("Card No:", "").trim().to_string());
+            card_no = line.replace("Card No:", "").trim().to_string();
+            stmt.masked_acc_number = card_no.clone();
             idx += 1;
             continue;
         } else if line.starts_with("AAN:") {
-            stmt.aan = Some(line.replace("AAN:", "").trim().to_string());
+            xfina_account.aan = Some(line.replace("AAN:", "").trim().to_string());
             idx += 1;
             continue;
         }
@@ -62,96 +99,92 @@ pub fn parse_hdfc_statement(content: &str) -> Result<CreditCardStatement, String
                     let key = parts[0];
                     let val = parts[1];
                     match key {
-                        "Name" => stmt.customer_info.name = val.to_string(),
+                        "Name" => holder.name = val.to_string(),
                         "Address" => address_parts.push(val.to_string()),
-                        "Customer GSTN" => stmt.customer_info.customer_gstn = if val.is_empty() { None } else { Some(val.to_string()) },
-                        "Payment Due Date" => stmt.payment_due_date = Some(xfina_models::parse_indian_date(val)),
+                        "Payment Due Date" => summary.due_date = parse_date(val),
                         "Statement Date" => {
-                            let d = xfina_models::parse_indian_date(val);
-                            // Statement Date is the billing cycle end — actual, not derived
-                            stmt.statement_end_date = Some(d.clone());
-                            stmt.statement_end_date_derived = false;
-                            stmt.statement_date = Some(d);
+                            let d = parse_date(val);
+                            summary.last_statement_date = d.clone();
+                            if let Some(date) = d {
+                                let dt = date.and_hms_opt(0, 0, 0).unwrap();
+                                let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
+                                xfina_account.generated_date = chrono::TimeZone::from_local_datetime(&ist_offset, &dt).single().map(|dt| dt.with_timezone(&Utc));
+                                if !date_only_paths.contains(&"xfina.generatedDate".to_string()) {
+                                    date_only_paths.push("xfina.generatedDate".to_string());
+                                }
+                            }
                         }
-                        "Total Amount Due" => stmt.total_amount_due = parse_f64(val),
-                        "Minimum Amount Due" => stmt.minimum_amount_due = parse_f64(val),
-                        "Credit Limit" => stmt.credit_limit = parse_f64(val),
-                        "Available Limit" => stmt.available_limit = parse_f64(val),
-                        "Available Cash limit" => stmt.available_cash_limit = parse_f64(val),
+                        "Total Amount Due" => summary.total_due_amount = parse_decimal(val),
+                        "Minimum Amount Due" => summary.min_due_amount = parse_decimal(val),
+                        "Credit Limit" => summary.credit_limit = parse_decimal(val),
+                        "Available Limit" => summary.available_credit = parse_decimal(val),
+                        "Available Cash limit" => summary.cash_limit = parse_decimal(val),
                         _ => {}
                     }
                 }
             }
-            Section::AccountSummary => {
-                // Header is at idx, values at idx + 1
+            Section::AccountCcSummary => {
                 if parts[0] == "Opening Bal" && idx + 1 < lines.len() {
                     let val_parts: Vec<&str> = lines[idx + 1].split("~|~").map(|p| p.trim()).collect();
                     if val_parts.len() >= 9 {
-                        stmt.account_summary = Some(AccountSummary {
-                            opening_balance: parse_f64(val_parts[0]).unwrap_or(0.0),
-                            payment_credit: parse_f64(val_parts[2]).unwrap_or(0.0),
-                            purchases_debits: parse_f64(val_parts[4]).unwrap_or(0.0),
-                            finance_charges: parse_f64(val_parts[6]).unwrap_or(0.0),
-                            total_dues: parse_f64(val_parts[8]).unwrap_or(0.0),
-                            owner_credit_breakdown: std::collections::HashMap::new(),
-                            owner_debit_breakdown: std::collections::HashMap::new(),
-                        });
+                        xfina_summary.opening_balance = parse_decimal(val_parts[0]);
+                        xfina_summary.payment_credit = parse_decimal(val_parts[2]);
+                        xfina_summary.purchases_debits = parse_decimal(val_parts[4]);
+                        summary.finance_charges = parse_decimal(val_parts[6]);
                     }
-                    idx += 1; // skip next line since we processed it
+                    idx += 1;
                 }
             }
             Section::PastDues => {
                 if parts[0] == "Overlimit" && idx + 1 < lines.len() {
                     let val_parts: Vec<&str> = lines[idx + 1].split("~|~").map(|p| p.trim()).collect();
                     if val_parts.len() >= 6 {
-                        stmt.past_dues = Some(PastDues {
-                            overlimit: parse_f64(val_parts[0]).unwrap_or(0.0),
-                            three_months: parse_f64(val_parts[1]).unwrap_or(0.0),
-                            two_months: parse_f64(val_parts[2]).unwrap_or(0.0),
-                            one_month: parse_f64(val_parts[3]).unwrap_or(0.0),
-                            current_dues: parse_f64(val_parts[4]).unwrap_or(0.0),
-                            minimum_amount_due: parse_f64(val_parts[5]).unwrap_or(0.0),
+                        xfina_summary.past_dues = Some(PastDues {
+                            overlimit: parse_decimal(val_parts[0]).unwrap_or_default(),
+                            three_months: parse_decimal(val_parts[1]).unwrap_or_default(),
+                            two_months: parse_decimal(val_parts[2]).unwrap_or_default(),
+                            one_month: parse_decimal(val_parts[3]).unwrap_or_default(),
                         });
+                        summary.current_due = parse_decimal(val_parts[4]);
                     }
-                    idx += 1; // skip next line since we processed it
+                    idx += 1;
                 }
             }
-            Section::Transactions => {
+            Section::CcTransactions => {
                 if parts.len() >= 5 && parts[0] != "Transaction type" {
-                    // Domestic~|~SAKTHI PRIYAN H ~|~30/05/2026 09:41:11~|~DESC~|~464.00~|~~|~+ 15
-                    let cat = parts[0].trim();
-                    let category = if cat == "International" {
-                        Some("INTL".to_string())
-                    } else if cat == "Domestic" {
-                        Some("IN".to_string())
-                    } else {
-                        None
-                    };
                     let owner = parts.get(1).unwrap_or(&"").trim().to_string();
-                    let date = xfina_models::parse_indian_date(parts.get(2).unwrap_or(&""));
+                    let txn_dt = parse_datetime(parts.get(2).unwrap_or(&""));
+                    let txn_date_naive = txn_dt.map(|dt| dt.with_timezone(&Utc).date_naive());
                     let desc = parts.get(3).unwrap_or(&"").to_string();
-                    let amount = parse_f64(parts.get(4).unwrap_or(&"")).unwrap_or(0.0).abs();
+                    let amount = parse_decimal(parts.get(4).unwrap_or(&"")).unwrap_or_default().abs();
                     let ty = parts.get(5).unwrap_or(&"");
-                    let tx_type = if *ty == "Cr" { "Credit".to_string() } else { "Debit".to_string() };
+                    let txn_type = if *ty == "Cr" { TransactionType::Credit } else { TransactionType::Debit };
                     let rp_str = parts.get(6).unwrap_or(&"").replace("+", "");
                     let reward_points = rp_str.trim().parse::<i32>().ok();
                     
-                    stmt.transactions.push(CreditCardTransaction {
-                        owner,
-                        date,
-                        description: desc,
+                    let mut tx_xfina = CcXfinaTransaction::default();
+                    tx_xfina.owner = Some(owner);
+                    tx_xfina.reward_points = reward_points;
+
+                    transactions_list.push(CcTransaction {
+                        txn_date: txn_dt,
+                        value_date: txn_date_naive,
+                        narration: desc,
                         amount,
-                        tx_type,
-                        reward_points,
-                        category,
+                        txn_type,
+                        txn_id: None,
+                        statement_date: None,
+                        mcc: None,
+                        masked_card_number: None,
+                        xfina: Some(tx_xfina),
                     });
                 }
             }
-            Section::RewardSummary => {
+            Section::RewardCcSummary => {
                 if parts[0] == "Opening Balance" && idx + 1 < lines.len() {
                     let val_parts: Vec<&str> = lines[idx + 1].split("~|~").map(|p| p.trim()).collect();
                     if val_parts.len() >= 5 {
-                        stmt.reward_points_summary = Some(RewardPointsSummary {
+                        xfina_summary.reward_points_summary = Some(RewardPointsSummary {
                             opening_balance: parse_i32(val_parts[0]).unwrap_or(0),
                             earned: parse_i32(val_parts[1]).unwrap_or(0),
                             disbursed: parse_i32(val_parts[2]).unwrap_or(0),
@@ -167,7 +200,7 @@ pub fn parse_hdfc_statement(content: &str) -> Result<CreditCardStatement, String
             }
             Section::RewardProgram => {
                 if parts.len() >= 2 && parts[0] != "Programs" {
-                    stmt.reward_programs.push(RewardProgram {
+                    xfina_summary.reward_programs.push(RewardProgram {
                         program: parts[0].to_string(),
                         bonus_points: parse_i32(parts[1]).unwrap_or(0),
                     });
@@ -179,58 +212,99 @@ pub fn parse_hdfc_statement(content: &str) -> Result<CreditCardStatement, String
     }
     
     if !address_parts.is_empty() {
-        stmt.customer_info.address = address_parts.join(", ");
+        holder.address = Some(address_parts.join(", "));
     }
+    
+    if !card_no.is_empty() {
+        holder.cards = Some(CcCards {
+            card: vec![CcCard {
+                card_type: CardType::Others,
+                primary: TypeChoice::Yes,
+                masked_card_number: card_no,
+                issued_date: None,
+            }],
+        });
+    }
+
+    stmt.profile = Some(CcProfile {
+        holders: CcHolders {
+            holder: vec![holder],
+        }
+    });
     
     // Compute aggregations
     let mut default_rewards = 0;
-    let mut owner_credit_breakdown = std::collections::HashMap::new();
-    let mut owner_debit_breakdown = std::collections::HashMap::new();
+    let mut owner_credit_breakdown = HashMap::new();
+    let mut owner_debit_breakdown = HashMap::new();
 
-    for txn in &stmt.transactions {
-        if let Some(pts) = txn.reward_points {
-            default_rewards += pts;
-        }
-        let owner = if txn.owner.is_empty() { "Unknown".to_string() } else { txn.owner.clone() };
-        if txn.tx_type == "Credit" {
-            *owner_credit_breakdown.entry(owner).or_insert(0.0) += txn.amount;
-        } else if txn.tx_type == "Debit" {
-            *owner_debit_breakdown.entry(owner).or_insert(0.0) += txn.amount;
+    for txn in &transactions_list {
+        if let Some(ref xfina) = txn.xfina {
+            if let Some(pts) = xfina.reward_points {
+                default_rewards += pts;
+            }
+            let owner = if let Some(o) = &xfina.owner {
+                if o.is_empty() { "Unknown".to_string() } else { o.clone() }
+            } else {
+                "Unknown".to_string()
+            };
+            
+            use rust_decimal::prelude::ToPrimitive;
+            let amt = txn.amount.to_f64().unwrap_or(0.0);
+            
+            if txn.txn_type == TransactionType::Credit {
+                *owner_credit_breakdown.entry(owner).or_insert(0.0) += amt;
+            } else {
+                *owner_debit_breakdown.entry(owner).or_insert(0.0) += amt;
+            }
         }
     }
 
-    if let Some(ref mut rs) = stmt.reward_points_summary {
+    if let Some(ref mut rs) = xfina_summary.reward_points_summary {
         rs.default_rewards = default_rewards;
     }
-    if let Some(ref mut as_sum) = stmt.account_summary {
-        as_sum.owner_credit_breakdown = owner_credit_breakdown;
-        as_sum.owner_debit_breakdown = owner_debit_breakdown;
-    }
+    xfina_summary.owner_credit_breakdown = owner_credit_breakdown;
+    xfina_summary.owner_debit_breakdown = owner_debit_breakdown;
     
-    stmt.transactions.sort_by(|a, b| a.date.cmp(&b.date));
+    let stmt_date_opt = summary.last_statement_date.clone();
+    summary.xfina = Some(xfina_summary);
+    stmt.summary = Some(summary);
 
-    // Derive start date from earliest transaction (no explicit start field in HDFC CC CSV)
-    if stmt.statement_start_date.is_none() {
-        if let Some(first) = stmt.transactions.first() {
-            stmt.statement_start_date = Some(date_only(&first.date));
-            stmt.statement_start_date_derived = true;
+    transactions_list.sort_by(|a, b| a.txn_date.cmp(&b.txn_date));
+
+    let mut txns = CcTransactions::default();
+    
+    if let Some(stmt_date) = stmt_date_opt {
+        let (start, end) = xfina_models::date_utils::derive_statement_period(stmt_date);
+        txns.start_date = Some(start);
+        txns.end_date = Some(end);
+        xfina_txns.start_date_derived = Some(true);
+        xfina_txns.end_date_derived = Some(true);
+    } else {
+        if let Some(first) = transactions_list.first() {
+            txns.start_date = first.txn_date.map(|dt| dt.with_timezone(&Utc).date_naive());
+            xfina_txns.start_date_derived = Some(true);
+        }
+        if let Some(last) = transactions_list.last() {
+            txns.end_date = last.txn_date.map(|dt| dt.with_timezone(&Utc).date_naive());
+            xfina_txns.end_date_derived = Some(true);
         }
     }
-
-    // Derive end date from latest transaction if not set from file
-    if stmt.statement_end_date.is_none() {
-        if let Some(last) = stmt.transactions.last() {
-            stmt.statement_end_date = Some(date_only(&last.date));
-            stmt.statement_end_date_derived = true;
-        }
+    txns.transaction = transactions_list;
+    txns.xfina = Some(xfina_txns);
+    
+    stmt.transactions = Some(txns);
+    
+    if !date_only_paths.is_empty() {
+        xfina_account.date_only_paths = Some(date_only_paths);
     }
+    stmt.xfina = Some(xfina_account);
     
     Ok(stmt)
 }
 
-fn parse_f64(val: &str) -> Option<f64> {
+fn parse_decimal(val: &str) -> Option<Decimal> {
     let clean = val.replace(",", "");
-    clean.parse::<f64>().ok()
+    clean.parse::<Decimal>().ok()
 }
 
 fn parse_i32(val: &str) -> Option<i32> {
@@ -238,7 +312,27 @@ fn parse_i32(val: &str) -> Option<i32> {
     clean.parse::<i32>().ok()
 }
 
-/// Returns only the date part (YYYY-MM-DD) from an ISO datetime string like 2026-05-30T09:41:11
-fn date_only(s: &str) -> String {
-    s.split('T').next().unwrap_or(s).to_string()
+fn parse_date(val: &str) -> Option<NaiveDate> {
+    let iso = xfina_models::parse_indian_date(val);
+    let s = iso.split('T').next().unwrap_or(&iso);
+    NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()
+}
+
+fn parse_datetime(val: &str) -> Option<DateTime<Utc>> {
+    let iso = xfina_models::parse_indian_date(val);
+    let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
+    // Try parsing with time first
+    if let Ok(ndt) = chrono::NaiveDateTime::parse_from_str(&iso, "%Y-%m-%dT%H:%M:%S") {
+        return chrono::TimeZone::from_local_datetime(&ist_offset, &ndt)
+            .single()
+            .map(|dt| dt.with_timezone(&Utc));
+    }
+    // Fall back to date-only → midnight IST
+    let s = iso.split('T').next().unwrap_or(&iso);
+    NaiveDate::parse_from_str(s, "%Y-%m-%d").ok().and_then(|d| {
+        let ndt = d.and_hms_opt(0, 0, 0).unwrap();
+        chrono::TimeZone::from_local_datetime(&ist_offset, &ndt)
+            .single()
+            .map(|dt| dt.with_timezone(&Utc))
+    })
 }
