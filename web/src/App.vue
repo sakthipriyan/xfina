@@ -178,39 +178,41 @@ const formatNumber = (val) => {
     return Number(val).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 4 });
 };
 
-const formatDateLocal = (dateStr, path = null, dateOnlyPaths = []) => {
-    if (!dateStr) return '-';
-    
-    let parseStr = dateStr.trim();
-    
-    if (/^\d{4}-\d{2}-\d{2}$/.test(parseStr)) {
-        parseStr = parseStr + "T00:00:00";
-    }
+const formatDate = (ts) => {
+    if (ts === null || ts === undefined || ts === '') return '-';
+    const d = new Date(Number(ts) * 1000);
+    if (isNaN(d)) return ts;
+    return new Intl.DateTimeFormat(undefined, { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric',
+        timeZone: 'UTC'
+    }).format(d);
+};
 
-    const d = new Date(parseStr);
-    if (isNaN(d)) return dateStr;
+const formatDateTime = (ts, path = null, dateOnlyPaths = []) => {
+    if (ts === null || ts === undefined || ts === '') return '-';
+    const d = new Date(Number(ts) * 1000);
+    if (isNaN(d)) return ts;
 
-    let forceDateOnly = false;
-    if (path && dateOnlyPaths && dateOnlyPaths.includes(path)) {
-        forceDateOnly = true;
-    }
+    const forceDateOnly = path && dateOnlyPaths && dateOnlyPaths.includes(path);
 
-    const hasTime = !forceDateOnly && (dateStr.includes(':') || (dateStr.includes('T') && !dateStr.endsWith('T00:00:00.000Z') && !dateStr.endsWith('T00:00:00Z') && !dateStr.endsWith('T00:00:00')));
-
-    if (hasTime) {
+    if (!forceDateOnly) {
         return new Intl.DateTimeFormat(undefined, { 
             year: 'numeric', 
             month: 'short', 
             day: 'numeric',
             hour: '2-digit', 
             minute: '2-digit', 
-            second: '2-digit'
+            second: '2-digit',
+            timeZone: 'Asia/Kolkata'
         }).format(d);
     } else {
         return new Intl.DateTimeFormat(undefined, { 
             year: 'numeric', 
             month: 'short', 
-            day: 'numeric' 
+            day: 'numeric',
+            timeZone: 'Asia/Kolkata'
         }).format(d);
     }
 };
@@ -361,14 +363,14 @@ const hasRewards = (stmt) => {
         <!-- Standardized Header -->
         <StatementHeader 
           :customerName="ccStatement.profile?.holders?.holder?.[0]?.name || 'Customer'"
-          :institutionName="selectedSource"
+          :institutionName="ccStatement.xfina?.institutionName || 'Credit Card'"
           statementType="Credit Card"
           :accountNumber="ccStatement.maskedAccNumber || ''"
           :statementDetails="[
-            ...(ccStatement.transactions?.startDate ? [{ label: 'From', value: formatDateLocal(ccStatement.transactions.startDate, 'transactions.startDate', ccStatement.xfina?.dateOnlyPaths), derived: ccStatement.transactions?.xfina?.startDateDerived }] : []),
-            ...(ccStatement.transactions?.endDate ? [{ label: 'To', value: formatDateLocal(ccStatement.transactions.endDate, 'transactions.endDate', ccStatement.xfina?.dateOnlyPaths), derived: ccStatement.transactions?.xfina?.endDateDerived }] : []),
-            ...(ccStatement.xfina?.generatedDate ? [{ label: 'Generated', value: formatDateLocal(ccStatement.xfina.generatedDate, 'xfina.generatedDate', ccStatement.xfina?.dateOnlyPaths) }] : []),
-            ...(ccStatement.summary?.dueDate ? [{ label: 'Due Date', value: formatDateLocal(ccStatement.summary.dueDate, 'summary.dueDate', ccStatement.xfina?.dateOnlyPaths) }] : [])
+            ...(ccStatement.transactions?.startDate ? [{ label: 'From', value: formatDate(ccStatement.transactions.startDate), derived: ccStatement.transactions?.xfina?.startDateDerived }] : []),
+            ...(ccStatement.transactions?.endDate ? [{ label: 'To', value: formatDate(ccStatement.transactions.endDate), derived: ccStatement.transactions?.xfina?.endDateDerived }] : []),
+            ...(ccStatement.xfina?.generatedDate ? [{ label: 'Generated', value: formatDateTime(ccStatement.xfina.generatedDate, 'xfina.generatedDate', ccStatement.xfina?.dateOnlyPaths) }] : []),
+            ...(ccStatement.summary?.dueDate ? [{ label: 'Due Date', value: formatDate(ccStatement.summary.dueDate) }] : [])
           ]"
         />
 
@@ -378,47 +380,67 @@ const hasRewards = (stmt) => {
               <CardTitle class="text-sm text-muted-foreground font-semibold uppercase tracking-wider">Account Summary</CardTitle>
             </CardHeader>
             <CardContent v-if="ccStatement.summary">
-              <div class="space-y-2">
-                <div class="flex justify-between items-center mb-2 border-b pb-2">
+              <div class="grid grid-cols-[1fr_auto_auto] gap-x-4 gap-y-2 items-center">
+                <div class="col-span-3 flex justify-between items-center mb-1 border-b pb-2">
                   <span class="text-sm font-medium">Opening Balance</span>
                   <span class="font-bold font-mono text-lg text-primary">{{ formatCurrency(ccStatement.summary.xfina?.openingBalance) }}</span>
                 </div>
                 
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-muted-foreground">Payment / Credit</span>
-                  <span class="font-medium font-mono text-emerald-500">-{{ formatCurrency(ccStatement.summary.xfina?.paymentCredit) }}</span>
+                <span class="text-sm text-muted-foreground">Payments</span>
+                <div class="justify-self-end">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger class="text-xs text-muted-foreground bg-muted/50 px-1.5 rounded cursor-help font-mono border border-border/50">
+                        {{ ccStatement.transactions?.transaction?.filter(t => t.txnType === 'CREDIT').length || 0 }}
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Number of payments</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
+                <span class="font-medium font-mono text-emerald-500 text-right">+ {{ formatCurrency(ccStatement.summary.xfina?.paymentCredit) }}</span>
 
-                <div v-if="ccStatement.summary.xfina?.ownerCreditBreakdown && Object.keys(ccStatement.summary.xfina.ownerCreditBreakdown).length > 1" class="pl-4 border-l-2 border-muted space-y-1 my-1">
+                <div v-if="ccStatement.summary.xfina?.ownerCreditBreakdown && Object.keys(ccStatement.summary.xfina.ownerCreditBreakdown).length > 1" class="col-span-3 pl-4 border-l-2 border-muted space-y-1 my-1">
                   <div v-for="(amount, owner) in ccStatement.summary.xfina.ownerCreditBreakdown" :key="owner" class="flex justify-between items-center">
                     <span class="text-sm text-muted-foreground truncate mr-2">{{ owner }}</span>
-                    <span class="font-medium font-mono text-sm text-emerald-500">-{{ formatCurrency(amount) }}</span>
+                    <span class="font-medium font-mono text-sm text-emerald-500">+ {{ formatCurrency(amount) }}</span>
                   </div>
                 </div>
                 
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-muted-foreground">Purchases / Debits</span>
-                  <span class="font-medium font-mono text-rose-500">+{{ formatCurrency(ccStatement.summary.xfina?.purchasesDebits) }}</span>
+                <span class="text-sm text-muted-foreground">Purchases</span>
+                <div class="justify-self-end">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger class="text-xs text-muted-foreground bg-muted/50 px-1.5 rounded cursor-help font-mono border border-border/50">
+                        {{ ccStatement.transactions?.transaction?.filter(t => t.txnType === 'DEBIT').length || 0 }}
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Number of purchases</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
+                <span class="font-medium font-mono text-foreground text-right">{{ formatCurrency(ccStatement.summary.xfina?.purchasesDebits) }}</span>
                 
-                <div v-if="ccStatement.summary.xfina?.ownerDebitBreakdown && Object.keys(ccStatement.summary.xfina.ownerDebitBreakdown).length > 1" class="pl-4 border-l-2 border-muted space-y-1 my-1">
+                <div v-if="ccStatement.summary.xfina?.ownerDebitBreakdown && Object.keys(ccStatement.summary.xfina.ownerDebitBreakdown).length > 1" class="col-span-3 pl-4 border-l-2 border-muted space-y-1 my-1">
                   <div v-for="(amount, owner) in ccStatement.summary.xfina.ownerDebitBreakdown" :key="owner" class="flex justify-between items-center">
                     <span class="text-sm text-muted-foreground truncate mr-2">{{ owner }}</span>
-                    <span class="font-medium font-mono text-sm text-rose-500">+{{ formatCurrency(amount) }}</span>
+                    <span class="font-medium font-mono text-sm text-foreground">{{ formatCurrency(amount) }}</span>
                   </div>
                 </div>
 
-                <div v-if="ccStatement.summary.financeCharges > 0" class="flex justify-between items-center">
+                <div v-if="ccStatement.summary.financeCharges > 0" class="col-span-3 flex justify-between items-center">
                   <span class="text-sm text-muted-foreground">Finance Charges</span>
-                  <span class="font-medium font-mono text-rose-500">+{{ formatCurrency(ccStatement.summary.financeCharges) }}</span>
+                  <span class="font-medium font-mono text-foreground">{{ formatCurrency(ccStatement.summary.financeCharges) }}</span>
                 </div>
                 
-                <div class="flex justify-between items-center mt-2 border-t pt-2">
+                <div class="col-span-3 flex justify-between items-center mt-1 border-t pt-2">
                   <span class="text-sm font-medium">Total Dues</span>
                   <span class="font-bold font-mono text-lg text-primary">{{ formatCurrency(ccStatement.summary.totalDueAmount) }}</span>
                 </div>
                 
-                <div class="flex justify-between items-center mt-1">
+                <div class="col-span-3 flex justify-between items-center mt-1">
                   <span class="text-xs text-muted-foreground">Min Amount Due</span>
                   <span class="font-medium font-mono text-xs">{{ formatCurrency(ccStatement.summary.minDueAmount) }}</span>
                 </div>
@@ -461,7 +483,7 @@ const hasRewards = (stmt) => {
                 </div>
 
                 <div v-if="ccStatement.summary.xfina.rewardPointsSummary.disbursed > 0" class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Disbursed</span><span class="font-medium font-mono text-rose-500">-{{ formatNumber(ccStatement.summary.xfina.rewardPointsSummary.disbursed) }}</span></div>
-                <div v-if="ccStatement.summary.xfina.rewardPointsSummary.adjustedLapsed > 0" class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Adjusted / Lapsed</span><span class="font-medium font-mono text-rose-500">-{{ formatNumber(ccStatement.summary.xfina.rewardPointsSummary.adjustedLapsed) }}</span></div>
+                <div v-if="ccStatement.summary.xfina.rewardPointsSummary.adjustedLapsed > 0" class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Adjusted / Lapsed</span><span class="font-medium font-mono text-foreground">{{ formatNumber(ccStatement.summary.xfina.rewardPointsSummary.adjustedLapsed) }}</span></div>
                 
                 <div v-if="ccStatement.summary.xfina.rewardPointsSummary.openingBalance !== 0 || ccStatement.summary.xfina.rewardPointsSummary.closingBalance !== 0" class="flex justify-between items-center mt-2 border-t pt-2"><span class="text-sm font-medium">Closing Balance</span><span class="font-bold font-mono text-lg text-primary">{{ formatNumber(ccStatement.summary.xfina.rewardPointsSummary.closingBalance) }}</span></div>
                 <div v-if="ccStatement.summary.xfina.rewardPointsSummary.expiringIn30Days" class="flex justify-between items-center text-rose-500"><span class="text-xs">Expiring (30d)</span><span class="font-medium font-mono text-xs">{{ formatNumber(ccStatement.summary.xfina.rewardPointsSummary.expiringIn30Days) }}</span></div>
@@ -496,7 +518,7 @@ const hasRewards = (stmt) => {
                 </TableHeader>
                 <TableBody>
                   <TableRow v-for="(txn, idx) in ccStatement.transactions?.transaction" :key="idx" class="hover:bg-muted/50 transition-colors">
-                    <TableCell class="text-foreground whitespace-nowrap">{{ formatDateLocal(txn.txnDate, 'transactions.transaction.txnDate', ccStatement.xfina?.dateOnlyPaths) }}</TableCell>
+                    <TableCell class="text-foreground whitespace-nowrap">{{ formatDateTime(txn.txnDate, 'transactions.transaction.txnDate', ccStatement.xfina?.dateOnlyPaths) }}</TableCell>
                     <TableCell class="text-foreground text-sm">
                       <span v-if="txn.xfina?.category" class="mr-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-muted text-muted-foreground">{{ txn.xfina.category }}</span>
                       {{ txn.narration }}
@@ -529,9 +551,9 @@ const hasRewards = (stmt) => {
           statementType="Mutual Funds"
           :accountNumber="portfolio.investor_info.account_number || ''"
           :statementDetails="[
-            ...(portfolio.statement_start_date ? [{ label: 'From', value: formatDateLocal(portfolio.statement_start_date, 'statement_start_date', portfolio.date_only_paths) }] : []),
-            ...(portfolio.statement_end_date ? [{ label: 'To', value: formatDateLocal(portfolio.statement_end_date, 'statement_end_date', portfolio.date_only_paths) }] : []),
-            ...(portfolio.generated_date ? [{ label: 'Generated', value: formatDateLocal(portfolio.generated_date, 'generated_date', portfolio.date_only_paths) }] : [])
+            ...(portfolio.statement_start_date ? [{ label: 'From', value: formatDate(portfolio.statement_start_date) }] : []),
+            ...(portfolio.statement_end_date ? [{ label: 'To', value: formatDate(portfolio.statement_end_date) }] : []),
+            ...(portfolio.generated_date ? [{ label: 'Generated', value: formatDateTime(portfolio.generated_date, 'generated_date', portfolio.date_only_paths) }] : [])
           ]"
         />
 
@@ -600,7 +622,7 @@ const hasRewards = (stmt) => {
                              <span class="font-medium font-mono">{{ formatCurrency(asset.current_nav) }}</span>
                              <div v-if="asset.current_nav_date" class="flex items-baseline gap-1 mt-0.5">
                                <span class="text-[10px] text-muted-foreground">on</span>
-                               <span class="font-medium font-mono text-sm">{{ formatDateLocal(asset.current_nav_date, 'current_nav_date', portfolio.date_only_paths) }}</span>
+                               <span class="font-medium font-mono text-sm">{{ formatDateTime(asset.current_nav_date, 'current_nav_date', portfolio.date_only_paths) }}</span>
                              </div>
                            </div>
                          </div>
@@ -636,7 +658,7 @@ const hasRewards = (stmt) => {
                      </TableHeader>
                      <TableBody>
                        <TableRow v-for="(txn, idx) in asset.transactions" :key="idx" class="hover:bg-muted/50 transition-colors">
-                         <TableCell class="text-foreground whitespace-nowrap">{{ formatDateLocal(txn.date, 'transactions.date', portfolio.date_only_paths) }}</TableCell>
+                         <TableCell class="text-foreground whitespace-nowrap">{{ formatDateTime(txn.date, 'transactions.date', portfolio.date_only_paths) }}</TableCell>
                          <TableCell class="text-foreground">
                             <span :class="{'text-emerald-500': txn.tx_type === 'BUY', 'text-rose-500': txn.tx_type === 'SELL'}">
                               {{ txn.tx_type || '-' }}
@@ -666,12 +688,12 @@ const hasRewards = (stmt) => {
           :address="bankStatement.profile?.holders?.holder?.[0]?.address || ''"
           :customerId="bankStatement.profile?.holders?.holder?.[0]?.xfina?.customerId || ''"
           :institutionName="bankStatement.xfina?.institutionName || 'Bank'"
-          statementType="Bank Account Statement"
+          statementType="Bank Account"
           :accountNumber="bankStatement.maskedAccNumber || ''"
           :statementDetails="[
-            ...(bankStatement.transactions?.startDate ? [{ label: 'From', value: formatDateLocal(bankStatement.transactions.startDate, 'transactions.startDate', bankStatement.xfina?.dateOnlyPaths) }] : []),
-            ...(bankStatement.transactions?.endDate ? [{ label: 'To', value: formatDateLocal(bankStatement.transactions.endDate, 'transactions.endDate', bankStatement.xfina?.dateOnlyPaths) }] : []),
-            ...(bankStatement.xfina?.generatedDate ? [{ label: 'Generated', value: formatDateLocal(bankStatement.xfina.generatedDate, 'xfina.generatedDate', bankStatement.xfina?.dateOnlyPaths) }] : [])
+            ...(bankStatement.transactions?.startDate ? [{ label: 'From', value: formatDate(bankStatement.transactions.startDate) }] : []),
+            ...(bankStatement.transactions?.endDate ? [{ label: 'To', value: formatDate(bankStatement.transactions.endDate) }] : []),
+            ...(bankStatement.xfina?.generatedDate ? [{ label: 'Generated', value: formatDateTime(bankStatement.xfina.generatedDate, 'xfina.generatedDate', bankStatement.xfina?.dateOnlyPaths) }] : [])
           ]"
         />
 
@@ -681,23 +703,43 @@ const hasRewards = (stmt) => {
               <CardTitle class="text-sm text-muted-foreground font-semibold uppercase tracking-wider">Transaction Summary</CardTitle>
             </CardHeader>
             <CardContent>
-              <div class="space-y-2">
-                <div class="flex justify-between items-center mb-2 border-b pb-2">
+              <div class="grid grid-cols-[1fr_auto_auto] gap-x-4 gap-y-2 items-center">
+                <div class="col-span-3 flex justify-between items-center mb-1 border-b pb-2">
                   <span class="text-sm font-medium">Opening Balance</span>
                   <span class="font-bold font-mono text-lg text-foreground">{{ formatCurrency(bankStatement.summary?.xfina?.openingBalance) }}</span>
                 </div>
                 
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-muted-foreground">Credits / Deposits</span>
-                  <span class="font-medium font-mono text-emerald-500">+{{ formatCurrency(bankStatement.transactions?.transaction?.filter(t => t.type === 'CREDIT').reduce((s, t) => s + Number(t.amount || 0), 0) || 0) }}</span>
+                <span class="text-sm text-muted-foreground">Deposits</span>
+                <div class="justify-self-end">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger class="text-xs text-muted-foreground bg-muted/50 px-1.5 rounded cursor-help font-mono border border-border/50">
+                        {{ bankStatement.transactions?.transaction?.filter(t => t.type === 'CREDIT').length || 0 }}
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Number of deposits</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
+                <span class="font-medium font-mono text-emerald-500 text-right">+ {{ formatCurrency(bankStatement.transactions?.transaction?.filter(t => t.type === 'CREDIT').reduce((s, t) => s + Number(t.amount || 0), 0) || 0) }}</span>
                 
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-muted-foreground">Debits / Withdrawals</span>
-                  <span class="font-medium font-mono text-foreground">{{ formatCurrency(bankStatement.transactions?.transaction?.filter(t => t.type === 'DEBIT').reduce((s, t) => s + Number(t.amount || 0), 0) || 0) }}</span>
+                <span class="text-sm text-muted-foreground">Withdrawals</span>
+                <div class="justify-self-end">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger class="text-xs text-muted-foreground bg-muted/50 px-1.5 rounded cursor-help font-mono border border-border/50">
+                        {{ bankStatement.transactions?.transaction?.filter(t => t.type === 'DEBIT').length || 0 }}
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Number of withdrawals</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
+                <span class="font-medium font-mono text-foreground text-right">{{ formatCurrency(bankStatement.transactions?.transaction?.filter(t => t.type === 'DEBIT').reduce((s, t) => s + Number(t.amount || 0), 0) || 0) }}</span>
                 
-                <div class="flex justify-between items-center mt-2 border-t pt-2">
+                <div class="col-span-3 flex justify-between items-center mt-1 border-t pt-2">
                   <span class="text-sm font-medium">Closing Balance</span>
                   <span class="font-bold font-mono text-lg text-primary">{{ formatCurrency(bankStatement.summary?.currentBalance) }}</span>
                 </div>
@@ -711,15 +753,7 @@ const hasRewards = (stmt) => {
               <CardTitle class="text-sm text-muted-foreground font-semibold uppercase tracking-wider">Account Details</CardTitle>
             </CardHeader>
             <CardContent>
-               <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 text-sm mt-1">
-                 <div class="flex flex-col" v-if="bankStatement.summary?.xfina?.accountProduct">
-                   <span class="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Product</span>
-                   <span class="font-medium mt-0.5">{{ bankStatement.summary?.xfina?.accountProduct }}</span>
-                 </div>
-                 <div class="flex flex-col" v-if="bankStatement.profile?.holders?.holder?.[0]?.nominee">
-                   <span class="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Nominee</span>
-                   <span class="font-medium mt-0.5">{{ bankStatement.profile?.holders?.holder?.[0]?.nominee === 'REGISTERED' ? 'Registered' : 'Not Registered' }}</span>
-                 </div>
+               <div class="grid grid-cols-1 sm:grid-cols-3 gap-x-8 gap-y-4 text-sm mt-1">
                  <div class="flex flex-col" v-if="bankStatement.summary?.branch">
                    <span class="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Branch</span>
                    <span class="font-medium mt-0.5">{{ bankStatement.summary?.branch }}</span>
@@ -732,9 +766,17 @@ const hasRewards = (stmt) => {
                    <span class="text-muted-foreground text-xs uppercase tracking-wider font-semibold">MICR Code</span>
                    <span class="font-medium font-mono mt-0.5">{{ bankStatement.summary?.micrCode }}</span>
                  </div>
+                 <div class="flex flex-col" v-if="bankStatement.summary?.xfina?.accountProduct">
+                   <span class="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Product</span>
+                   <span class="font-medium mt-0.5">{{ bankStatement.summary?.xfina?.accountProduct }}</span>
+                 </div>
                  <div class="flex flex-col" v-if="bankStatement.summary?.openingDate">
                    <span class="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Opening Date</span>
-                   <span class="font-medium mt-0.5">{{ formatDateLocal(bankStatement.summary?.openingDate, 'summary.openingDate', bankStatement.xfina?.dateOnlyPaths) }}</span>
+                   <span class="font-medium mt-0.5">{{ formatDate(bankStatement.summary?.openingDate) }}</span>
+                 </div>
+                 <div class="flex flex-col" v-if="bankStatement.profile?.holders?.holder?.[0]?.nominee">
+                   <span class="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Nominee</span>
+                   <span class="font-medium mt-0.5">{{ bankStatement.profile?.holders?.holder?.[0]?.nominee === 'REGISTERED' ? 'Registered' : 'Not Registered' }}</span>
                  </div>
                </div>
             </CardContent>
@@ -765,7 +807,7 @@ const hasRewards = (stmt) => {
                 </TableHeader>
                 <TableBody>
                   <TableRow v-for="(txn, idx) in bankStatement.transactions?.transaction" :key="idx" class="hover:bg-muted/50 transition-colors">
-                    <TableCell class="font-medium whitespace-nowrap">{{ formatDateLocal(txn.xfina?.parsedDate || txn.transactionTimestamp, 'transactions.transaction.transactionTimestamp', bankStatement.xfina?.dateOnlyPaths) }}</TableCell>
+                    <TableCell class="font-medium whitespace-nowrap">{{ formatDateTime(txn.xfina?.parsedDate || txn.transactionTimestamp, 'transactions.transaction.transactionTimestamp', bankStatement.xfina?.dateOnlyPaths) }}</TableCell>
                     <TableCell class="text-foreground text-sm">{{ txn.narration }}</TableCell>
                     <TableCell class="text-right font-mono whitespace-nowrap" :class="{'text-emerald-500': txn.type === 'CREDIT', 'text-foreground': txn.type !== 'CREDIT'}">
                         <span v-if="txn.type === 'CREDIT'">+</span>

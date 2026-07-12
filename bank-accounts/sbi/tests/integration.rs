@@ -8,7 +8,10 @@ fn test_sbi_pdf_parser() {
     let raw_dir = test_dir.join("raw");
     let expected_dir = test_dir.join("expected");
 
-    fs::create_dir_all(&expected_dir).unwrap();
+    let xfina_dir = expected_dir.join("xfina");
+    let rebit_dir = expected_dir.join("rebit");
+    fs::create_dir_all(&xfina_dir).unwrap();
+    fs::create_dir_all(&rebit_dir).unwrap();
 
     let password = "22391030559"; // Hardcoded for tests based on user's input
 
@@ -21,16 +24,20 @@ fn test_sbi_pdf_parser() {
             let filename_str = path.file_name().and_then(|s| s.to_str());
             let statement = parse_sbi_bank_statement(&bytes, Some(password), filename_str).unwrap();
 
-            let json = serde_json::to_string_pretty(&statement).unwrap();
+            let xfina_json = serde_json::to_string_pretty(&statement.to_xfina_json()).unwrap();
+            let rebit_json = serde_json::to_string_pretty(&statement.to_rebit_json()).unwrap();
 
-            let expected_path = expected_dir.join(path.with_extension("json").file_name().unwrap());
+            let xfina_path = xfina_dir.join(path.with_extension("json").file_name().unwrap());
+            let rebit_path = rebit_dir.join(path.with_extension("json").file_name().unwrap());
             
-            // If expected file exists, assert it matches. Otherwise, write it (initial creation).
-            if expected_path.exists() {
-                let expected_json = fs::read_to_string(&expected_path).unwrap();
-                assert_eq!(json, expected_json, "Mismatch for {:?}", path.file_name().unwrap());
+            if xfina_path.exists() {
+                let expected_xfina = fs::read_to_string(&xfina_path).unwrap();
+                let expected_rebit = fs::read_to_string(&rebit_path).unwrap();
+                assert_eq!(xfina_json, expected_xfina, "Mismatch for {:?}", path.file_name().unwrap());
+                assert_eq!(rebit_json, expected_rebit, "Mismatch for {:?}", path.file_name().unwrap());
             } else {
-                fs::write(expected_path, json).unwrap();
+                fs::write(xfina_path, xfina_json).unwrap();
+                fs::write(rebit_path, rebit_json).unwrap();
             }
         }
     }

@@ -13,7 +13,7 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>, filename: 
     statement.version = 1.1;
     
     let mut xfina_account = XfinaDepositAccount::default();
-    xfina_account.institution_name = Some("SBI".to_string());
+    xfina_account.institution_name = Some("State Bank of India".to_string());
 
     let mut account_number = String::new();
     let mut account_name = String::new();

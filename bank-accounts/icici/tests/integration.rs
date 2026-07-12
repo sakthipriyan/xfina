@@ -15,6 +15,9 @@ fn test_icici_bank_accounts() {
     let raw_dir = test_data_dir.join("raw");
     let expected_dir = test_data_dir.join("expected");
 
+    fs::create_dir_all(expected_dir.join("xfina")).expect("Failed to create xfina directory");
+    fs::create_dir_all(expected_dir.join("rebit")).expect("Failed to create rebit directory");
+
     for entry in fs::read_dir(raw_dir).expect("Failed to read raw directory") {
         let entry = entry.expect("Failed to read directory entry");
         let path = entry.path();
@@ -25,20 +28,20 @@ fn test_icici_bank_accounts() {
             
             let parsed_statement = parse_icici_xls(&bytes, path.file_name().and_then(|n| n.to_str())).expect("Failed to parse statement");
             
-            let expected_file_path = expected_dir.join(format!("{}.json", file_name));
-            
-            // Auto-generate expected JSON if it doesn't exist
-            if !expected_file_path.exists() {
-                println!("Expected JSON not found for {}. Generating...", file_name);
-                let json = serde_json::to_string_pretty(&parsed_statement).expect("Failed to serialize");
-                fs::write(&expected_file_path, json).expect("Failed to write expected JSON");
-            } else {
-                let expected_json_str = fs::read_to_string(&expected_file_path).expect("Failed to read expected JSON");
-                // Compare by reserializing so format matches exactly
-                let actual_json = serde_json::to_string_pretty(&parsed_statement).unwrap();
+            let xfina_path = expected_dir.join("xfina").join(format!("{}.json", file_name));
+                let rebit_path = expected_dir.join("rebit").join(format!("{}.json", file_name));
                 
-                assert_eq!(actual_json, expected_json_str, "Mismatch for file: {}", file_name);
-            }
+                let xfina_json = serde_json::to_string_pretty(&parsed_statement.to_xfina_json()).unwrap();
+                let rebit_json = serde_json::to_string_pretty(&parsed_statement.to_rebit_json()).unwrap();
+                
+                fs::write(&xfina_path, &xfina_json).expect("Failed to write xfina JSON");
+                fs::write(&rebit_path, &rebit_json).expect("Failed to write rebit JSON");
+                
+                let expected_xfina = fs::read_to_string(&xfina_path).expect("Failed to read expected xfina");
+                let expected_rebit = fs::read_to_string(&rebit_path).expect("Failed to read expected rebit");
+                
+                assert_eq!(xfina_json, expected_xfina, "Mismatch for xfina file: {}", file_name);
+                assert_eq!(rebit_json, expected_rebit, "Mismatch for rebit file: {}", file_name);
         }
     }
 }

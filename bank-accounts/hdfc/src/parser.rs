@@ -327,6 +327,7 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
     stmt.profile = Some(profile);
     stmt.summary = Some(summary);
     stmt.transactions = Some(transactions_obj);
+    
     if !date_only_paths.is_empty() {
         xfina_account.date_only_paths = Some(date_only_paths);
     }
