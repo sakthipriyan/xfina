@@ -128,3 +128,4 @@ pub struct Portfolio {
     pub assets: Vec<Asset>,
 }
 pub mod date_utils;
+pub mod serializer;

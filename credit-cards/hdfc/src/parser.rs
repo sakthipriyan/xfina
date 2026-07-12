@@ -18,7 +18,7 @@ pub fn parse_hdfc_statement(content: &str, filename: Option<&str>) -> Result<Cre
     let mut address_parts = Vec::new();
     let mut holder = CcHolder::default();
     let mut xfina_account = XfinaCreditCardAccount::default();
-    xfina_account.institution_name = Some("HDFC".to_string());
+    xfina_account.institution_name = Some("HDFC Bank".to_string());
     
     let mut date_only_paths = Vec::new();
     
@@ -153,7 +153,8 @@ pub fn parse_hdfc_statement(content: &str, filename: Option<&str>) -> Result<Cre
             Section::CcTransactions => {
                 if parts.len() >= 5 && parts[0] != "Transaction type" {
                     let owner = parts.get(1).unwrap_or(&"").trim().to_string();
-                    let date = parse_date(parts.get(2).unwrap_or(&""));
+                    let txn_dt = parse_datetime(parts.get(2).unwrap_or(&""));
+                    let txn_date_naive = txn_dt.map(|dt| dt.with_timezone(&Utc).date_naive());
                     let desc = parts.get(3).unwrap_or(&"").to_string();
                     let amount = parse_decimal(parts.get(4).unwrap_or(&"")).unwrap_or_default().abs();
                     let ty = parts.get(5).unwrap_or(&"");
@@ -166,8 +167,8 @@ pub fn parse_hdfc_statement(content: &str, filename: Option<&str>) -> Result<Cre
                     tx_xfina.reward_points = reward_points;
 
                     transactions_list.push(CcTransaction {
-                        txn_date: date.clone(),
-                        value_date: date,
+                        txn_date: txn_dt,
+                        value_date: txn_date_naive,
                         narration: desc,
                         amount,
                         txn_type,
@@ -280,11 +281,11 @@ pub fn parse_hdfc_statement(content: &str, filename: Option<&str>) -> Result<Cre
         xfina_txns.end_date_derived = Some(true);
     } else {
         if let Some(first) = transactions_list.first() {
-            txns.start_date = first.txn_date.clone();
+            txns.start_date = first.txn_date.map(|dt| dt.with_timezone(&Utc).date_naive());
             xfina_txns.start_date_derived = Some(true);
         }
         if let Some(last) = transactions_list.last() {
-            txns.end_date = last.txn_date.clone();
+            txns.end_date = last.txn_date.map(|dt| dt.with_timezone(&Utc).date_naive());
             xfina_txns.end_date_derived = Some(true);
         }
     }
@@ -292,6 +293,7 @@ pub fn parse_hdfc_statement(content: &str, filename: Option<&str>) -> Result<Cre
     txns.xfina = Some(xfina_txns);
     
     stmt.transactions = Some(txns);
+    
     if !date_only_paths.is_empty() {
         xfina_account.date_only_paths = Some(date_only_paths);
     }
@@ -314,4 +316,23 @@ fn parse_date(val: &str) -> Option<NaiveDate> {
     let iso = xfina_models::parse_indian_date(val);
     let s = iso.split('T').next().unwrap_or(&iso);
     NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()
+}
+
+fn parse_datetime(val: &str) -> Option<DateTime<Utc>> {
+    let iso = xfina_models::parse_indian_date(val);
+    let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
+    // Try parsing with time first
+    if let Ok(ndt) = chrono::NaiveDateTime::parse_from_str(&iso, "%Y-%m-%dT%H:%M:%S") {
+        return chrono::TimeZone::from_local_datetime(&ist_offset, &ndt)
+            .single()
+            .map(|dt| dt.with_timezone(&Utc));
+    }
+    // Fall back to date-only → midnight IST
+    let s = iso.split('T').next().unwrap_or(&iso);
+    NaiveDate::parse_from_str(s, "%Y-%m-%d").ok().and_then(|d| {
+        let ndt = d.and_hms_opt(0, 0, 0).unwrap();
+        chrono::TimeZone::from_local_datetime(&ist_offset, &ndt)
+            .single()
+            .map(|dt| dt.with_timezone(&Utc))
+    })
 }

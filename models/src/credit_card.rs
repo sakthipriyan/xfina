@@ -134,6 +134,23 @@ pub struct CreditCardAccount {
     pub xfina: Option<XfinaCreditCardAccount>,
 }
 
+impl CreditCardAccount {
+    pub fn to_xfina_json(&self) -> serde_json::Value {
+        let mut val = serde_json::to_value(self).unwrap();
+        crate::serializer::transform_to_xfina(&mut val);
+        val
+    }
+
+    pub fn to_rebit_json(&self) -> serde_json::Value {
+        let mut val = serde_json::to_value(self).unwrap();
+        let paths = self.xfina.as_ref()
+            .and_then(|x| x.date_only_paths.clone())
+            .unwrap_or_default();
+        crate::serializer::transform_to_rebit(&mut val, &paths, "".to_string());
+        val
+    }
+}
+
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -228,7 +245,7 @@ pub struct CcTransactions {
 pub struct CcTransaction {
     pub txn_id: Option<String>,
     pub txn_type: TransactionType,
-    pub txn_date: Option<NaiveDate>,
+    pub txn_date: Option<DateTime<Utc>>,
     #[serde(with = "rust_decimal::serde::float")]
     pub amount: Decimal,
     pub value_date: Option<NaiveDate>,

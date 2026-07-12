@@ -267,6 +267,7 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
     let mut transactions_obj = Transactions::default();
     transactions_obj.start_date = start_date;
     transactions_obj.end_date = end_date;
+    parsed_transactions.reverse();
     transactions_obj.transaction = parsed_transactions;
 
     let ist_offset = FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
@@ -308,6 +309,7 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
     statement.profile = Some(profile);
     statement.summary = Some(summary);
     statement.transactions = Some(transactions_obj);
+    
     if !date_only_paths.is_empty() {
         xfina_account.date_only_paths = Some(date_only_paths);
     }
