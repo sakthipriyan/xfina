@@ -235,12 +235,15 @@ const hasRewards = (stmt) => {
       
       <!-- Header -->
       <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-        <div class="space-y-2">
-          <h1 class="text-3xl font-bold tracking-tight">Xfina<span class="text-xl font-medium text-muted-foreground ml-2">sakthipriyan.com</span></h1>
-          <p class="text-muted-foreground mt-2 leading-relaxed">
-            e<strong>X</strong>tract <strong>fina</strong>ncial statements entirely in your browser with Rust/Wasm<br />
-            Fast, private, zero-setup, and without uploading your files to any server.
-          </p>
+        <div class="flex items-center gap-5">
+          <img src="/favicon.svg" alt="Xfina Logo" class="w-16 h-16" />
+          <div class="space-y-2">
+            <h1 class="text-3xl font-bold tracking-tight">Xfina<span class="text-xl font-medium text-muted-foreground ml-2">sakthipriyan.com</span></h1>
+            <p class="text-muted-foreground mt-2 leading-relaxed">
+              e<strong>X</strong>tract <strong>fina</strong>ncial statements entirely in your browser with Rust/Wasm<br />
+              Fast, private, zero-setup, and without uploading your files to any server.
+            </p>
+          </div>
         </div>
         <div class="flex items-center space-x-3">
           <a href="https://github.com/sakthipriyan/xfina" target="_blank" rel="noopener noreferrer" class="no-underline">

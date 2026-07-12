@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="web/public/favicon.svg" width="120" height="120" alt="Xfina Logo"/>
+</p>
+
 # Xfina
 
 **Xfina** is a collection of libraries (Rust, Python, JS) and a web interface for extracting structured financial data from **Indian** bank statements, credit card statements, mutual fund reports, and international brokerage reports.
