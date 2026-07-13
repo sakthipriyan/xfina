@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
 import init, { parse_ibkr, parse_cams, parse_hdfc_cc, parse_icici_cc, parse_hdfc_ba, parse_icici_ba, parse_sbi_ba, parse_bob_ba, parse_axis_ba } from './wasm/xfina_wasm.js';
-import { Sun, Moon, Github, HelpCircle, ChevronDown, Loader2 } from 'lucide-vue-next';
+import { Sun, Moon, Github, HelpCircle, ChevronDown, Loader2, ArrowUp, ArrowDown } from 'lucide-vue-next';
 
 // Shadcn components
 import { Button } from '@/components/ui/button';
@@ -260,12 +260,65 @@ const hasRewards = (stmt) => {
 
 const getAssetTransactions = (holding) => {
     if (!equityStatement.value?.transactions?.transaction) return [];
-    return equityStatement.value.transactions.transaction.filter(txn => 
+    const txns = equityStatement.value.transactions.transaction.filter(txn => 
         txn.symbol === holding.description || 
         txn.symbol === holding.issuerName || 
+        txn.isin === holding.isin ||
         txn.companyName === holding.issuerName
     );
+    
+    let currentBalance = holding.xfina?.openingBalance || 0;
+    
+    return txns.map(txn => {
+        if (txn.type === 'BUY') {
+            currentBalance += Number(txn.units || 0);
+        } else if (txn.type === 'SELL') {
+            currentBalance -= Number(txn.units || 0);
+        }
+        return {
+            ...txn,
+            _runningBalance: currentBalance
+        };
+    });
 };
+
+const getCamsAssetSummary = (asset) => {
+    let periodBuyUnits = 0;
+    let periodBuyCount = 0;
+    let periodSellUnits = 0;
+    let periodSellCount = 0;
+    
+    if (asset.transactions) {
+        for (const txn of asset.transactions) {
+            if (txn.units > 0) {
+                periodBuyUnits += txn.units;
+                periodBuyCount++;
+            } else if (txn.units < 0) {
+                periodSellUnits += Math.abs(txn.units);
+                periodSellCount++;
+            }
+        }
+    }
+    
+    return {
+        openingBalance: asset.total_units - asset.period_units,
+        periodBuyUnits,
+        periodBuyCount,
+        periodSellUnits,
+        periodSellCount,
+        closingBalance: asset.total_units,
+        nav: asset.current_nav,
+        navDate: asset.current_nav_date,
+        marketValue: asset.current_value || 0,
+        totalInvested: asset.total_cost_basis || 0,
+        unrealizedPl: (asset.current_value || 0) - (asset.total_cost_basis || 0)
+    };
+};
+
+const camsSummaries = computed(() => {
+    if (!portfolio.value?.assets) return [];
+    return portfolio.value.assets.map(asset => getCamsAssetSummary(asset));
+});
 </script>
 
 <template>
@@ -552,11 +605,11 @@ const getAssetTransactions = (holding) => {
               <Table>
                 <TableHeader class="bg-muted/50">
                   <TableRow class="hover:bg-transparent">
-                    <TableHead class="text-muted-foreground whitespace-nowrap">Date</TableHead>
+                    <TableHead class="w-[150px] text-muted-foreground whitespace-nowrap">Date</TableHead>
                     <TableHead class="text-muted-foreground whitespace-nowrap">Description</TableHead>
-                    <TableHead class="text-muted-foreground whitespace-nowrap">Card Name</TableHead>
-                    <TableHead class="text-right text-muted-foreground whitespace-nowrap">Amount</TableHead>
-                    <TableHead class="text-right text-muted-foreground whitespace-nowrap">Rewards</TableHead>
+                    <TableHead class="w-[150px] text-muted-foreground whitespace-nowrap">Card Name</TableHead>
+                    <TableHead class="w-[140px] text-right text-muted-foreground whitespace-nowrap">Amount</TableHead>
+                    <TableHead class="w-[120px] text-right text-muted-foreground whitespace-nowrap">Rewards</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -609,116 +662,97 @@ const getAssetTransactions = (holding) => {
              :disabled="!asset.transactions?.length"
            >
                <AccordionTrigger class="group hover:no-underline px-4 py-4 data-[state=open]:border-b border-border">
-                 <div class="flex flex-col w-full text-left pr-4 space-y-3">
-                   <div class="flex justify-between items-start w-full">
-                     <div class="flex flex-col items-start">
-                       <span class="font-medium text-foreground text-lg">{{ asset.name }}</span>
-                       <span class="text-sm text-muted-foreground mt-0.5">{{ asset.symbol || '-' }} <span v-if="asset.isin">| ISIN: {{ asset.isin }}</span></span>
+                 <div class="flex flex-col items-start w-full pr-0 gap-3">
+                   <!-- Top Row: Chevron, Name, Tags, Txn Pill -->
+                   <div class="flex items-center gap-2.5 flex-wrap w-full">
+                     <span class="text-xs font-medium font-mono bg-muted/30 border border-primary/20 rounded px-2 py-0.5 text-primary shadow-sm" v-if="asset.isin">{{ asset.isin }}</span>
+                     <span class="font-medium text-foreground text-lg">{{ asset.name }}</span>
+                     <span class="text-xs font-medium font-mono bg-muted/30 border border-primary/20 rounded px-2 py-0.5 text-primary shadow-sm" v-if="asset.symbol">{{ asset.symbol }}</span>
+                     
+                     <div class="flex items-center gap-1.5 text-xs font-mono bg-primary/10 text-primary pl-2.5 pr-2 py-1.5 rounded ml-auto shrink-0">
+                       <span>{{ asset.transactions?.length || 0 }} {{ asset.transactions?.length === 1 ? 'Txn' : 'Txns' }}</span>
+                       <ChevronDown v-if="asset.transactions?.length" class="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
                      </div>
                    </div>
                    
-                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                     <!-- Transaction Summary Box -->
-                     <div class="border rounded-md p-3.5 bg-muted/20 flex flex-col space-y-3">
-                       <span class="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1.5">
-                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
-                         Transaction Summary
-                       </span>
-                       <div class="space-y-2 mt-1">
-                         <div class="grid grid-cols-4 gap-2 text-[10px] text-muted-foreground border-b border-border pb-1">
-                           <div class="col-span-2"></div>
-                           <div class="text-right">Units</div>
-                           <div class="text-right">Value</div>
+                   <!-- 2-Column Blocks -->
+                   <div class="flex flex-col lg:flex-row gap-3 w-full">
+                     <div class="flex items-center justify-between text-xs bg-muted/20 border border-border rounded-md px-3.5 py-2.5 gap-3 flex-1 overflow-x-auto">
+                       <div class="flex flex-col items-end shrink-0">
+                         <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Opening</span>
+                         <span class="font-mono font-bold text-foreground text-sm text-right">{{ formatNumber(camsSummaries[index]?.openingBalance || 0) }}</span>
+                       </div>
+                       <div class="w-px h-8 bg-border/60"></div>
+                       <div class="flex flex-col items-end shrink-0">
+                         <div class="flex items-center gap-1.5 mb-0.5">
+                           <span v-if="camsSummaries[index]?.periodBuyCount" class="text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded font-mono border border-border/50">{{ camsSummaries[index]?.periodBuyCount }}</span>
+                           <span class="text-[10px] text-muted-foreground uppercase tracking-wider">Buys</span>
                          </div>
-                         
-                         <div class="grid grid-cols-4 gap-2 items-center pt-1">
-                           <div class="col-span-2 text-[11px] text-muted-foreground">Opening Balance</div>
-                           <div class="font-medium font-mono text-sm text-right">{{ formatNumber(holding.xfina?.openingBalance || 0) }}</div>
-                           <div class="text-right text-muted-foreground text-[10px]">-</div>
+                         <span class="font-mono font-bold text-sm text-right" :class="camsSummaries[index]?.periodBuyUnits ? 'text-emerald-500' : 'text-foreground'"><span v-if="camsSummaries[index]?.periodBuyUnits">+ </span>{{ formatNumber(camsSummaries[index]?.periodBuyUnits || 0) }}</span>
+                       </div>
+                       <div class="w-px h-8 bg-border/60"></div>
+                       <div class="flex flex-col items-end shrink-0">
+                         <div class="flex items-center gap-1.5 mb-0.5">
+                           <span v-if="camsSummaries[index]?.periodSellCount" class="text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded font-mono border border-border/50">{{ camsSummaries[index]?.periodSellCount }}</span>
+                           <span class="text-[10px] text-muted-foreground uppercase tracking-wider">Sells</span>
                          </div>
-                         
-                         <div class="grid grid-cols-4 gap-2 items-center">
-                           <div class="col-span-2 flex items-center gap-2">
-                             <span class="text-[11px] text-muted-foreground">Buys</span>
-                             <span class="text-[9px] bg-primary/10 text-primary px-1 rounded" v-if="holding.xfina?.periodBuyCount">{{ holding.xfina?.periodBuyCount }}</span>
-                           </div>
-                           <div class="font-medium font-mono text-sm text-right text-emerald-500"><span v-if="holding.xfina?.periodBuyUnits">+</span>{{ formatNumber(holding.xfina?.periodBuyUnits || 0) }}</div>
-                           <div class="font-medium font-mono text-sm text-right">{{ formatCurrency(holding.xfina?.periodInvestedValue || 0) }}</div>
-                         </div>
-                         
-                         <div class="grid grid-cols-4 gap-2 items-center">
-                           <div class="col-span-2 flex items-center gap-2">
-                             <span class="text-[11px] text-muted-foreground">Sells</span>
-                             <span class="text-[9px] bg-primary/10 text-primary px-1 rounded" v-if="holding.xfina?.periodSellCount">{{ holding.xfina?.periodSellCount }}</span>
-                           </div>
-                           <div class="font-medium font-mono text-sm text-right text-rose-500"><span v-if="holding.xfina?.periodSellUnits">-</span>{{ formatNumber(holding.xfina?.periodSellUnits || 0) }}</div>
-                           <div class="font-medium font-mono text-sm text-right">{{ formatCurrency(holding.xfina?.periodRealizedValue || 0) }}</div>
-                         </div>
-                         
-                         <div class="grid grid-cols-4 gap-2 items-center pt-2 border-t border-border">
-                           <div class="col-span-2 text-xs font-medium text-foreground">Closing Balance</div>
-                           <div class="font-bold font-mono text-sm text-primary text-right">{{ formatNumber(holding.units) }}</div>
-                           <div class="text-right text-muted-foreground text-[10px]">-</div>
-                         </div>
+                         <span class="font-mono font-bold text-foreground text-sm text-right"><span v-if="camsSummaries[index]?.periodSellUnits">- </span>{{ formatNumber(camsSummaries[index]?.periodSellUnits || 0) }}</span>
+                       </div>
+                       <div class="w-px h-8 bg-border/60"></div>
+                       <div class="flex flex-col items-end shrink-0">
+                         <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Closing</span>
+                         <span class="font-mono font-bold text-primary text-sm text-right">{{ formatNumber(camsSummaries[index]?.closingBalance || 0) }}</span>
+                       </div>
+                       <div class="w-px h-8 bg-border/60"></div>
+                       <div class="flex flex-col items-end shrink-0">
+                         <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">NAV</span>
+                         <span class="font-mono font-bold text-foreground text-sm text-right">{{ formatCurrency(camsSummaries[index]?.nav) }}</span>
+                       </div>
+                       <div class="w-px h-8 bg-border/60" v-if="camsSummaries[index]?.navDate"></div>
+                       <div class="flex flex-col items-end shrink-0" v-if="camsSummaries[index]?.navDate">
+                         <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">NAV Date</span>
+                         <span class="font-mono font-medium text-foreground text-sm text-right">{{ formatDate(camsSummaries[index]?.navDate) }}</span>
                        </div>
                      </div>
                      
-                     <!-- Market Value Box -->
-                     <div class="border rounded-md p-3.5 bg-muted/20 flex flex-col space-y-3">
-                       <span class="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1.5">
-                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg>
-                         Holding
-                       </span>
-                       <div class="space-y-3 mt-2">
-                         <div class="flex justify-between items-center">
-                           <span class="text-[11px] text-muted-foreground">Cost Value</span>
-                           <span class="font-medium font-mono text-sm">{{ formatCurrency((holding.units || 0) * (holding.rate || 0)) }}</span>
-                         </div>
-                         
-                         <div class="flex justify-between items-center">
-                           <span class="text-[11px] text-muted-foreground">Market Value</span>
-                           <span class="font-bold font-mono text-sm text-primary">{{ formatCurrency((holding.units || 0) * (holding.lastTradedPrice || 0)) }}</span>
-                         </div>
-                         
-                         <div class="flex justify-between items-center">
-                           <span class="text-[11px] text-muted-foreground">Total Units</span>
-                           <span class="font-medium font-mono text-sm">{{ formatNumber(holding.units) }}</span>
-                         </div>
-                         
-                         <div class="flex justify-between items-end border-t border-border pt-3 mt-1">
-                           <div class="flex flex-col">
-                             <span class="text-[11px] text-foreground font-medium">NAV</span>
-                             <div class="flex items-baseline gap-1 mt-0.5 text-[10px] text-muted-foreground" v-if="equityStatement.xfina?.generatedDate">
-                               <span>as on</span>
-                               <span class="font-medium font-mono">{{ formatDateTime(equityStatement.xfina?.generatedDate, 'xfina.generatedDate', equityStatement.xfina?.dateOnlyPaths) }}</span>
-                             </div>
-                           </div>
-                           <span class="font-bold font-mono text-sm">{{ formatCurrency(holding.lastTradedPrice) }}</span>
-                         </div>
+                     <div class="flex items-center text-right bg-muted/20 border border-border rounded-md px-3.5 py-2.5 shrink-0 gap-3">
+                       <div class="flex flex-col items-end w-[130px] shrink-0">
+                         <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Total Invested</span>
+                         <span class="text-sm font-medium font-mono text-foreground">{{ formatCurrency(camsSummaries[index]?.totalInvested) }}</span>
+                       </div>
+                       <div class="w-px h-8 bg-border/60"></div>
+                       <div class="flex flex-col items-end w-[130px] shrink-0">
+                         <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Market Value</span>
+                         <span class="text-sm font-bold font-mono text-primary">{{ formatCurrency(camsSummaries[index]?.marketValue) }}</span>
+                       </div>
+                       <div class="w-px h-8 bg-border/60"></div>
+                       <div class="flex flex-col items-end w-[130px] shrink-0">
+                         <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Unrealized P&L</span>
+                         <span class="font-mono font-bold text-sm" 
+                               :class="camsSummaries[index]?.unrealizedPl >= 0 ? 'text-emerald-500' : 'text-rose-500'">
+                           {{ camsSummaries[index]?.unrealizedPl >= 0 ? '+ ' : '' }}{{ formatCurrency(camsSummaries[index]?.unrealizedPl) }}
+                         </span>
                        </div>
                      </div>
                    </div>
                  </div>
-                 <template #icon>
-                    <div class="flex items-center gap-1.5 text-xs font-mono bg-primary/10 text-primary pl-2.5 pr-2 py-1.5 rounded shrink-0 ml-2 self-start mt-0.5">
-                      <span>{{ asset.transactions?.length || 0 }} {{ asset.transactions?.length === 1 ? 'Txn' : 'Txns' }}</span>
-                      <ChevronDown v-if="asset.transactions?.length" class="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                    </div>
-                  </template>
+                 
+                 <!-- Empty slot to prevent Shadcn from rendering a right-aligned icon -->
+                 <template #icon><div></div></template>
                </AccordionTrigger>
                <AccordionContent>
                  <div class="rounded-md border border-border mt-2 overflow-x-auto">
                    <Table>
                      <TableHeader class="bg-muted/50">
                        <TableRow class="hover:bg-transparent">
-                         <TableHead class="text-muted-foreground whitespace-nowrap">Date</TableHead>
-                         <TableHead class="text-muted-foreground whitespace-nowrap">Type</TableHead>
+                         <TableHead class="w-[150px] text-muted-foreground whitespace-nowrap">Date</TableHead>
+                         <TableHead class="w-[100px] text-muted-foreground whitespace-nowrap">Type</TableHead>
                          <TableHead class="text-muted-foreground whitespace-nowrap">Description</TableHead>
-                         <TableHead class="text-right text-muted-foreground whitespace-nowrap">Total Amount</TableHead>
-                         <TableHead class="text-right text-muted-foreground whitespace-nowrap">Units / Qty</TableHead>
-                         <TableHead class="text-right text-muted-foreground whitespace-nowrap">NAV / Price</TableHead>
-                         <TableHead class="text-right text-muted-foreground whitespace-nowrap">Duty / STT / Fee</TableHead>
-                         <TableHead class="text-right text-muted-foreground whitespace-nowrap">Balance</TableHead>
+                         <TableHead class="w-[140px] text-right text-muted-foreground whitespace-nowrap">Total Amount</TableHead>
+                         <TableHead class="w-[120px] text-right text-muted-foreground whitespace-nowrap">Units / Qty</TableHead>
+                         <TableHead class="w-[120px] text-right text-muted-foreground whitespace-nowrap">NAV / Price</TableHead>
+                         <TableHead class="w-[120px] text-right text-muted-foreground whitespace-nowrap">Duty / STT / Fee</TableHead>
+                         <TableHead class="w-[140px] text-right text-muted-foreground whitespace-nowrap">Balance</TableHead>
                        </TableRow>
                      </TableHeader>
                      <TableBody>
@@ -864,10 +898,10 @@ const getAssetTransactions = (holding) => {
               <Table>
                 <TableHeader class="bg-muted/50">
                   <TableRow class="hover:bg-transparent">
-                    <TableHead class="text-muted-foreground whitespace-nowrap">Date</TableHead>
+                    <TableHead class="w-[150px] text-muted-foreground whitespace-nowrap">Date</TableHead>
                     <TableHead class="text-muted-foreground whitespace-nowrap">Description</TableHead>
-                    <TableHead class="text-right text-muted-foreground whitespace-nowrap">Amount</TableHead>
-                    <TableHead class="text-right text-muted-foreground whitespace-nowrap">Balance</TableHead>
+                    <TableHead class="w-[140px] text-right text-muted-foreground whitespace-nowrap">Amount</TableHead>
+                    <TableHead class="w-[140px] text-right text-muted-foreground whitespace-nowrap">Balance</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -914,27 +948,23 @@ const getAssetTransactions = (holding) => {
             <CardContent>
               <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
                 <div class="flex flex-col">
+                  <span class="text-xs text-muted-foreground mb-1">Total Assets</span>
+                  <span class="font-medium font-mono text-xl text-foreground">{{ equityStatement.summary?.investment?.holdings?.holding?.length || 0 }}</span>
+                </div>
+                <div class="flex flex-col">
                   <span class="text-xs text-muted-foreground mb-1">Total Invested</span>
                   <span class="font-medium font-mono text-xl">{{ formatCurrency(equityStatement.summary?.investmentValue) }}</span>
                 </div>
                 <div class="flex flex-col">
-                  <span class="text-xs text-muted-foreground mb-1">Current Value</span>
+                  <span class="text-xs text-muted-foreground mb-1">Market Value</span>
                   <span class="font-medium font-mono text-xl text-primary">{{ formatCurrency(equityStatement.summary?.currentValue) }}</span>
-                  <div class="flex items-baseline gap-1 mt-1 text-[10px] text-muted-foreground" v-if="equityStatement.xfina?.generatedDate">
-                    <span>as of</span>
-                    <span class="font-medium font-mono">{{ formatDateTime(equityStatement.xfina?.generatedDate, 'xfina.generatedDate', equityStatement.xfina?.dateOnlyPaths) }}</span>
-                  </div>
                 </div>
                 <div class="flex flex-col">
                   <span class="text-xs text-muted-foreground mb-1">Unrealized P&L</span>
                   <span class="font-medium font-mono text-xl" 
                         :class="(equityStatement.summary?.currentValue || 0) >= (equityStatement.summary?.investmentValue || 0) ? 'text-emerald-500' : 'text-rose-500'">
-                    {{ (equityStatement.summary?.currentValue || 0) >= (equityStatement.summary?.investmentValue || 0) ? '+' : '' }}{{ formatCurrency((equityStatement.summary?.currentValue || 0) - (equityStatement.summary?.investmentValue || 0)) }}
+                    {{ (equityStatement.summary?.currentValue || 0) >= (equityStatement.summary?.investmentValue || 0) ? '+ ' : '' }}{{ formatCurrency((equityStatement.summary?.currentValue || 0) - (equityStatement.summary?.investmentValue || 0)) }}
                   </span>
-                </div>
-                <div class="flex flex-col">
-                  <span class="text-xs text-muted-foreground mb-1">Total Assets</span>
-                  <span class="font-medium font-mono text-xl">{{ equityStatement.summary?.investment?.holdings?.holding?.length || 0 }}</span>
                 </div>
               </div>
             </CardContent>
@@ -950,114 +980,97 @@ const getAssetTransactions = (holding) => {
              :disabled="!getAssetTransactions(holding).length"
            >
                <AccordionTrigger class="group hover:no-underline px-4 py-4 data-[state=open]:border-b border-border">
-                 <div class="flex flex-col w-full text-left pr-4 space-y-3">
-                   <div class="flex justify-between items-start w-full">
-                     <div class="flex flex-col items-start">
-                       <span class="font-medium text-foreground text-lg">{{ holding.issuerName || holding.description }}</span>
-                       <span class="text-sm text-muted-foreground mt-0.5">{{ holding.description || holding.issuerName }} <span v-if="holding.isin">| ISIN: {{ holding.isin }}</span></span>
+                 <div class="flex flex-col items-start w-full pr-0 gap-3">
+                   <!-- Top Row: Chevron, Name, Tags, Txn Pill -->
+                   <div class="flex items-center gap-2.5 flex-wrap w-full">
+                     <span class="text-xs font-medium font-mono bg-muted/30 border border-primary/20 rounded px-2 py-0.5 text-primary shadow-sm" v-if="holding.isin">{{ holding.isin }}</span>
+                     <span class="font-medium text-foreground text-lg">{{ holding.issuerName || holding.description }}</span>
+                     <span class="text-xs font-medium font-mono bg-muted/30 border border-primary/20 rounded px-2 py-0.5 text-primary shadow-sm">{{ holding.description || holding.issuerName }}</span>
+                     
+                     <div class="flex items-center gap-1.5 text-xs font-mono bg-primary/10 text-primary pl-2.5 pr-2 py-1.5 rounded ml-auto shrink-0">
+                       <span>{{ getAssetTransactions(holding).length }} {{ getAssetTransactions(holding).length === 1 ? 'Txn' : 'Txns' }}</span>
+                       <ChevronDown v-if="getAssetTransactions(holding).length" class="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
                      </div>
                    </div>
                    
-                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                     <!-- Transaction Summary Box -->
-                     <div class="border rounded-md p-3.5 bg-muted/20 flex flex-col space-y-3">
-                       <span class="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1.5">
-                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
-                         Transaction Summary
-                       </span>
-                       <div class="space-y-2 mt-1">
-                         <div class="grid grid-cols-4 gap-2 text-[10px] text-muted-foreground border-b border-border pb-1">
-                           <div class="col-span-2"></div>
-                           <div class="text-right">Units</div>
-                           <div class="text-right">Value</div>
+                   <!-- 2-Column Blocks -->
+                   <div class="flex flex-col lg:flex-row gap-3 w-full">
+                     <div class="flex items-center justify-between text-xs bg-muted/20 border border-border rounded-md px-3.5 py-2.5 gap-3 flex-1 overflow-x-auto">
+                       <div class="flex flex-col items-end shrink-0">
+                         <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Opening</span>
+                         <span class="font-mono font-bold text-foreground text-sm text-right">{{ formatNumber(holding.xfina?.openingBalance || 0) }}</span>
+                       </div>
+                       <div class="w-px h-8 bg-border/60"></div>
+                       <div class="flex flex-col items-end shrink-0">
+                         <div class="flex items-center gap-1.5 mb-0.5">
+                           <span v-if="holding.xfina?.periodBuyCount" class="text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded font-mono border border-border/50">{{ holding.xfina?.periodBuyCount }}</span>
+                           <span class="text-[10px] text-muted-foreground uppercase tracking-wider">Buys</span>
                          </div>
-                         
-                         <div class="grid grid-cols-4 gap-2 items-center pt-1">
-                           <div class="col-span-2 text-[11px] text-muted-foreground">Opening Balance</div>
-                           <div class="font-medium font-mono text-sm text-right">{{ formatNumber(holding.xfina?.openingBalance || 0) }}</div>
-                           <div class="text-right text-muted-foreground text-[10px]">-</div>
+                         <span class="font-mono font-bold text-sm text-right" :class="(holding.xfina?.periodBuyUnits || 0) > 0 ? 'text-emerald-500' : 'text-foreground'"><span v-if="(holding.xfina?.periodBuyUnits || 0) > 0">+ </span>{{ formatNumber(holding.xfina?.periodBuyUnits || 0) }}</span>
+                       </div>
+                       <div class="w-px h-8 bg-border/60"></div>
+                       <div class="flex flex-col items-end shrink-0">
+                         <div class="flex items-center gap-1.5 mb-0.5">
+                           <span v-if="holding.xfina?.periodSellCount" class="text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded font-mono border border-border/50">{{ holding.xfina?.periodSellCount }}</span>
+                           <span class="text-[10px] text-muted-foreground uppercase tracking-wider">Sells</span>
                          </div>
-                         
-                         <div class="grid grid-cols-4 gap-2 items-center">
-                           <div class="col-span-2 flex items-center gap-2">
-                             <span class="text-[11px] text-muted-foreground">Buys</span>
-                             <span class="text-[9px] bg-primary/10 text-primary px-1 rounded" v-if="holding.xfina?.periodBuyCount">{{ holding.xfina?.periodBuyCount }}</span>
-                           </div>
-                           <div class="font-medium font-mono text-sm text-right text-emerald-500"><span v-if="holding.xfina?.periodBuyUnits">+</span>{{ formatNumber(holding.xfina?.periodBuyUnits || 0) }}</div>
-                           <div class="font-medium font-mono text-sm text-right">{{ formatCurrency(holding.xfina?.periodInvestedValue || 0) }}</div>
-                         </div>
-                         
-                         <div class="grid grid-cols-4 gap-2 items-center">
-                           <div class="col-span-2 flex items-center gap-2">
-                             <span class="text-[11px] text-muted-foreground">Sells</span>
-                             <span class="text-[9px] bg-primary/10 text-primary px-1 rounded" v-if="holding.xfina?.periodSellCount">{{ holding.xfina?.periodSellCount }}</span>
-                           </div>
-                           <div class="font-medium font-mono text-sm text-right text-rose-500"><span v-if="holding.xfina?.periodSellUnits">-</span>{{ formatNumber(holding.xfina?.periodSellUnits || 0) }}</div>
-                           <div class="font-medium font-mono text-sm text-right">{{ formatCurrency(holding.xfina?.periodRealizedValue || 0) }}</div>
-                         </div>
-                         
-                         <div class="grid grid-cols-4 gap-2 items-center pt-2 border-t border-border">
-                           <div class="col-span-2 text-xs font-medium text-foreground">Closing Balance</div>
-                           <div class="font-bold font-mono text-sm text-primary text-right">{{ formatNumber(holding.units) }}</div>
-                           <div class="text-right text-muted-foreground text-[10px]">-</div>
-                         </div>
+                         <span class="font-mono font-bold text-foreground text-sm text-right"><span v-if="holding.xfina?.periodSellUnits">-</span>{{ formatNumber(holding.xfina?.periodSellUnits || 0) }}</span>
+                       </div>
+                       <div class="w-px h-8 bg-border/60"></div>
+                       <div class="flex flex-col items-end shrink-0">
+                         <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Closing</span>
+                         <span class="font-mono font-bold text-primary text-sm text-right">{{ formatNumber(holding.units) }}</span>
+                       </div>
+                       <div class="w-px h-8 bg-border/60"></div>
+                       <div class="flex flex-col items-end shrink-0">
+                         <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">NAV</span>
+                         <span class="font-mono font-bold text-foreground text-sm text-right">{{ formatCurrency(holding.lastTradedPrice) }}</span>
+                       </div>
+                       <div class="w-px h-8 bg-border/60" v-if="equityStatement.xfina?.generatedDate"></div>
+                       <div class="flex flex-col items-end shrink-0" v-if="equityStatement.xfina?.generatedDate">
+                         <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">NAV Date</span>
+                         <span class="font-mono font-medium text-foreground text-sm text-right">{{ formatDate(equityStatement.xfina?.generatedDate) }}</span>
                        </div>
                      </div>
                      
-                     <!-- Market Value Box -->
-                     <div class="border rounded-md p-3.5 bg-muted/20 flex flex-col space-y-3">
-                       <span class="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1.5">
-                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg>
-                         Holding
-                       </span>
-                       <div class="space-y-3 mt-2">
-                         <div class="flex justify-between items-center">
-                           <span class="text-[11px] text-muted-foreground">Cost Value</span>
-                           <span class="font-medium font-mono text-sm">{{ formatCurrency((holding.units || 0) * (holding.rate || 0)) }}</span>
-                         </div>
-                         
-                         <div class="flex justify-between items-center">
-                           <span class="text-[11px] text-muted-foreground">Market Value</span>
-                           <span class="font-bold font-mono text-sm text-primary">{{ formatCurrency((holding.units || 0) * (holding.lastTradedPrice || 0)) }}</span>
-                         </div>
-                         
-                         <div class="flex justify-between items-center">
-                           <span class="text-[11px] text-muted-foreground">Total Units</span>
-                           <span class="font-medium font-mono text-sm">{{ formatNumber(holding.units) }}</span>
-                         </div>
-                         
-                         <div class="flex justify-between items-end border-t border-border pt-3 mt-1">
-                           <div class="flex flex-col">
-                             <span class="text-[11px] text-foreground font-medium">NAV</span>
-                             <div class="flex items-baseline gap-1 mt-0.5 text-[10px] text-muted-foreground" v-if="equityStatement.xfina?.generatedDate">
-                               <span>as on</span>
-                               <span class="font-medium font-mono">{{ formatDateTime(equityStatement.xfina?.generatedDate, 'xfina.generatedDate', equityStatement.xfina?.dateOnlyPaths) }}</span>
-                             </div>
-                           </div>
-                           <span class="font-bold font-mono text-sm">{{ formatCurrency(holding.lastTradedPrice) }}</span>
-                         </div>
+                     <div class="flex items-center text-right bg-muted/20 border border-border rounded-md px-3.5 py-2.5 shrink-0 gap-3">
+                       <div class="flex flex-col items-end w-[130px] shrink-0">
+                         <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Total Invested</span>
+                         <span class="text-sm font-medium font-mono text-foreground">{{ formatCurrency((holding.units || 0) * (holding.rate || 0)) }}</span>
+                       </div>
+                       <div class="w-px h-8 bg-border/60"></div>
+                       <div class="flex flex-col items-end w-[130px] shrink-0">
+                         <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Market Value</span>
+                         <span class="text-sm font-bold font-mono text-primary">{{ formatCurrency((holding.units || 0) * (holding.lastTradedPrice || 0)) }}</span>
+                       </div>
+                       <div class="w-px h-8 bg-border/60"></div>
+                       <div class="flex flex-col items-end w-[130px] shrink-0">
+                         <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Unrealized P&L</span>
+                         <span class="font-mono font-bold text-sm" 
+                               :class="((holding.units || 0) * (holding.lastTradedPrice || 0)) >= ((holding.units || 0) * (holding.rate || 0)) ? 'text-emerald-500' : 'text-rose-500'">
+                           {{ ((holding.units || 0) * (holding.lastTradedPrice || 0)) >= ((holding.units || 0) * (holding.rate || 0)) ? '+ ' : '' }}{{ formatCurrency(((holding.units || 0) * (holding.lastTradedPrice || 0)) - ((holding.units || 0) * (holding.rate || 0))) }}
+                         </span>
                        </div>
                      </div>
                    </div>
                  </div>
-                 <template #icon>
-                    <div class="flex items-center gap-1.5 text-xs font-mono bg-primary/10 text-primary pl-2.5 pr-2 py-1.5 rounded shrink-0 ml-2 self-start mt-0.5">
-                      <span>{{ getAssetTransactions(holding).length || 0 }} {{ getAssetTransactions(holding).length === 1 ? 'Txn' : 'Txns' }}</span>
-                      <ChevronDown v-if="getAssetTransactions(holding).length" class="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                    </div>
-                  </template>
+                 
+                 <!-- Empty slot to prevent Shadcn from rendering a right-aligned icon -->
+                 <template #icon><div></div></template>
                </AccordionTrigger>
                <AccordionContent>
-                 <div class="rounded-md border border-border mt-2 overflow-x-auto">
+                 <div class="overflow-x-auto">
                    <Table>
                      <TableHeader class="bg-muted/50">
                        <TableRow class="hover:bg-transparent">
-                         <TableHead class="text-muted-foreground whitespace-nowrap">Date</TableHead>
-                         <TableHead class="text-muted-foreground whitespace-nowrap">Type</TableHead>
-                         <TableHead class="text-right text-muted-foreground whitespace-nowrap">Total Amount</TableHead>
-                         <TableHead class="text-right text-muted-foreground whitespace-nowrap">Units / Qty</TableHead>
-                         <TableHead class="text-right text-muted-foreground whitespace-nowrap">Rate / Price</TableHead>
-                         <TableHead class="text-right text-muted-foreground whitespace-nowrap">Fees</TableHead>
+                         <TableHead class="w-[150px] text-muted-foreground whitespace-nowrap">Date</TableHead>
+                         <TableHead class="w-[100px] text-muted-foreground whitespace-nowrap">Type</TableHead>
+                         <TableHead class="text-muted-foreground whitespace-nowrap">Description</TableHead>
+                         <TableHead class="w-[140px] text-right text-muted-foreground whitespace-nowrap">Total Amount</TableHead>
+                         <TableHead class="w-[120px] text-right text-muted-foreground whitespace-nowrap">Units / Qty</TableHead>
+                         <TableHead class="w-[120px] text-right text-muted-foreground whitespace-nowrap">Rate / Price</TableHead>
+                         <TableHead class="w-[120px] text-right text-muted-foreground whitespace-nowrap">Fees</TableHead>
+                         <TableHead class="w-[140px] text-right text-muted-foreground whitespace-nowrap">Balance</TableHead>
                        </TableRow>
                      </TableHeader>
                      <TableBody>
@@ -1068,10 +1081,12 @@ const getAssetTransactions = (holding) => {
                               {{ txn.type || '-' }}
                             </span>
                          </TableCell>
+                         <TableCell class="text-foreground text-xs">-</TableCell>
                          <TableCell class="text-right font-mono text-foreground">{{ formatCurrency(txn.tradeValue) }}</TableCell>
                          <TableCell class="text-right font-mono text-foreground">{{ formatNumber(txn.units) }}</TableCell>
                          <TableCell class="text-right font-mono text-foreground">{{ formatCurrency(txn.rate) }}</TableCell>
                          <TableCell class="text-right font-mono text-foreground">{{ formatCurrency(txn.totalCharge) }}</TableCell>
+                         <TableCell class="text-right font-mono text-foreground">{{ formatNumber(txn._runningBalance) }}</TableCell>
                        </TableRow>
                      </TableBody>
                    </Table>
