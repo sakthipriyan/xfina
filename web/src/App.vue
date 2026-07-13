@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
-import init, { parse_ibkr, parse_cams, parse_hdfc_cc, parse_icici_cc, parse_hdfc_ba, parse_icici_ba, parse_sbi_ba, parse_bob_ba } from './wasm/xfina_wasm.js';
+import init, { parse_ibkr, parse_cams, parse_hdfc_cc, parse_icici_cc, parse_hdfc_ba, parse_icici_ba, parse_sbi_ba, parse_bob_ba, parse_axis_ba } from './wasm/xfina_wasm.js';
 import { Sun, Moon, Github, HelpCircle, ChevronDown, Loader2 } from 'lucide-vue-next';
 
 // Shadcn components
@@ -53,7 +53,7 @@ const requiresPassword = computed(() => {
 const getFileFormat = computed(() => {
     if (selectedCategory.value === 'Mutual Funds') return 'PDF';
     if (selectedCategory.value === 'Bank Accounts') {
-        if (selectedSource.value === 'HDFC' || selectedSource.value === 'ICICI' || selectedSource.value === 'BoB') return 'Excel';
+        if (selectedSource.value === 'HDFC' || selectedSource.value === 'ICICI' || selectedSource.value === 'BoB' || selectedSource.value === 'Axis') return 'Excel';
         return 'PDF';
     }
     if (selectedCategory.value === 'Credit Cards') {
@@ -67,7 +67,7 @@ const getFileFormat = computed(() => {
 const getAcceptString = computed(() => {
     if (selectedCategory.value === 'Mutual Funds') return '.pdf';
     if (selectedCategory.value === 'Bank Accounts') {
-        if (selectedSource.value === 'HDFC' || selectedSource.value === 'ICICI' || selectedSource.value === 'BoB') return '.xls,.xlsx';
+        if (selectedSource.value === 'HDFC' || selectedSource.value === 'ICICI' || selectedSource.value === 'BoB' || selectedSource.value === 'Axis') return '.xls,.xlsx';
         return '.pdf';
     }
     if (selectedCategory.value === 'Credit Cards') {
@@ -129,6 +129,8 @@ const onFileSelect = async (event) => {
                 jsonString = parse_sbi_ba(uint8Array, password.value ? password.value : null, file.name);
             } else if (selectedSource.value === 'BoB') {
                 jsonString = parse_bob_ba(uint8Array);
+            } else if (selectedSource.value === 'Axis') {
+                jsonString = parse_axis_ba(uint8Array, file.name);
             }
             bankStatement.value = JSON.parse(jsonString);
         } else if (selectedSource.value === 'IBKR') {
@@ -339,6 +341,7 @@ const getAssetTransactions = (holding) => {
                  <Button :variant="selectedSource === 'HDFC' ? 'default' : 'outline'" @click="selectedSource = 'HDFC'">HDFC Bank</Button>
                  <Button :variant="selectedSource === 'ICICI' ? 'default' : 'outline'" @click="selectedSource = 'ICICI'">ICICI Bank</Button>
                  <Button :variant="selectedSource === 'SBI' ? 'default' : 'outline'" @click="selectedSource = 'SBI'">State Bank of India</Button>
+                 <Button :variant="selectedSource === 'Axis' ? 'default' : 'outline'" @click="selectedSource = 'Axis'">Axis Bank</Button>
                </div>
              </div>
 

@@ -18,3 +18,4 @@ xfina-ba-hdfc = { path = "../bank-accounts/hdfc" }
 xfina-ba-icici = { path = "../bank-accounts/icici" }
 xfina-ba-sbi = { path = "../bank-accounts/sbi" }
 xfina-ba-bob = { path = "../bank-accounts/bob" }
+xfina-ba-axis = { path = "../bank-accounts/axis" }
