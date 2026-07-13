@@ -6,6 +6,9 @@ pub use credit_card::*;
 pub mod deposit;
 pub use deposit::*;
 
+pub mod equity;
+pub use equity::*;
+
 pub fn parse_indian_date(input: &str) -> String {
     let input = input.trim();
     
