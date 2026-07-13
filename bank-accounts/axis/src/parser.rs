@@ -90,9 +90,9 @@ pub fn parse_axis_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAcc
                 if let Some(nom) = first_col.strip_prefix("Nominee Registered :-") {
                     nominee_reg = nom.trim().to_string();
                 }
-            } else if first_col.starts_with("Statement of Account No -") {
+            } else if first_col.starts_with("Statement of Account No") {
                 // Statement of Account No - 914010032444462 for the period (From : 01-07-2026 To : 13-07-2026)
-                let re_acc = Regex::new(r"Account No - (\d+) for the period \(From : ([\d-]+) To : ([\d-]+)\)").unwrap();
+                let re_acc = Regex::new(r"Account No\s*-\s*(\d+).*?From\s*:\s*([\d-]+)\s*To\s*:\s*([\d-]+)").unwrap();
                 if let Some(caps) = re_acc.captures(first_col) {
                     account_number = caps[1].to_string();
                     start_date = NaiveDate::parse_from_str(&caps[2], "%d-%m-%Y").ok();
