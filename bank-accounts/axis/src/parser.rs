@@ -135,11 +135,12 @@ pub fn parse_axis_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAcc
                 // End of transaction block or empty line
                 if first_col.starts_with("BRANCH ADDRESS") {
                     if let Some(branch_text) = first_col.strip_prefix("BRANCH ADDRESS -") {
-                        if let Some(branch_name) = branch_text.split('[').next() {
-                            let b_name = branch_name.trim().to_string();
-                            if !b_name.is_empty() {
-                                summary_branch = b_name;
-                            }
+                        if let Some(idx) = branch_text.find(']') {
+                            summary_branch = branch_text[..=idx].trim().to_string();
+                        } else if let Some(idx) = branch_text.find('[') {
+                            summary_branch = branch_text[..idx].trim().to_string();
+                        } else if let Some(branch_name) = branch_text.split(',').next() {
+                            summary_branch = branch_name.trim().to_string();
                         }
                     }
                     break;
