@@ -1,8 +1,14 @@
 use std::collections::HashMap;
-use xfina_models::{Portfolio, Asset, Transaction, InvestorInfo};
+use xfina_models::{
+    EquityAccount, EquityProfile, EquityHolders, EquityHolder, EquitySummary, EquityInvestment,
+    EquityHoldings, EquityHolding, EquityTransactions, EquityTransaction, XfinaEquityAccount,
+    EquityFiType, ShareHolderEquityType, EquityTransactionType, TransactionsSymbol, 
+    EquityCategory,
+};
 use csv::ReaderBuilder;
 use chrono::{NaiveDate, NaiveDateTime, TimeZone, LocalResult, Utc};
 use chrono_tz::America::New_York;
+use rust_decimal::Decimal;
 
 fn format_date_iso(date_str: &str) -> String {
     let clean_str = date_str.replace(" EDT", "").replace(" EST", "");
@@ -27,26 +33,49 @@ fn format_date_iso(date_str: &str) -> String {
     date_str.to_string()
 }
 
-pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
+fn parse_date(date_str: &str) -> Option<NaiveDate> {
+    let iso = format_date_iso(date_str);
+    if iso.len() >= 10 {
+        NaiveDate::parse_from_str(&iso[..10], "%Y-%m-%d").ok()
+    } else {
+        None
+    }
+}
+
+fn parse_datetime(date_str: &str) -> Option<chrono::DateTime<Utc>> {
+    let iso = format_date_iso(date_str);
+    chrono::DateTime::parse_from_rfc3339(&iso).map(|d| d.with_timezone(&Utc)).ok()
+}
+
+pub fn parse_ibkr_csv(csv_content: &str) -> Result<EquityAccount, String> {
     let mut rdr = ReaderBuilder::new()
         .has_headers(false)
         .flexible(true)
         .from_reader(csv_content.as_bytes());
 
     let mut account_no = String::from("IBKR");
-    let mut investor_name = None;
+    let mut investor_name = String::new();
     let mut statement_start_date = None;
     let mut statement_end_date = None;
     let mut generated_date = None;
 
     // symbol -> (primary_symbol, description, isin)
     let mut instruments: HashMap<String, (String, String, String)> = HashMap::new();
-    // symbol -> Vec<Transaction>
-    let mut trades: HashMap<String, Vec<Transaction>> = HashMap::new();
+    
+    // Interim trades representation since EquityTransaction expects Decimal
+    struct InterimTrade {
+        date: String,
+        tx_type: EquityTransactionType,
+        amount: Decimal,
+        units: Decimal,
+        t_price: Decimal,
+        comm_fee: Decimal,
+    }
+    // symbol -> Vec<InterimTrade>
+    let mut trades: HashMap<String, Vec<InterimTrade>> = HashMap::new();
+    
     // symbol -> (quantity, value, cost_basis, close_price)
-    let mut positions: HashMap<String, (f64, f64, f64, f64)> = HashMap::new();
-    // symbol -> prior_quantity
-    let mut prior_quantities: HashMap<String, f64> = HashMap::new();
+    let mut positions: HashMap<String, (Decimal, Decimal, Decimal, Decimal)> = HashMap::new();
 
     for result in rdr.records() {
         let record = match result {
@@ -66,21 +95,21 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
             }
             (Some("Account Information"), Some("Data"), Some("Name")) => {
                 if let Some(name) = record.get(3) {
-                    investor_name = Some(name.to_string());
+                    investor_name = name.to_string();
                 }
             }
             (Some("Statement"), Some("Data"), Some("Period")) => {
                 if let Some(period) = record.get(3) {
                     let parts: Vec<&str> = period.split('-').collect();
                     if parts.len() == 2 {
-                        statement_start_date = Some(format_date_iso(parts[0].trim()));
-                        statement_end_date = Some(format_date_iso(parts[1].trim()));
+                        statement_start_date = parse_date(parts[0].trim());
+                        statement_end_date = parse_date(parts[1].trim());
                     }
                 }
             }
             (Some("Statement"), Some("Data"), Some("WhenGenerated")) => {
                 if let Some(generated) = record.get(3) {
-                    generated_date = Some(format_date_iso(generated.trim()));
+                    generated_date = parse_datetime(generated.trim());
                 }
             }
             (Some("Financial Instrument Information"), Some("Data"), _) => {
@@ -99,20 +128,13 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
                     }
                 }
             }
-            (Some("Mark-to-Market Performance Summary"), Some("Data"), Some("Stocks")) => {
-                let symbol = record.get(3).unwrap_or("").to_string();
-                let prior_qty: f64 = record.get(4).unwrap_or("0").parse().unwrap_or(0.0);
-                if !symbol.is_empty() {
-                    prior_quantities.insert(symbol, prior_qty);
-                }
-            }
             (Some("Open Positions"), Some("Data"), Some("Summary")) => {
                 if record.get(3) == Some("Stocks") {
                     let symbol = record.get(5).unwrap_or("").to_string();
-                    let quantity: f64 = record.get(6).unwrap_or("0").parse().unwrap_or(0.0);
-                    let cost_basis: f64 = record.get(9).unwrap_or("0").parse().unwrap_or(0.0);
-                    let close_price: f64 = record.get(10).unwrap_or("0").parse().unwrap_or(0.0);
-                    let value: f64 = record.get(11).unwrap_or("0").parse().unwrap_or(0.0);
+                    let quantity: Decimal = record.get(6).unwrap_or("0").parse().unwrap_or(Decimal::ZERO);
+                    let cost_basis: Decimal = record.get(9).unwrap_or("0").parse().unwrap_or(Decimal::ZERO);
+                    let close_price: Decimal = record.get(10).unwrap_or("0").parse().unwrap_or(Decimal::ZERO);
+                    let value: Decimal = record.get(11).unwrap_or("0").parse().unwrap_or(Decimal::ZERO);
 
                     if !symbol.is_empty() {
                         positions.insert(symbol, (quantity, value, cost_basis, close_price));
@@ -123,24 +145,22 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
                 if record.get(3) == Some("Stocks") {
                     let symbol = record.get(5).unwrap_or("").to_string();
                     let date = record.get(6).unwrap_or("").to_string();
-                    let quantity: f64 = record.get(7).unwrap_or("0").parse().unwrap_or(0.0);
-                    let t_price: f64 = record.get(8).unwrap_or("0").parse().unwrap_or(0.0);
-                    let proceeds: f64 = record.get(10).unwrap_or("0").parse().unwrap_or(0.0);
-                    let comm_fee: f64 = record.get(11).unwrap_or("0").parse().unwrap_or(0.0);
+                    let quantity: Decimal = record.get(7).unwrap_or("0").parse().unwrap_or(Decimal::ZERO);
+                    let t_price: Decimal = record.get(8).unwrap_or("0").parse().unwrap_or(Decimal::ZERO);
+                    let proceeds: Decimal = record.get(10).unwrap_or("0").parse().unwrap_or(Decimal::ZERO);
+                    let comm_fee: Decimal = record.get(11).unwrap_or("0").parse().unwrap_or(Decimal::ZERO);
 
                     let amount = proceeds + comm_fee;
 
-                    if !symbol.is_empty() && !date.is_empty() && amount != 0.0 {
-                        let tx_type = if quantity > 0.0 { "BUY".to_string() } else { "SELL".to_string() };
-                        let tx = Transaction {
+                    if !symbol.is_empty() && !date.is_empty() && amount != Decimal::ZERO {
+                        let tx_type = if quantity > Decimal::ZERO { EquityTransactionType::Buy } else { EquityTransactionType::Sell };
+                        let tx = InterimTrade {
                             date: format_date_iso(&date),
                             tx_type,
-                            description: None,
                             amount: amount.abs(),
                             units: quantity.abs(),
-                            nav: if t_price != 0.0 { Some(t_price) } else { None },
-                            balance: None, // Will be calculated after sorting
-                            fee: Some(comm_fee),
+                            t_price,
+                            comm_fee,
                         };
 
                         trades.entry(symbol).or_insert_with(Vec::new).push(tx);
@@ -151,7 +171,10 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
         }
     }
 
-    let mut assets = Vec::new();
+    let mut final_holdings = Vec::new();
+    let mut final_transactions = Vec::new();
+    let mut total_investment_value = Decimal::ZERO;
+    let mut total_current_value = Decimal::ZERO;
 
     let get_primary = |sym: &str| -> String {
         if let Some((primary, _, _)) = instruments.get(sym) {
@@ -161,34 +184,28 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
         }
     };
 
-    let mut merged_positions: HashMap<String, (f64, f64, f64, f64)> = HashMap::new();
+    let mut merged_positions: HashMap<String, (Decimal, Decimal, Decimal, Decimal)> = HashMap::new();
     for (sym, pos) in positions {
         let primary = get_primary(&sym);
-        let entry = merged_positions.entry(primary).or_insert((0.0, 0.0, 0.0, 0.0));
+        let entry = merged_positions.entry(primary).or_insert((Decimal::ZERO, Decimal::ZERO, Decimal::ZERO, Decimal::ZERO));
         entry.0 += pos.0;
         entry.1 += pos.1;
         entry.2 += pos.2;
         entry.3 = pos.3; // Just take the last close price
     }
 
-    let mut merged_trades: HashMap<String, Vec<Transaction>> = HashMap::new();
+    let mut merged_trades: HashMap<String, Vec<InterimTrade>> = HashMap::new();
     for (sym, mut txs) in trades {
         let primary = get_primary(&sym);
         merged_trades.entry(primary).or_default().append(&mut txs);
     }
 
-    let mut merged_prior: HashMap<String, f64> = HashMap::new();
-    for (sym, qty) in prior_quantities {
-        let primary = get_primary(&sym);
-        *merged_prior.entry(primary).or_insert(0.0) += qty;
-    }
-
     let mut all_symbols = std::collections::HashSet::new();
     for sym in merged_positions.keys() { all_symbols.insert(sym.clone()); }
     for sym in merged_trades.keys() { all_symbols.insert(sym.clone()); }
-    for sym in merged_prior.keys() { all_symbols.insert(sym.clone()); }
 
-    // Assemble Portfolio
+    let mut txn_counter = 1;
+
     for symbol in all_symbols {
         let (desc, isin) = if let Some((_, d, i)) = instruments.get(&symbol) {
             (d.clone(), i.clone())
@@ -196,69 +213,144 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<Portfolio, String> {
             (symbol.clone(), "".to_string())
         };
         
-        let pos = merged_positions.get(&symbol).cloned().unwrap_or((0.0, 0.0, 0.0, 0.0));
+        let pos = merged_positions.get(&symbol).cloned().unwrap_or((Decimal::ZERO, Decimal::ZERO, Decimal::ZERO, Decimal::ZERO));
         let mut txs = merged_trades.remove(&symbol).unwrap_or_default();
         
-        // Sort transactions by date (simple string sort for now, might need datetime parsing)
         txs.sort_by(|a, b| a.date.cmp(&b.date));
 
-        // Calculate running balance and invested value
-        let mut current_balance = merged_prior.get(&symbol).cloned().unwrap_or(0.0);
-        
-        let mut period_units = 0.0;
-        let mut period_invested = 0.0;
-        let mut period_realized = 0.0;
-        
-        for tx in txs.iter_mut() {
-            if tx.tx_type == "BUY" {
-                current_balance += tx.units;
-                period_units += tx.units;
-                period_invested += tx.amount;
-            } else if tx.tx_type == "SELL" {
-                current_balance -= tx.units;
-                period_units -= tx.units;
-                period_realized += tx.amount;
+        let mut period_invested_value = Decimal::ZERO;
+        let mut period_realized_value = Decimal::ZERO;
+        let mut tx_qty_diff = Decimal::ZERO;
+        let mut period_buy_units = Decimal::ZERO;
+        let mut period_sell_units = Decimal::ZERO;
+        let mut period_buy_count = 0;
+        let mut period_sell_count = 0;
+
+        for tx in &txs {
+            let tx_date = chrono::DateTime::parse_from_rfc3339(&tx.date).map(|d| d.with_timezone(&Utc)).ok();
+            
+            if tx.tx_type == EquityTransactionType::Buy {
+                tx_qty_diff += tx.units;
+                period_buy_units += tx.units;
+                period_buy_count += 1;
+                period_invested_value += tx.amount;
+            } else {
+                tx_qty_diff -= tx.units;
+                period_sell_units += tx.units;
+                period_sell_count += 1;
+                period_realized_value += tx.amount;
             }
-            tx.balance = Some(current_balance);
+
+            final_transactions.push(EquityTransaction {
+                txn_id: format!("IBKR-{}", txn_counter),
+                order_id: None,
+                trade_id: None,
+                company_name: Some(desc.clone()),
+                symbol: Some(symbol.clone()),
+                transaction_date_time: tx_date,
+                exchange: Some(TransactionsSymbol::Others),
+                isin: if isin.is_empty() { None } else { Some(isin.clone()) },
+                equity_category: Some(EquityCategory::Equity),
+                instrument_type: None,
+                option_type: None,
+                strike_price: None,
+                narration: Some("Trade".to_string()),
+                rate: Some(tx.t_price.abs()),
+                total_charge: Some(tx.comm_fee.abs()),
+                trade_value: Some(tx.amount),
+                r#type: tx.tx_type,
+                share_holder_equity_type: Some(ShareHolderEquityType::CommonStock),
+                units: tx.units,
+                other_charges: None,
+            });
+            txn_counter += 1;
         }
 
         let total_units = pos.0;
         let current_value = pos.1;
+        let opening_balance = total_units - tx_qty_diff;
         let total_cost_basis = pos.2;
         let close_price = pos.3;
 
-        assets.push(Asset {
-            name: desc,
-            folio_number: None,
-            isin: if isin.is_empty() { None } else { Some(isin) },
-            symbol: Some(symbol),
-            category: None,
-            period_units,
-            period_invested_value: period_invested,
-            period_realized_value: period_realized,
-            total_units,
-            total_cost_basis,
-            current_nav: if close_price != 0.0 { Some(close_price) } else { None },
-            current_nav_date: statement_end_date.clone(),
-            current_value: if current_value != 0.0 { Some(current_value) } else { None },
-            transactions: txs,
-        });
+        total_investment_value += total_cost_basis;
+        total_current_value += current_value;
+
+        if total_units > Decimal::ZERO {
+            final_holdings.push(EquityHolding {
+                issuer_name: desc.clone(),
+                isin: isin.clone(),
+                units: total_units,
+                investment_date_time: None,
+                rate: if total_units != Decimal::ZERO { Some(total_cost_basis / total_units) } else { None },
+                last_traded_price: Some(close_price),
+                description: Some(symbol.clone()),
+                xfina: Some(xfina_models::equity::XfinaEquityHolding {
+                    opening_balance: Some(opening_balance),
+                    closing_balance: Some(total_units),
+                    period_invested_value: Some(period_invested_value),
+                    period_realized_value: Some(period_realized_value),
+                    period_buy_units: Some(period_buy_units),
+                    period_sell_units: Some(period_sell_units),
+                    period_buy_count: Some(period_buy_count),
+                    period_sell_count: Some(period_sell_count),
+                }),
+            });
+        }
     }
 
-    let investor_info = InvestorInfo {
-        account_number: Some(account_no),
-        name: investor_name,
+    let holder = EquityHolder {
+        name: if investor_name.is_empty() { "IBKR Investor".to_string() } else { investor_name },
+        dob: None,
+        mobile: None,
+        nominee: None,
+        demat_id: None,
+        landline: None,
+        address: None,
         email: None,
         pan: None,
-        contact: None,
-        address: None,
+        ckyc_compliance: None,
+        xfina: None,
     };
 
-    Ok(Portfolio { 
-        investor_info,
-        statement_start_date,
-        statement_end_date,
+    let profile = EquityProfile {
+        holders: EquityHolders {
+            holder: vec![holder],
+        }
+    };
+
+    let summary = EquitySummary {
+        investment: EquityInvestment {
+            holdings: EquityHoldings {
+                r#type: None,
+                holding: final_holdings,
+            }
+        },
+        investment_value: total_investment_value,
+        current_value: total_current_value,
+        xfina: None,
+    };
+
+    let transactions = EquityTransactions {
+        start_date: statement_start_date,
+        end_date: statement_end_date,
+        transaction: final_transactions,
+        xfina: None,
+    };
+
+    let xfina_ext = XfinaEquityAccount {
+        institution_name: Some("Interactive Brokers".to_string()),
         generated_date,
-        assets 
+        date_only_paths: None,
+    };
+
+    Ok(EquityAccount { 
+        r#type: EquityFiType::Equities,
+        masked_acc_number: account_no,
+        version: 1.1,
+        linked_acc_ref: None,
+        profile: Some(profile),
+        summary: Some(summary),
+        transactions: Some(transactions),
+        xfina: Some(xfina_ext),
     })
 }
