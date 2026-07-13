@@ -98,3 +98,15 @@ pub fn parse_bob_ba(bytes: &[u8], format: Option<String>) -> Result<String, JsVa
         Err(e) => Err(JsValue::from_str(&e)),
     }
 }
+
+use xfina_ba_axis::parse_axis_bank_statement;
+#[wasm_bindgen]
+pub fn parse_axis_ba(bytes: &[u8], filename: Option<String>, format: Option<String>) -> Result<String, JsValue> {
+    match parse_axis_bank_statement(bytes, filename.as_deref()) {
+        Ok(stmt) => {
+            let json = if format.as_deref() == Some("rebit") { stmt.to_rebit_json() } else { stmt.to_xfina_json() };
+            serde_json::to_string(&json).map_err(|e| JsValue::from_str(&format!("JSON serialization error: {}", e)))
+        },
+        Err(e) => Err(JsValue::from_str(&e)),
+    }
+}

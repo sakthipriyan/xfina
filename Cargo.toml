@@ -6,7 +6,7 @@ members = [
     "intl-stocks/ibkr",
     "wasm",
     "credit-cards/hdfc", "credit-cards/icici",
-    "bank-accounts/hdfc", "bank-accounts/icici", "bank-accounts/sbi", "bank-accounts/bob",
+    "bank-accounts/hdfc", "bank-accounts/icici", "bank-accounts/sbi", "bank-accounts/bob", "bank-accounts/axis",
     "cli"
 ]
 
