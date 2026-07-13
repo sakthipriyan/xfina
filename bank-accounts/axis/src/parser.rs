@@ -51,7 +51,12 @@ pub fn parse_axis_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAcc
     let mut name = String::new();
     let mut customer_id = String::new();
     let mut nominee_reg = String::new();
+    let mut mobile = String::new();
+    let mut email = String::new();
+    let mut pan = String::new();
+    let mut is_joint = false;
     let mut address_parts = Vec::new();
+    let mut summary_branch = String::new();
 
     let mut start_date: Option<NaiveDate> = None;
     let mut end_date: Option<NaiveDate> = None;
@@ -89,6 +94,24 @@ pub fn parse_axis_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAcc
             } else if first_col.starts_with("Nominee Registered :-") {
                 if let Some(nom) = first_col.strip_prefix("Nominee Registered :-") {
                     nominee_reg = nom.trim().to_string();
+                }
+            } else if first_col.starts_with("Registered Mobile No :-") {
+                if let Some(mob) = first_col.strip_prefix("Registered Mobile No :-") {
+                    mobile = mob.trim().to_string();
+                }
+            } else if first_col.starts_with("Registered Email ID :-") {
+                if let Some(eml) = first_col.strip_prefix("Registered Email ID :-") {
+                    email = eml.trim().to_string();
+                }
+            } else if first_col.starts_with("PAN :-") {
+                if let Some(p) = first_col.strip_prefix("PAN :-") {
+                    pan = p.trim().to_string();
+                }
+            } else if first_col.starts_with("Joint Holder :-") {
+                if let Some(jt) = first_col.strip_prefix("Joint Holder :-") {
+                    if jt.trim() != "-" {
+                        is_joint = true;
+                    }
                 }
             } else if first_col.starts_with("Statement of Account No") {
                 // Statement of Account No - 914010032444462 for the period (From : 01-07-2026 To : 13-07-2026)
@@ -131,6 +154,10 @@ pub fn parse_axis_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAcc
                 let withdrawal: Decimal = debit_str.parse().unwrap_or(Decimal::from(0));
                 let deposit: Decimal = credit_str.parse().unwrap_or(Decimal::from(0));
                 let balance: Decimal = balance_str.parse().unwrap_or(Decimal::from(0));
+                
+                if row_vec.len() >= 8 && summary_branch.is_empty() {
+                    summary_branch = row_vec[7].clone();
+                }
 
                 let (tx_type, amount) = if deposit > Decimal::from(0) {
                     (TransactionType::Credit, deposit)
@@ -200,6 +227,9 @@ pub fn parse_axis_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAcc
     if !micr_code.is_empty() {
         summary.micr_code = Some(micr_code);
     }
+    if !summary_branch.is_empty() {
+        summary.branch = Some(summary_branch);
+    }
 
     summary.xfina = Some(xfina_sum);
     
@@ -223,6 +253,10 @@ pub fn parse_axis_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAcc
         holder.nominee = Some(HoldingNominee::NotRegistered);
     }
 
+    if !mobile.is_empty() { holder.mobile = Some(mobile); }
+    if !email.is_empty() { holder.email = Some(email); }
+    if !pan.is_empty() { holder.pan = Some(pan); }
+
     let mut x_holder = XfinaHolder::default();
     if !customer_id.is_empty() {
         x_holder.customer_id = Some(customer_id);
@@ -231,7 +265,7 @@ pub fn parse_axis_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAcc
 
     let mut profile = Profile::default();
     profile.holders = Holders {
-        r#type: HoldersType::Single, // Assuming single, since joint wasn't explicit
+        r#type: if is_joint { HoldersType::Joint } else { HoldersType::Single },
         holder: vec![holder],
     };
     
