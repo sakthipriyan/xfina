@@ -30,6 +30,7 @@ By building Xfina in **Rust**, we achieve:
 
 | Crate | Institution | Format | Status | Notes |
 |---|---|---|---|---|
+| `xfina-ba-axis` | Axis Bank | Excel (`.xls`) | **Production Ready** | Full support |
 | `xfina-ba-hdfc` | HDFC Bank | Excel (`.xls`/`.xlsx`) | **Production Ready** | Full support |
 | `xfina-ba-icici` | ICICI Bank | Excel (`.xls`/`.xlsx`) | **Production Ready** | Full support |
 | `xfina-ba-sbi` | State Bank of India | PDF (password protected) | **Production Ready** | Full support |
@@ -132,7 +133,6 @@ Pushed to `main` → GitHub Actions automatically builds WASM + Vue and deploys 
 - [ ] CSV / JSON export in the web app
 - [ ] Complete robust parsing for IBKR using 
 - [ ] CAMS CAS (Mutual Funds)
-- [ ] Add Bank Account Support for Axis Bank
 - [ ] Publish `xfina` to Rust crates.io
 - [ ] Publish JavaScript/TypeScript WASM bindings to npm
 - [ ] Publish Python bindings (`xfina-py`) via `pyo3` to PyPI
