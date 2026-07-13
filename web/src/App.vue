@@ -153,6 +153,31 @@ const onFileSelect = async (event) => {
             ccStatement.value = JSON.parse(jsonString);
         }
         
+        if (bankStatement.value) {
+            if (!bankStatement.value.xfina) bankStatement.value.xfina = {};
+            if (!bankStatement.value.xfina.generatedDate && file.lastModified) {
+                bankStatement.value.xfina.generatedDate = Math.floor(file.lastModified / 1000);
+                bankStatement.value.xfina.generatedDateDerived = true;
+            }
+        } else if (ccStatement.value) {
+            if (!ccStatement.value.xfina) ccStatement.value.xfina = {};
+            if (!ccStatement.value.xfina.generatedDate && file.lastModified) {
+                ccStatement.value.xfina.generatedDate = Math.floor(file.lastModified / 1000);
+                ccStatement.value.xfina.generatedDateDerived = true;
+            }
+        } else if (portfolio.value) {
+            if (!portfolio.value.generated_date && file.lastModified) {
+                portfolio.value.generated_date = Math.floor(file.lastModified / 1000);
+                portfolio.value.generated_date_derived = true;
+            }
+        } else if (equityStatement.value) {
+            if (!equityStatement.value.xfina) equityStatement.value.xfina = {};
+            if (!equityStatement.value.xfina.generatedDate && file.lastModified) {
+                equityStatement.value.xfina.generatedDate = Math.floor(file.lastModified / 1000);
+                equityStatement.value.xfina.generatedDateDerived = true;
+            }
+        }
+
         const end = performance.now();
         parseTime.value = ((end - start) / 1000).toFixed(3);
         console.log(`🚀 Rust WASM Processing Time: ${(end - start).toFixed(2)} ms`);
@@ -337,11 +362,11 @@ const getAssetTransactions = (holding) => {
              <div class="space-y-2" v-if="selectedCategory === 'Bank Accounts'">
                <Label>Bank</Label>
                <div class="flex flex-wrap gap-4">
+                 <Button :variant="selectedSource === 'Axis' ? 'default' : 'outline'" @click="selectedSource = 'Axis'">Axis Bank</Button>
                  <Button :variant="selectedSource === 'BoB' ? 'default' : 'outline'" @click="selectedSource = 'BoB'">Bank of Baroda</Button>
                  <Button :variant="selectedSource === 'HDFC' ? 'default' : 'outline'" @click="selectedSource = 'HDFC'">HDFC Bank</Button>
                  <Button :variant="selectedSource === 'ICICI' ? 'default' : 'outline'" @click="selectedSource = 'ICICI'">ICICI Bank</Button>
                  <Button :variant="selectedSource === 'SBI' ? 'default' : 'outline'" @click="selectedSource = 'SBI'">State Bank of India</Button>
-                 <Button :variant="selectedSource === 'Axis' ? 'default' : 'outline'" @click="selectedSource = 'Axis'">Axis Bank</Button>
                </div>
              </div>
 
@@ -387,7 +412,7 @@ const getAssetTransactions = (holding) => {
           :statementDetails="[
             ...(ccStatement.transactions?.startDate ? [{ label: 'From', value: formatDate(ccStatement.transactions.startDate), derived: ccStatement.transactions?.xfina?.startDateDerived }] : []),
             ...(ccStatement.transactions?.endDate ? [{ label: 'To', value: formatDate(ccStatement.transactions.endDate), derived: ccStatement.transactions?.xfina?.endDateDerived }] : []),
-            ...(ccStatement.xfina?.generatedDate ? [{ label: 'Generated', value: formatDateTime(ccStatement.xfina.generatedDate, 'xfina.generatedDate', ccStatement.xfina?.dateOnlyPaths) }] : []),
+            ...(ccStatement.xfina?.generatedDate ? [{ label: 'Generated', value: formatDateTime(ccStatement.xfina.generatedDate, 'xfina.generatedDate', ccStatement.xfina?.dateOnlyPaths), derived: ccStatement.xfina?.generatedDateDerived }] : []),
             ...(ccStatement.summary?.dueDate ? [{ label: 'Due Date', value: formatDate(ccStatement.summary.dueDate) }] : [])
           ]"
         />
@@ -571,7 +596,7 @@ const getAssetTransactions = (holding) => {
           :statementDetails="[
             ...(portfolio.statement_start_date ? [{ label: 'From', value: formatDate(portfolio.statement_start_date) }] : []),
             ...(portfolio.statement_end_date ? [{ label: 'To', value: formatDate(portfolio.statement_end_date) }] : []),
-            ...(portfolio.generated_date ? [{ label: 'Generated', value: formatDateTime(portfolio.generated_date, 'generated_date', portfolio.date_only_paths) }] : [])
+            ...(portfolio.generated_date ? [{ label: 'Generated', value: formatDateTime(portfolio.generated_date, 'generated_date', portfolio.date_only_paths), derived: portfolio.generated_date_derived }] : [])
           ]"
         />
 
@@ -733,7 +758,7 @@ const getAssetTransactions = (holding) => {
           :statementDetails="[
             ...(bankStatement.transactions?.startDate ? [{ label: 'From', value: formatDate(bankStatement.transactions.startDate) }] : []),
             ...(bankStatement.transactions?.endDate ? [{ label: 'To', value: formatDate(bankStatement.transactions.endDate) }] : []),
-            ...(bankStatement.xfina?.generatedDate ? [{ label: 'Generated', value: formatDateTime(bankStatement.xfina.generatedDate, 'xfina.generatedDate', bankStatement.xfina?.dateOnlyPaths) }] : [])
+            ...(bankStatement.xfina?.generatedDate ? [{ label: 'Generated', value: formatDateTime(bankStatement.xfina.generatedDate, 'xfina.generatedDate', bankStatement.xfina?.dateOnlyPaths), derived: bankStatement.xfina?.generatedDateDerived }] : [])
           ]"
         />
 
