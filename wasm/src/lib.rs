@@ -2,11 +2,11 @@ use wasm_bindgen::prelude::*;
 use xfina_intl_stocks_ibkr::parse_ibkr_csv;
 
 #[wasm_bindgen]
-pub fn parse_ibkr(csv_content: &str) -> Result<String, JsValue> {
+pub fn parse_ibkr(csv_content: &str, format: Option<String>) -> Result<String, JsValue> {
     match parse_ibkr_csv(csv_content) {
-        Ok(portfolio) => {
-            serde_json::to_string(&portfolio)
-                .map_err(|e| JsValue::from_str(&format!("JSON serialization error: {}", e)))
+        Ok(stmt) => {
+            let json = if format.as_deref() == Some("rebit") { stmt.to_rebit_json() } else { stmt.to_xfina_json() };
+            serde_json::to_string(&json).map_err(|e| JsValue::from_str(&format!("JSON serialization error: {}", e)))
         },
         Err(e) => Err(JsValue::from_str(&e)),
     }
