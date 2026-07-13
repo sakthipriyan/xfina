@@ -1610,6 +1610,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "xfina-ba-axis"
+version = "0.1.0"
+dependencies = [
+ "calamine 0.22.1",
+ "chrono",
+ "regex",
+ "rust_decimal",
+ "serde_json",
+ "xfina-models",
+]
+
+[[package]]
 name = "xfina-ba-bob"
 version = "0.1.0"
 dependencies = [
@@ -1701,6 +1713,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "csv",
+ "rust_decimal",
  "xfina-models",
 ]
 
@@ -1732,6 +1745,7 @@ version = "0.1.0"
 dependencies = [
  "serde_json",
  "wasm-bindgen",
+ "xfina-ba-axis",
  "xfina-ba-bob",
  "xfina-ba-hdfc",
  "xfina-ba-icici",

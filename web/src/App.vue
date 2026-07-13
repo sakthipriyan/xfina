@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
-import init, { parse_ibkr, parse_cams, parse_hdfc_cc, parse_icici_cc, parse_hdfc_ba, parse_icici_ba, parse_sbi_ba, parse_bob_ba } from './wasm/xfina_wasm.js';
+import init, { parse_ibkr, parse_cams, parse_hdfc_cc, parse_icici_cc, parse_hdfc_ba, parse_icici_ba, parse_sbi_ba, parse_bob_ba, parse_axis_ba } from './wasm/xfina_wasm.js';
 import { Sun, Moon, Github, HelpCircle, ChevronDown, Loader2 } from 'lucide-vue-next';
 
 // Shadcn components
@@ -38,6 +38,7 @@ const error = ref(null);
 const portfolio = ref(null);
 const ccStatement = ref(null);
 const bankStatement = ref(null);
+const equityStatement = ref(null);
 const isProcessing = ref(false);
 const parseTime = ref(null);
 
@@ -52,7 +53,7 @@ const requiresPassword = computed(() => {
 const getFileFormat = computed(() => {
     if (selectedCategory.value === 'Mutual Funds') return 'PDF';
     if (selectedCategory.value === 'Bank Accounts') {
-        if (selectedSource.value === 'HDFC' || selectedSource.value === 'ICICI' || selectedSource.value === 'BoB') return 'Excel';
+        if (selectedSource.value === 'HDFC' || selectedSource.value === 'ICICI' || selectedSource.value === 'BoB' || selectedSource.value === 'Axis') return 'Excel';
         return 'PDF';
     }
     if (selectedCategory.value === 'Credit Cards') {
@@ -66,7 +67,7 @@ const getFileFormat = computed(() => {
 const getAcceptString = computed(() => {
     if (selectedCategory.value === 'Mutual Funds') return '.pdf';
     if (selectedCategory.value === 'Bank Accounts') {
-        if (selectedSource.value === 'HDFC' || selectedSource.value === 'ICICI' || selectedSource.value === 'BoB') return '.xls,.xlsx';
+        if (selectedSource.value === 'HDFC' || selectedSource.value === 'ICICI' || selectedSource.value === 'BoB' || selectedSource.value === 'Axis') return '.xls,.xlsx';
         return '.pdf';
     }
     if (selectedCategory.value === 'Credit Cards') {
@@ -81,6 +82,7 @@ const setCategory = (cat) => {
     portfolio.value = null;
     ccStatement.value = null;
     bankStatement.value = null;
+    equityStatement.value = null;
     error.value = null;
     if (cat === 'Mutual Funds') selectedSource.value = 'CAMS';
     else if (cat === 'Intl Brokers') selectedSource.value = 'IBKR';
@@ -105,6 +107,7 @@ const onFileSelect = async (event) => {
     portfolio.value = null;
     ccStatement.value = null;
     bankStatement.value = null;
+    equityStatement.value = null;
     isProcessing.value = true;
     parseTime.value = null;
     
@@ -126,12 +129,14 @@ const onFileSelect = async (event) => {
                 jsonString = parse_sbi_ba(uint8Array, password.value ? password.value : null, file.name);
             } else if (selectedSource.value === 'BoB') {
                 jsonString = parse_bob_ba(uint8Array);
+            } else if (selectedSource.value === 'Axis') {
+                jsonString = parse_axis_ba(uint8Array, file.name);
             }
             bankStatement.value = JSON.parse(jsonString);
         } else if (selectedSource.value === 'IBKR') {
             const text = await file.text();
             jsonString = parse_ibkr(text);
-            portfolio.value = JSON.parse(jsonString);
+            equityStatement.value = JSON.parse(jsonString);
         } else if (selectedSource.value === 'CAMS') {
             const arrayBuffer = await file.arrayBuffer();
             const uint8Array = new Uint8Array(arrayBuffer);
@@ -148,6 +153,31 @@ const onFileSelect = async (event) => {
             ccStatement.value = JSON.parse(jsonString);
         }
         
+        if (bankStatement.value) {
+            if (!bankStatement.value.xfina) bankStatement.value.xfina = {};
+            if (!bankStatement.value.xfina.generatedDate && file.lastModified) {
+                bankStatement.value.xfina.generatedDate = Math.floor(file.lastModified / 1000);
+                bankStatement.value.xfina.generatedDateDerived = true;
+            }
+        } else if (ccStatement.value) {
+            if (!ccStatement.value.xfina) ccStatement.value.xfina = {};
+            if (!ccStatement.value.xfina.generatedDate && file.lastModified) {
+                ccStatement.value.xfina.generatedDate = Math.floor(file.lastModified / 1000);
+                ccStatement.value.xfina.generatedDateDerived = true;
+            }
+        } else if (portfolio.value) {
+            if (!portfolio.value.generated_date && file.lastModified) {
+                portfolio.value.generated_date = Math.floor(file.lastModified / 1000);
+                portfolio.value.generated_date_derived = true;
+            }
+        } else if (equityStatement.value) {
+            if (!equityStatement.value.xfina) equityStatement.value.xfina = {};
+            if (!equityStatement.value.xfina.generatedDate && file.lastModified) {
+                equityStatement.value.xfina.generatedDate = Math.floor(file.lastModified / 1000);
+                equityStatement.value.xfina.generatedDateDerived = true;
+            }
+        }
+
         const end = performance.now();
         parseTime.value = ((end - start) / 1000).toFixed(3);
         console.log(`🚀 Rust WASM Processing Time: ${(end - start).toFixed(2)} ms`);
@@ -226,6 +256,15 @@ const hasRewards = (stmt) => {
            s.adjustedLapsed !== 0 || 
            s.closingBalance !== 0 || 
            s.defaultRewards !== 0;
+};
+
+const getAssetTransactions = (holding) => {
+    if (!equityStatement.value?.transactions?.transaction) return [];
+    return equityStatement.value.transactions.transaction.filter(txn => 
+        txn.symbol === holding.description || 
+        txn.symbol === holding.issuerName || 
+        txn.companyName === holding.issuerName
+    );
 };
 </script>
 
@@ -323,6 +362,7 @@ const hasRewards = (stmt) => {
              <div class="space-y-2" v-if="selectedCategory === 'Bank Accounts'">
                <Label>Bank</Label>
                <div class="flex flex-wrap gap-4">
+                 <Button :variant="selectedSource === 'Axis' ? 'default' : 'outline'" @click="selectedSource = 'Axis'">Axis Bank</Button>
                  <Button :variant="selectedSource === 'BoB' ? 'default' : 'outline'" @click="selectedSource = 'BoB'">Bank of Baroda</Button>
                  <Button :variant="selectedSource === 'HDFC' ? 'default' : 'outline'" @click="selectedSource = 'HDFC'">HDFC Bank</Button>
                  <Button :variant="selectedSource === 'ICICI' ? 'default' : 'outline'" @click="selectedSource = 'ICICI'">ICICI Bank</Button>
@@ -372,7 +412,7 @@ const hasRewards = (stmt) => {
           :statementDetails="[
             ...(ccStatement.transactions?.startDate ? [{ label: 'From', value: formatDate(ccStatement.transactions.startDate), derived: ccStatement.transactions?.xfina?.startDateDerived }] : []),
             ...(ccStatement.transactions?.endDate ? [{ label: 'To', value: formatDate(ccStatement.transactions.endDate), derived: ccStatement.transactions?.xfina?.endDateDerived }] : []),
-            ...(ccStatement.xfina?.generatedDate ? [{ label: 'Generated', value: formatDateTime(ccStatement.xfina.generatedDate, 'xfina.generatedDate', ccStatement.xfina?.dateOnlyPaths) }] : []),
+            ...(ccStatement.xfina?.generatedDate ? [{ label: 'Generated', value: formatDateTime(ccStatement.xfina.generatedDate, 'xfina.generatedDate', ccStatement.xfina?.dateOnlyPaths), derived: ccStatement.xfina?.generatedDateDerived }] : []),
             ...(ccStatement.summary?.dueDate ? [{ label: 'Due Date', value: formatDate(ccStatement.summary.dueDate) }] : [])
           ]"
         />
@@ -556,7 +596,7 @@ const hasRewards = (stmt) => {
           :statementDetails="[
             ...(portfolio.statement_start_date ? [{ label: 'From', value: formatDate(portfolio.statement_start_date) }] : []),
             ...(portfolio.statement_end_date ? [{ label: 'To', value: formatDate(portfolio.statement_end_date) }] : []),
-            ...(portfolio.generated_date ? [{ label: 'Generated', value: formatDateTime(portfolio.generated_date, 'generated_date', portfolio.date_only_paths) }] : [])
+            ...(portfolio.generated_date ? [{ label: 'Generated', value: formatDateTime(portfolio.generated_date, 'generated_date', portfolio.date_only_paths), derived: portfolio.generated_date_derived }] : [])
           ]"
         />
 
@@ -577,61 +617,83 @@ const hasRewards = (stmt) => {
                      </div>
                    </div>
                    
-                   <div class="grid grid-cols-1 md:grid-cols-5 lg:grid-cols-6 gap-4">
-                     <!-- Period Activity -->
-                     <div class="flex flex-col md:col-span-2 lg:col-span-2 border-b md:border-b-0 md:border-r pb-4 md:pb-0 pr-0 md:pr-4">
-                       <span class="text-xs text-muted-foreground font-semibold mb-1 uppercase tracking-wider">Period Activity</span>
-                       <div class="grid grid-cols-2 gap-4 mt-1">
-                         <div class="flex flex-col">
-                           <span class="text-muted-foreground text-xs">Invested</span>
-                           <span class="font-medium font-mono">{{ formatCurrency(asset.period_invested_value) }}</span>
+                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                     <!-- Transaction Summary Box -->
+                     <div class="border rounded-md p-3.5 bg-muted/20 flex flex-col space-y-3">
+                       <span class="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+                         Transaction Summary
+                       </span>
+                       <div class="space-y-2 mt-1">
+                         <div class="grid grid-cols-4 gap-2 text-[10px] text-muted-foreground border-b border-border pb-1">
+                           <div class="col-span-2"></div>
+                           <div class="text-right">Units</div>
+                           <div class="text-right">Value</div>
                          </div>
-                         <div class="flex flex-col">
-                           <span class="text-muted-foreground text-xs">Units Added</span>
-                           <span class="font-medium font-mono">{{ formatNumber(asset.period_units) }}</span>
+                         
+                         <div class="grid grid-cols-4 gap-2 items-center pt-1">
+                           <div class="col-span-2 text-[11px] text-muted-foreground">Opening Balance</div>
+                           <div class="font-medium font-mono text-sm text-right">{{ formatNumber(holding.xfina?.openingBalance || 0) }}</div>
+                           <div class="text-right text-muted-foreground text-[10px]">-</div>
                          </div>
-                       </div>
-                       <div v-if="asset.period_realized_value > 0" class="flex flex-col mt-2">
-                         <span class="text-muted-foreground text-xs">Realized / Sold</span>
-                         <span class="font-medium font-mono">{{ formatCurrency(asset.period_realized_value) }}</span>
+                         
+                         <div class="grid grid-cols-4 gap-2 items-center">
+                           <div class="col-span-2 flex items-center gap-2">
+                             <span class="text-[11px] text-muted-foreground">Buys</span>
+                             <span class="text-[9px] bg-primary/10 text-primary px-1 rounded" v-if="holding.xfina?.periodBuyCount">{{ holding.xfina?.periodBuyCount }}</span>
+                           </div>
+                           <div class="font-medium font-mono text-sm text-right text-emerald-500"><span v-if="holding.xfina?.periodBuyUnits">+</span>{{ formatNumber(holding.xfina?.periodBuyUnits || 0) }}</div>
+                           <div class="font-medium font-mono text-sm text-right">{{ formatCurrency(holding.xfina?.periodInvestedValue || 0) }}</div>
+                         </div>
+                         
+                         <div class="grid grid-cols-4 gap-2 items-center">
+                           <div class="col-span-2 flex items-center gap-2">
+                             <span class="text-[11px] text-muted-foreground">Sells</span>
+                             <span class="text-[9px] bg-primary/10 text-primary px-1 rounded" v-if="holding.xfina?.periodSellCount">{{ holding.xfina?.periodSellCount }}</span>
+                           </div>
+                           <div class="font-medium font-mono text-sm text-right text-rose-500"><span v-if="holding.xfina?.periodSellUnits">-</span>{{ formatNumber(holding.xfina?.periodSellUnits || 0) }}</div>
+                           <div class="font-medium font-mono text-sm text-right">{{ formatCurrency(holding.xfina?.periodRealizedValue || 0) }}</div>
+                         </div>
+                         
+                         <div class="grid grid-cols-4 gap-2 items-center pt-2 border-t border-border">
+                           <div class="col-span-2 text-xs font-medium text-foreground">Closing Balance</div>
+                           <div class="font-bold font-mono text-sm text-primary text-right">{{ formatNumber(holding.units) }}</div>
+                           <div class="text-right text-muted-foreground text-[10px]">-</div>
+                         </div>
                        </div>
                      </div>
                      
-                     <!-- Overall Balance -->
-                     <div class="flex flex-col md:col-span-3 lg:col-span-4 pl-0 md:pl-2">
-                       <span class="text-xs text-muted-foreground font-semibold mb-1 uppercase tracking-wider">Overall Balance</span>
-                       <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-1">
-                         <div class="flex flex-col">
-                           <TooltipProvider>
-                             <Tooltip>
-                               <TooltipTrigger class="text-muted-foreground text-xs flex items-center gap-1 cursor-help justify-start">
-                                 Invested
-                                 <HelpCircle class="w-3 h-3 text-muted-foreground/70" />
-                               </TooltipTrigger>
-                               <TooltipContent>
-                                 <p>Total Cost Basis</p>
-                               </TooltipContent>
-                             </Tooltip>
-                           </TooltipProvider>
-                           <span class="font-medium font-mono">{{ formatCurrency(asset.total_cost_basis) }}</span>
+                     <!-- Market Value Box -->
+                     <div class="border rounded-md p-3.5 bg-muted/20 flex flex-col space-y-3">
+                       <span class="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg>
+                         Holding
+                       </span>
+                       <div class="space-y-3 mt-2">
+                         <div class="flex justify-between items-center">
+                           <span class="text-[11px] text-muted-foreground">Cost Value</span>
+                           <span class="font-medium font-mono text-sm">{{ formatCurrency((holding.units || 0) * (holding.rate || 0)) }}</span>
                          </div>
-                         <div class="flex flex-col">
-                           <span class="text-muted-foreground text-xs">Total Units</span>
-                           <span class="font-medium font-mono">{{ formatNumber(asset.total_units) }}</span>
+                         
+                         <div class="flex justify-between items-center">
+                           <span class="text-[11px] text-muted-foreground">Market Value</span>
+                           <span class="font-bold font-mono text-sm text-primary">{{ formatCurrency((holding.units || 0) * (holding.lastTradedPrice || 0)) }}</span>
                          </div>
-                         <div class="flex flex-col">
-                           <span class="text-muted-foreground text-xs">NAV / Price</span>
+                         
+                         <div class="flex justify-between items-center">
+                           <span class="text-[11px] text-muted-foreground">Total Units</span>
+                           <span class="font-medium font-mono text-sm">{{ formatNumber(holding.units) }}</span>
+                         </div>
+                         
+                         <div class="flex justify-between items-end border-t border-border pt-3 mt-1">
                            <div class="flex flex-col">
-                             <span class="font-medium font-mono">{{ formatCurrency(asset.current_nav) }}</span>
-                             <div v-if="asset.current_nav_date" class="flex items-baseline gap-1 mt-0.5">
-                               <span class="text-[10px] text-muted-foreground">on</span>
-                               <span class="font-medium font-mono text-sm">{{ formatDateTime(asset.current_nav_date, 'current_nav_date', portfolio.date_only_paths) }}</span>
+                             <span class="text-[11px] text-foreground font-medium">NAV</span>
+                             <div class="flex items-baseline gap-1 mt-0.5 text-[10px] text-muted-foreground" v-if="equityStatement.xfina?.generatedDate">
+                               <span>as on</span>
+                               <span class="font-medium font-mono">{{ formatDateTime(equityStatement.xfina?.generatedDate, 'xfina.generatedDate', equityStatement.xfina?.dateOnlyPaths) }}</span>
                              </div>
                            </div>
-                         </div>
-                         <div class="flex flex-col">
-                           <span class="text-muted-foreground text-xs">Market Value</span>
-                           <span class="font-medium font-mono text-primary">{{ formatCurrency(asset.current_value) }}</span>
+                           <span class="font-bold font-mono text-sm">{{ formatCurrency(holding.lastTradedPrice) }}</span>
                          </div>
                        </div>
                      </div>
@@ -696,7 +758,7 @@ const hasRewards = (stmt) => {
           :statementDetails="[
             ...(bankStatement.transactions?.startDate ? [{ label: 'From', value: formatDate(bankStatement.transactions.startDate) }] : []),
             ...(bankStatement.transactions?.endDate ? [{ label: 'To', value: formatDate(bankStatement.transactions.endDate) }] : []),
-            ...(bankStatement.xfina?.generatedDate ? [{ label: 'Generated', value: formatDateTime(bankStatement.xfina.generatedDate, 'xfina.generatedDate', bankStatement.xfina?.dateOnlyPaths) }] : [])
+            ...(bankStatement.xfina?.generatedDate ? [{ label: 'Generated', value: formatDateTime(bankStatement.xfina.generatedDate, 'xfina.generatedDate', bankStatement.xfina?.dateOnlyPaths), derived: bankStatement.xfina?.generatedDateDerived }] : [])
           ]"
         />
 
@@ -826,9 +888,198 @@ const hasRewards = (stmt) => {
         </Accordion>
       </div>
       
+      <!-- Equity Statement Results Table -->
+      <div v-if="equityStatement" class="space-y-6">
+        
+        <!-- Standardized Header -->
+        <StatementHeader
+          :customerName="equityStatement.profile?.holders?.holder?.[0]?.name || 'Customer'"
+          :address="equityStatement.profile?.holders?.holder?.[0]?.address || ''"
+          :customerId="equityStatement.profile?.holders?.holder?.[0]?.xfina?.customerId || ''"
+          :institutionName="equityStatement.xfina?.institutionName || 'Broker'"
+          statementType="Equity / Brokerage"
+          :accountNumber="equityStatement.maskedAccNumber || ''"
+          :statementDetails="[
+            ...(equityStatement.transactions?.startDate ? [{ label: 'From', value: formatDate(equityStatement.transactions.startDate) }] : []),
+            ...(equityStatement.transactions?.endDate ? [{ label: 'To', value: formatDate(equityStatement.transactions.endDate) }] : []),
+            ...(equityStatement.xfina?.generatedDate ? [{ label: 'Generated', value: formatDateTime(equityStatement.xfina.generatedDate, 'xfina.generatedDate', equityStatement.xfina?.dateOnlyPaths) }] : [])
+          ]"
+        />
+
+        <div class="grid grid-cols-1 gap-4">
+          <Card class="bg-card text-card-foreground shadow-sm">
+            <CardHeader class="pb-2 border-b mb-3">
+              <CardTitle class="text-sm text-muted-foreground font-semibold uppercase tracking-wider">Portfolio Summary</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div class="flex flex-col">
+                  <span class="text-xs text-muted-foreground mb-1">Total Invested</span>
+                  <span class="font-medium font-mono text-xl">{{ formatCurrency(equityStatement.summary?.investmentValue) }}</span>
+                </div>
+                <div class="flex flex-col">
+                  <span class="text-xs text-muted-foreground mb-1">Current Value</span>
+                  <span class="font-medium font-mono text-xl text-primary">{{ formatCurrency(equityStatement.summary?.currentValue) }}</span>
+                  <div class="flex items-baseline gap-1 mt-1 text-[10px] text-muted-foreground" v-if="equityStatement.xfina?.generatedDate">
+                    <span>as of</span>
+                    <span class="font-medium font-mono">{{ formatDateTime(equityStatement.xfina?.generatedDate, 'xfina.generatedDate', equityStatement.xfina?.dateOnlyPaths) }}</span>
+                  </div>
+                </div>
+                <div class="flex flex-col">
+                  <span class="text-xs text-muted-foreground mb-1">Unrealized P&L</span>
+                  <span class="font-medium font-mono text-xl" 
+                        :class="(equityStatement.summary?.currentValue || 0) >= (equityStatement.summary?.investmentValue || 0) ? 'text-emerald-500' : 'text-rose-500'">
+                    {{ (equityStatement.summary?.currentValue || 0) >= (equityStatement.summary?.investmentValue || 0) ? '+' : '' }}{{ formatCurrency((equityStatement.summary?.currentValue || 0) - (equityStatement.summary?.investmentValue || 0)) }}
+                  </span>
+                </div>
+                <div class="flex flex-col">
+                  <span class="text-xs text-muted-foreground mb-1">Total Assets</span>
+                  <span class="font-medium font-mono text-xl">{{ equityStatement.summary?.investment?.holdings?.holding?.length || 0 }}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Accordion type="multiple" class="w-full space-y-4">
+           <AccordionItem 
+             v-for="(holding, index) in equityStatement.summary?.investment?.holdings?.holding" 
+             :key="index" 
+             :value="`item-${index}`"
+             class="border rounded-lg bg-card text-card-foreground shadow-sm overflow-hidden"
+             :disabled="!getAssetTransactions(holding).length"
+           >
+               <AccordionTrigger class="group hover:no-underline px-4 py-4 data-[state=open]:border-b border-border">
+                 <div class="flex flex-col w-full text-left pr-4 space-y-3">
+                   <div class="flex justify-between items-start w-full">
+                     <div class="flex flex-col items-start">
+                       <span class="font-medium text-foreground text-lg">{{ holding.issuerName || holding.description }}</span>
+                       <span class="text-sm text-muted-foreground mt-0.5">{{ holding.description || holding.issuerName }} <span v-if="holding.isin">| ISIN: {{ holding.isin }}</span></span>
+                     </div>
+                   </div>
+                   
+                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                     <!-- Transaction Summary Box -->
+                     <div class="border rounded-md p-3.5 bg-muted/20 flex flex-col space-y-3">
+                       <span class="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+                         Transaction Summary
+                       </span>
+                       <div class="space-y-2 mt-1">
+                         <div class="grid grid-cols-4 gap-2 text-[10px] text-muted-foreground border-b border-border pb-1">
+                           <div class="col-span-2"></div>
+                           <div class="text-right">Units</div>
+                           <div class="text-right">Value</div>
+                         </div>
+                         
+                         <div class="grid grid-cols-4 gap-2 items-center pt-1">
+                           <div class="col-span-2 text-[11px] text-muted-foreground">Opening Balance</div>
+                           <div class="font-medium font-mono text-sm text-right">{{ formatNumber(holding.xfina?.openingBalance || 0) }}</div>
+                           <div class="text-right text-muted-foreground text-[10px]">-</div>
+                         </div>
+                         
+                         <div class="grid grid-cols-4 gap-2 items-center">
+                           <div class="col-span-2 flex items-center gap-2">
+                             <span class="text-[11px] text-muted-foreground">Buys</span>
+                             <span class="text-[9px] bg-primary/10 text-primary px-1 rounded" v-if="holding.xfina?.periodBuyCount">{{ holding.xfina?.periodBuyCount }}</span>
+                           </div>
+                           <div class="font-medium font-mono text-sm text-right text-emerald-500"><span v-if="holding.xfina?.periodBuyUnits">+</span>{{ formatNumber(holding.xfina?.periodBuyUnits || 0) }}</div>
+                           <div class="font-medium font-mono text-sm text-right">{{ formatCurrency(holding.xfina?.periodInvestedValue || 0) }}</div>
+                         </div>
+                         
+                         <div class="grid grid-cols-4 gap-2 items-center">
+                           <div class="col-span-2 flex items-center gap-2">
+                             <span class="text-[11px] text-muted-foreground">Sells</span>
+                             <span class="text-[9px] bg-primary/10 text-primary px-1 rounded" v-if="holding.xfina?.periodSellCount">{{ holding.xfina?.periodSellCount }}</span>
+                           </div>
+                           <div class="font-medium font-mono text-sm text-right text-rose-500"><span v-if="holding.xfina?.periodSellUnits">-</span>{{ formatNumber(holding.xfina?.periodSellUnits || 0) }}</div>
+                           <div class="font-medium font-mono text-sm text-right">{{ formatCurrency(holding.xfina?.periodRealizedValue || 0) }}</div>
+                         </div>
+                         
+                         <div class="grid grid-cols-4 gap-2 items-center pt-2 border-t border-border">
+                           <div class="col-span-2 text-xs font-medium text-foreground">Closing Balance</div>
+                           <div class="font-bold font-mono text-sm text-primary text-right">{{ formatNumber(holding.units) }}</div>
+                           <div class="text-right text-muted-foreground text-[10px]">-</div>
+                         </div>
+                       </div>
+                     </div>
+                     
+                     <!-- Market Value Box -->
+                     <div class="border rounded-md p-3.5 bg-muted/20 flex flex-col space-y-3">
+                       <span class="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg>
+                         Holding
+                       </span>
+                       <div class="space-y-3 mt-2">
+                         <div class="flex justify-between items-center">
+                           <span class="text-[11px] text-muted-foreground">Cost Value</span>
+                           <span class="font-medium font-mono text-sm">{{ formatCurrency((holding.units || 0) * (holding.rate || 0)) }}</span>
+                         </div>
+                         
+                         <div class="flex justify-between items-center">
+                           <span class="text-[11px] text-muted-foreground">Market Value</span>
+                           <span class="font-bold font-mono text-sm text-primary">{{ formatCurrency((holding.units || 0) * (holding.lastTradedPrice || 0)) }}</span>
+                         </div>
+                         
+                         <div class="flex justify-between items-center">
+                           <span class="text-[11px] text-muted-foreground">Total Units</span>
+                           <span class="font-medium font-mono text-sm">{{ formatNumber(holding.units) }}</span>
+                         </div>
+                         
+                         <div class="flex justify-between items-end border-t border-border pt-3 mt-1">
+                           <div class="flex flex-col">
+                             <span class="text-[11px] text-foreground font-medium">NAV</span>
+                             <div class="flex items-baseline gap-1 mt-0.5 text-[10px] text-muted-foreground" v-if="equityStatement.xfina?.generatedDate">
+                               <span>as on</span>
+                               <span class="font-medium font-mono">{{ formatDateTime(equityStatement.xfina?.generatedDate, 'xfina.generatedDate', equityStatement.xfina?.dateOnlyPaths) }}</span>
+                             </div>
+                           </div>
+                           <span class="font-bold font-mono text-sm">{{ formatCurrency(holding.lastTradedPrice) }}</span>
+                         </div>
+                       </div>
+                     </div>
+                   </div>
+                 </div>
+                 <template #icon>
+                    <div class="flex items-center gap-1.5 text-xs font-mono bg-primary/10 text-primary pl-2.5 pr-2 py-1.5 rounded shrink-0 ml-2 self-start mt-0.5">
+                      <span>{{ getAssetTransactions(holding).length || 0 }} {{ getAssetTransactions(holding).length === 1 ? 'Txn' : 'Txns' }}</span>
+                      <ChevronDown v-if="getAssetTransactions(holding).length" class="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                    </div>
+                  </template>
+               </AccordionTrigger>
+               <AccordionContent>
+                 <div class="rounded-md border border-border mt-2 overflow-x-auto">
+                   <Table>
+                     <TableHeader class="bg-muted/50">
+                       <TableRow class="hover:bg-transparent">
+                         <TableHead class="text-muted-foreground whitespace-nowrap">Date</TableHead>
+                         <TableHead class="text-muted-foreground whitespace-nowrap">Type</TableHead>
+                         <TableHead class="text-right text-muted-foreground whitespace-nowrap">Total Amount</TableHead>
+                         <TableHead class="text-right text-muted-foreground whitespace-nowrap">Units / Qty</TableHead>
+                         <TableHead class="text-right text-muted-foreground whitespace-nowrap">Rate / Price</TableHead>
+                         <TableHead class="text-right text-muted-foreground whitespace-nowrap">Fees</TableHead>
+                       </TableRow>
+                     </TableHeader>
+                     <TableBody>
+                       <TableRow v-for="(txn, idx) in getAssetTransactions(holding)" :key="idx" class="hover:bg-muted/50 transition-colors">
+                         <TableCell class="text-foreground whitespace-nowrap">{{ formatDateTime(txn.transactionDateTime, 'transactions.transaction.transactionDateTime', equityStatement.xfina?.dateOnlyPaths) }}</TableCell>
+                         <TableCell class="text-foreground">
+                            <span class="font-medium text-xs px-2 py-1 rounded" :class="{'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400': txn.type === 'BUY', 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400': txn.type === 'SELL'}">
+                              {{ txn.type || '-' }}
+                            </span>
+                         </TableCell>
+                         <TableCell class="text-right font-mono text-foreground">{{ formatCurrency(txn.tradeValue) }}</TableCell>
+                         <TableCell class="text-right font-mono text-foreground">{{ formatNumber(txn.units) }}</TableCell>
+                         <TableCell class="text-right font-mono text-foreground">{{ formatCurrency(txn.rate) }}</TableCell>
+                         <TableCell class="text-right font-mono text-foreground">{{ formatCurrency(txn.totalCharge) }}</TableCell>
+                       </TableRow>
+                     </TableBody>
+                   </Table>
+                 </div>
+               </AccordionContent>
+             </AccordionItem>
+            </Accordion>
+      </div>
     </div>
   </div>
 </template>
-
-<style>
-</style>
