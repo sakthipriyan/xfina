@@ -72,6 +72,7 @@ const props = defineProps({
             <tr v-for="(detail, idx) in statementDetails" :key="idx" class="border-0">
               <td class="py-1 text-muted-foreground font-medium align-top pr-4">{{ detail.label }}</td>
               <td class="py-1 text-foreground font-medium whitespace-nowrap text-right sm:text-left">
+                {{ detail.value }}
                 <span v-if="detail.derived" title="Estimated date" class="ml-1 text-[10px] font-semibold text-muted-foreground/70 bg-muted/40 rounded px-1 py-0.5 align-middle">est.</span>
               </td>
             </tr>
