@@ -153,6 +153,23 @@ pub struct MutualFundsAccount {
     pub xfina: Option<XfinaMutualFundsAccount>,
 }
 
+impl MutualFundsAccount {
+    pub fn to_xfina_json(&self) -> serde_json::Value {
+        let mut val = serde_json::to_value(self).unwrap();
+        crate::serializer::transform_to_xfina(&mut val);
+        val
+    }
+
+    pub fn to_rebit_json(&self) -> serde_json::Value {
+        let mut val = serde_json::to_value(self).unwrap();
+        let paths = self.xfina.as_ref()
+            .and_then(|x| x.date_only_paths.clone())
+            .unwrap_or_default();
+        crate::serializer::transform_to_rebit(&mut val, &paths, "".to_string());
+        val
+    }
+}
+
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -305,6 +322,7 @@ pub struct MfTransaction {
 #[serde(rename_all = "camelCase")]
 pub struct XfinaMutualFundsAccount {
     pub generated_date: Option<DateTime<Utc>>,
+    pub date_only_paths: Option<Vec<String>>,
 }
 
 #[skip_serializing_none]
