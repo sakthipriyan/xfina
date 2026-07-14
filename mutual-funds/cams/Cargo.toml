@@ -9,3 +9,4 @@ pdf-extract.workspace = true
 regex.workspace = true
 clap = { version = "4.4", features = ["derive"] }
 serde_json.workspace = true
+rust_decimal = "1.42.1"
