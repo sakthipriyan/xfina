@@ -93,11 +93,10 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>) -> Result<MutualFundsAccount
                 
                 let mut isin = None;
                 if let Some(idx) = text.find("ISIN:") {
-                    let parts: Vec<&str> = text[idx..].split_whitespace().collect();
-                    if parts.len() > 1 {
-                        let isin_raw = parts[1];
-                        let isin_clean = isin_raw.split('(').next().unwrap_or(isin_raw).trim();
-                        isin = Some(isin_clean.to_string());
+                    let isin_raw = text[idx + 5..].replace(" ", "");
+                    let isin_clean: String = isin_raw.chars().take_while(|c| c.is_alphanumeric()).take(12).collect();
+                    if !isin_clean.is_empty() {
+                        isin = Some(isin_clean);
                     }
                 }
                 
