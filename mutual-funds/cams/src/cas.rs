@@ -1,20 +1,36 @@
 use crate::layout::Line;
-use xfina_models::{Portfolio, InvestorInfo, Asset, Transaction};
+use xfina_models::{
+    MutualFundsAccount, MfProfile, MfHolders, MfHolder, MfSummary, MfInvestment, MfHoldings,
+    MfHolding, MfTransactions, MfTransaction, MfTransactionType, XfinaMutualFundsAccount,
+    XfinaMutualFundsHolding, XfinaMutualFundsTransaction, parse_indian_date
+};
 use regex::Regex;
+use rust_decimal::Decimal;
+use std::str::FromStr;
 
-pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>) -> Result<Portfolio, String> {
-    let mut portfolio = Portfolio {
-        investor_info: InvestorInfo::default(),
-        statement_start_date: None,
-        statement_end_date: None,
-        generated_date: None,
-        assets: Vec::new(),
+pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>) -> Result<MutualFundsAccount, String> {
+    let mut account = MutualFundsAccount {
+        r#type: "mutualfunds".to_string(),
+        masked_acc_number: String::new(),
+        version: "1.1".to_string(),
+        linked_acc_ref: String::new(),
+        profile: None,
+        summary: None,
+        transactions: None,
+        xfina: Some(XfinaMutualFundsAccount::default()),
     };
 
-    let mut current_asset: Option<Asset> = None;
+    let mut holder = MfHolder::default();
+    let mut holdings = Vec::new();
+    let mut all_transactions: Vec<MfTransaction> = Vec::new();
+
+    let mut current_holding: Option<MfHolding> = None;
     let mut current_folio_number: Option<String> = None;
     let mut in_investor_info = false;
     
+    let mut statement_start_date = None;
+    let mut statement_end_date = None;
+
     let date_re = Regex::new(r"^\d{2}-\S{3}-\d{4}").unwrap();
 
     for lines in pages_lines {
@@ -23,17 +39,17 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>) -> Result<Portfolio, String>
             if text.is_empty() { continue; }
             let lower_text = text.to_lowercase();
 
-            // Statement dates (e.g. 01-Apr-2026 To 20-Jun-2026)
-            if portfolio.statement_start_date.is_none() && lower_text.contains(" to ") {
+            // Statement dates
+            if statement_start_date.is_none() && lower_text.contains(" to ") {
                 let parts: Vec<&str> = lower_text.split(" to ").collect();
                 if parts.len() == 2 && date_re.is_match(parts[0].trim()) && date_re.is_match(parts[1].trim()) {
                     let original_parts: Vec<&str> = text.splitn(2, |c| c == 'T' || c == 't').collect();
                     if original_parts.len() == 2 {
                         let p1 = original_parts[0].trim().to_string();
-                        let p2 = original_parts[1][1..].trim().to_string(); // Skip the 'o ' in 'To '
+                        let p2 = original_parts[1][1..].trim().to_string();
                         if date_re.is_match(&p1) {
-                            portfolio.statement_start_date = Some(xfina_models::parse_indian_date(&p1));
-                            portfolio.statement_end_date = Some(xfina_models::parse_indian_date(&p2));
+                            statement_start_date = Some(parse_indian_date(&p1));
+                            statement_end_date = Some(parse_indian_date(&p2));
                         }
                     }
                 }
@@ -47,32 +63,32 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>) -> Result<Portfolio, String>
                     current_folio_number = Some(folio_str);
                 }
                 
-                if parts.len() > 1 && portfolio.investor_info.pan.is_none() {
+                if parts.len() > 1 && holder.pan.is_none() {
                     let pan_parts: Vec<&str> = parts[1].split_whitespace().collect();
                     if !pan_parts.is_empty() {
-                        portfolio.investor_info.pan = Some(pan_parts[0].to_string());
+                        holder.pan = Some(pan_parts[0].to_string());
                     }
                 }
                 in_investor_info = true;
                 continue;
             } else if in_investor_info {
-                if portfolio.investor_info.name.is_none() && !lower_text.contains("isin:") {
-                    portfolio.investor_info.name = Some(text.to_string());
+                if holder.name.is_empty() && !lower_text.contains("isin:") {
+                    holder.name = text.to_string();
                 }
                 in_investor_info = false;
             }
 
             if let Some(idx) = text.find("Email ID:") {
                 let parts: Vec<&str> = text[idx..].split_whitespace().collect();
-                if parts.len() > 2 && portfolio.investor_info.email.is_none() {
-                    portfolio.investor_info.email = Some(parts[2].to_string());
+                if parts.len() > 2 && holder.email.is_none() {
+                    holder.email = Some(parts[2].to_string());
                 }
             }
 
             // Detect new scheme
             if lower_text.contains("isin:") {
-                if let Some(asset) = current_asset.take() {
-                    portfolio.assets.push(asset);
+                if let Some(h) = current_holding.take() {
+                    holdings.push(h);
                 }
                 
                 let mut isin = None;
@@ -95,51 +111,45 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>) -> Result<Portfolio, String>
                     }
                 }
                 
-                current_asset = Some(Asset {
-                    name: name_clean, 
-                    folio_number: current_folio_number.clone(),
+                let mut xfina = XfinaMutualFundsHolding::default();
+                xfina.scheme_name = Some(name_clean);
+
+                current_holding = Some(MfHolding {
+                    folio_no: current_folio_number.clone(),
                     isin,
-                    symbol: None,
-                    category: None,
-                    period_units: 0.0,
-                    period_invested_value: 0.0,
-                    period_realized_value: 0.0,
-                    total_units: 0.0,
-                    total_cost_basis: 0.0,
-                    current_nav: None,
-                    current_nav_date: None,
-                    current_value: None,
-                    transactions: Vec::new(),
+                    xfina: Some(xfina),
+                    ..Default::default()
                 });
                 continue;
             }
 
-            // Summary values parsing
-            if lower_text.contains("opening unit balance:") {
-                if let Some(_asset) = current_asset.as_mut() {
-                    // Try to parse opening balance just in case
-                }
-            }
             if lower_text.starts_with("closing unit balance:") {
-                if let Some(asset) = current_asset.as_mut() {
+                if let Some(h) = current_holding.as_mut() {
                     let parts: Vec<&str> = text.split_whitespace().collect();
                     for (i, p) in parts.iter().enumerate() {
+                        let parse_dec = |s: &str| -> Decimal {
+                            Decimal::from_str(&s.replace(",", "")).unwrap_or_default()
+                        };
+
                         if p.to_lowercase() == "balance:" && i + 1 < parts.len() {
-                            asset.total_units = parts[i+1].replace(",", "").parse().unwrap_or(0.0);
+                            h.units = parse_dec(parts[i+1]);
+                            h.closing_units = h.units; // Schema duplicate
                         }
                         if p.to_lowercase() == "value:" && i > 0 && parts[i-1].to_lowercase() == "cost" && i + 1 < parts.len() {
-                            asset.total_cost_basis = parts[i+1].replace(",", "").parse().unwrap_or(0.0);
+                            if let Some(x) = h.xfina.as_mut() {
+                                x.total_invested = parse_dec(parts[i+1]);
+                            }
                         }
                         if p.to_lowercase() == "nav" && i + 2 < parts.len() && parts[i+1].to_lowercase() == "on" {
-                            asset.current_nav_date = Some(xfina_models::parse_indian_date(&parts[i+2].replace(":", "")));
+                            if let Some(x) = h.xfina.as_mut() {
+                                let date_str = parse_indian_date(&parts[i+2].replace(":", ""));
+                                x.nav_date = date_str.parse().ok();
+                            }
                         }
                         
-                        // Parse "INR <value>"
                         if p.to_lowercase() == "inr" && i + 1 < parts.len() {
-                            let val = parts[i+1].replace(",", "").parse().unwrap_or(0.0);
+                            let val = parse_dec(parts[i+1]);
                             
-                            // It's NAV if "NAV" appears recently before INR
-                            // Check previous tokens up to 4 words back
                             let mut is_nav = false;
                             let mut is_market = false;
                             for j in 1..=4 {
@@ -156,9 +166,12 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>) -> Result<Portfolio, String>
                             }
                             
                             if is_nav {
-                                asset.current_nav = Some(val);
+                                h.nav = val;
+                                h.rate = val; // We also set rate to nav
                             } else if is_market {
-                                asset.current_value = Some(val);
+                                if let Some(x) = h.xfina.as_mut() {
+                                    x.current_value = val;
+                                }
                             }
                         }
                     }
@@ -166,14 +179,16 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>) -> Result<Portfolio, String>
                 continue;
             }
 
-            if let Some(asset) = current_asset.as_mut() {
+            if let Some(h) = current_holding.as_mut() {
                 if date_re.is_match(text) {
                     if text.contains("*** Stamp Duty ***") || text.contains("*** STT ***") {
                         let parts: Vec<&str> = text.split_whitespace().collect();
                         if let Some(last_val) = parts.last() {
-                            let fee: f64 = last_val.replace(",", "").parse().unwrap_or(0.0);
-                            if let Some(txn) = asset.transactions.last_mut() {
-                                txn.fee = Some(fee.abs());
+                            let fee = Decimal::from_str(&last_val.replace(",", "")).unwrap_or_default().abs();
+                            if let Some(txn) = all_transactions.last_mut() {
+                                if let Some(x) = &mut txn.xfina {
+                                    x.fees = fee;
+                                }
                             }
                         }
                         continue;
@@ -187,21 +202,19 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>) -> Result<Portfolio, String>
                     let date = parts.first().unwrap_or(&"").to_string();
                     let len = parts.len();
                     
-                    let mut amount = 0.0;
-                    let mut units = 0.0;
-                    let mut nav = None;
-                    let mut balance = None;
+                    let mut amount = Decimal::default();
+                    let mut units = Decimal::default();
+                    let mut nav = Decimal::default();
                     let mut raw_desc = String::new();
                     
                     if len >= 5 {
-                        let parse_num = |s: &str| -> f64 {
-                            s.replace(",", "").replace("(", "-").replace(")", "").parse().unwrap_or(0.0)
+                        let parse_dec = |s: &str| -> Decimal {
+                            Decimal::from_str(&s.replace(",", "").replace("(", "-").replace(")", "")).unwrap_or_default()
                         };
                         
-                        balance = Some(parse_num(parts[len - 1]));
-                        nav = parts.get(len - 2).map(|s| parse_num(s));
-                        units = parts.get(len - 3).map(|s| parse_num(s)).unwrap_or(0.0);
-                        amount = parts.get(len - 4).map(|s| parse_num(s)).unwrap_or(0.0);
+                        nav = parse_dec(parts[len - 2]);
+                        units = parse_dec(parts[len - 3]);
+                        amount = parse_dec(parts[len - 4]);
                         
                         raw_desc = parts[1..(len - 4)].join(" ");
                     } else {
@@ -210,32 +223,66 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>) -> Result<Portfolio, String>
                     
                     let desc_lower = raw_desc.to_lowercase();
                     let tx_type = if desc_lower.contains("redemption") || desc_lower.contains("switch out") || desc_lower.contains("sell") {
-                        "SELL".to_string()
+                        MfTransactionType::Sell
                     } else {
-                        "BUY".to_string()
+                        MfTransactionType::Buy
+                    };
+
+                    let date_parsed = parse_indian_date(&date);
+                    
+                    let mut xfina = XfinaMutualFundsTransaction::default();
+                    xfina.units = units;
+
+                    let mut txn = MfTransaction {
+                        isin: h.isin.clone(),
+                        amount,
+                        nav,
+                        r#type: Some(tx_type),
+                        narration: Some(raw_desc),
+                        order_date: date_parsed.parse().ok(),
+                        execution_date: date_parsed.parse().ok(),
+                        xfina: Some(xfina),
+                        ..Default::default()
                     };
                     
-                    asset.transactions.push(Transaction {
-                        date: xfina_models::parse_indian_date(&date),
-                        tx_type,
-                        description: Some(raw_desc),
-                        amount,
-                        units,
-                        nav,
-                        balance,
-                        fee: None,
-                    });
-                } else {
-                    // It could be a continuation of the description for the last transaction
-                    // For now, we skip wrapping text unless needed.
+                    all_transactions.push(txn);
                 }
             }
         }
     }
 
-    if let Some(asset) = current_asset {
-        portfolio.assets.push(asset);
+    if let Some(h) = current_holding {
+        holdings.push(h);
     }
 
-    Ok(portfolio)
+    if !holder.name.is_empty() {
+        account.profile = Some(MfProfile {
+            holders: MfHolders {
+                r#type: None,
+                holder: vec![holder],
+            }
+        });
+    }
+
+    if !holdings.is_empty() {
+        account.summary = Some(MfSummary {
+            investment_value: Decimal::default(),
+            current_value: Decimal::default(),
+            investment: MfInvestment {
+                holdings: MfHoldings {
+                    holding: holdings,
+                }
+            }
+        });
+    }
+
+    if !all_transactions.is_empty() {
+        account.transactions = Some(MfTransactions {
+            start_date: statement_start_date.and_then(|d| d.parse().ok()),
+            end_date: statement_end_date.and_then(|d| d.parse().ok()),
+            transaction: all_transactions,
+        });
+    }
+
+    Ok(account)
 }

@@ -35,7 +35,7 @@ onMounted(() => {
 
 const wasmLoaded = ref(false);
 const error = ref(null);
-const portfolio = ref(null);
+const mfStatement = ref(null);
 const ccStatement = ref(null);
 const bankStatement = ref(null);
 const equityStatement = ref(null);
@@ -79,7 +79,7 @@ const getAcceptString = computed(() => {
 
 const setCategory = (cat) => {
     selectedCategory.value = cat;
-    portfolio.value = null;
+    mfStatement.value = null;
     ccStatement.value = null;
     bankStatement.value = null;
     equityStatement.value = null;
@@ -104,7 +104,7 @@ const onFileSelect = async (event) => {
     if (!file) return;
 
     error.value = null;
-    portfolio.value = null;
+    mfStatement.value = null;
     ccStatement.value = null;
     bankStatement.value = null;
     equityStatement.value = null;
@@ -141,7 +141,7 @@ const onFileSelect = async (event) => {
             const arrayBuffer = await file.arrayBuffer();
             const uint8Array = new Uint8Array(arrayBuffer);
             jsonString = parse_cams(uint8Array, password.value ? password.value : null);
-            portfolio.value = JSON.parse(jsonString);
+            mfStatement.value = JSON.parse(jsonString);
         } else if (selectedSource.value === 'HDFC') {
             const text = await file.text();
             jsonString = parse_hdfc_cc(text, file.name);
@@ -165,10 +165,10 @@ const onFileSelect = async (event) => {
                 ccStatement.value.xfina.generatedDate = Math.floor(file.lastModified / 1000);
                 ccStatement.value.xfina.generatedDateDerived = true;
             }
-        } else if (portfolio.value) {
-            if (!portfolio.value.generated_date && file.lastModified) {
-                portfolio.value.generated_date = Math.floor(file.lastModified / 1000);
-                portfolio.value.generated_date_derived = true;
+        } else if (mfStatement.value) {
+            if (!mfStatement.value.generated_date && file.lastModified) {
+                mfStatement.value.generated_date = Math.floor(file.lastModified / 1000);
+                mfStatement.value.generated_date_derived = true;
             }
         } else if (equityStatement.value) {
             if (!equityStatement.value.xfina) equityStatement.value.xfina = {};
@@ -282,42 +282,60 @@ const getAssetTransactions = (holding) => {
     });
 };
 
-const getCamsAssetSummary = (asset) => {
-    let periodBuyUnits = 0;
-    let periodBuyCount = 0;
-    let periodSellUnits = 0;
-    let periodSellCount = 0;
+const camsGroupedAssets = computed(() => {
+    if (!mfStatement.value?.summary?.investment?.holdings?.holding) return [];
     
-    if (asset.transactions) {
-        for (const txn of asset.transactions) {
-            if (txn.units > 0) {
-                periodBuyUnits += txn.units;
-                periodBuyCount++;
-            } else if (txn.units < 0) {
-                periodSellUnits += Math.abs(txn.units);
-                periodSellCount++;
-            }
+    const txnsByIsin = {};
+    if (mfStatement.value.transactions?.transaction) {
+        for (const txn of mfStatement.value.transactions.transaction) {
+            if (!txn.isin) continue;
+            if (!txnsByIsin[txn.isin]) txnsByIsin[txn.isin] = [];
+            txnsByIsin[txn.isin].push(txn);
         }
     }
-    
-    return {
-        openingBalance: asset.total_units - asset.period_units,
-        periodBuyUnits,
-        periodBuyCount,
-        periodSellUnits,
-        periodSellCount,
-        closingBalance: asset.total_units,
-        nav: asset.current_nav,
-        navDate: asset.current_nav_date,
-        marketValue: asset.current_value || 0,
-        totalInvested: asset.total_cost_basis || 0,
-        unrealizedPl: (asset.current_value || 0) - (asset.total_cost_basis || 0)
-    };
-};
 
-const camsSummaries = computed(() => {
-    if (!portfolio.value?.assets) return [];
-    return portfolio.value.assets.map(asset => getCamsAssetSummary(asset));
+    return mfStatement.value.summary.investment.holdings.holding.map(h => {
+        const txns = txnsByIsin[h.isin] || [];
+        
+        let periodBuyUnits = 0;
+        let periodBuyCount = 0;
+        let periodSellUnits = 0;
+        let periodSellCount = 0;
+        
+        for (const txn of txns) {
+            const units = txn.xfina?.units || 0;
+            if (txn.type === 'BUY' && units > 0) {
+                periodBuyUnits += units;
+                periodBuyCount++;
+            } else if (txn.type === 'SELL' && units > 0) {
+                periodSellUnits += units;
+                periodSellCount++;
+            } else if (units > 0) {
+                 periodBuyUnits += units;
+                 periodBuyCount++;
+            }
+        }
+        
+        return {
+            isin: h.isin,
+            name: h.xfina?.schemeName || 'Unknown Scheme',
+            folioNo: h.folioNo,
+            transactions: txns,
+            
+            periodBuyUnits,
+            periodBuyCount,
+            periodSellUnits,
+            periodSellCount,
+            closingBalance: h.units || 0,
+            openingBalance: (h.units || 0) - periodBuyUnits + periodSellUnits,
+            
+            nav: h.nav || h.rate || 0,
+            navDate: h.xfina?.navDate,
+            marketValue: h.xfina?.currentValue || 0,
+            totalInvested: h.xfina?.totalInvested || 0,
+            unrealizedPl: (h.xfina?.currentValue || 0) - (h.xfina?.totalInvested || 0)
+        };
+    });
 });
 </script>
 
@@ -637,25 +655,25 @@ const camsSummaries = computed(() => {
       </div>
 
       <!-- Results Table -->
-      <div v-if="portfolio" class="space-y-6">
+      <div v-if="mfStatement" class="space-y-6">
         
         <!-- Standardized Header -->
         <StatementHeader 
-          v-if="portfolio.investor_info"
-          :customerName="portfolio.investor_info.name || 'Investor'"
+          v-if="mfStatement.profile?.holders?.holder?.length"
+          :customerName="mfStatement.profile.holders.holder[0].name || 'Investor'"
           :institutionName="selectedSource"
           statementType="Mutual Funds"
-          :accountNumber="portfolio.investor_info.account_number || ''"
+          :accountNumber="mfStatement.profile.holders.holder[0].pan || ''"
           :statementDetails="[
-            ...(portfolio.statement_start_date ? [{ label: 'From', value: formatDate(portfolio.statement_start_date) }] : []),
-            ...(portfolio.statement_end_date ? [{ label: 'To', value: formatDate(portfolio.statement_end_date) }] : []),
-            ...(portfolio.generated_date ? [{ label: 'Generated', value: formatDateTime(portfolio.generated_date, 'generated_date', portfolio.date_only_paths), derived: portfolio.generated_date_derived }] : [])
+            ...(mfStatement.transactions?.startDate ? [{ label: 'From', value: formatDate(mfStatement.transactions.startDate) }] : []),
+            ...(mfStatement.transactions?.endDate ? [{ label: 'To', value: formatDate(mfStatement.transactions.endDate) }] : []),
+            ...(mfStatement.xfina?.generatedDate ? [{ label: 'Generated', value: formatDateTime(mfStatement.xfina.generatedDate, 'xfina.generatedDate', mfStatement.xfina?.dateOnlyPaths), derived: mfStatement.xfina?.generatedDateDerived }] : [])
           ]"
         />
 
         <Accordion type="multiple" class="w-full space-y-4">
            <AccordionItem 
-             v-for="(asset, index) in portfolio.assets" 
+             v-for="(asset, index) in camsGroupedAssets" 
              :key="index" 
              :value="`item-${index}`"
              class="border rounded-lg bg-card text-card-foreground shadow-sm overflow-hidden"
@@ -680,57 +698,57 @@ const camsSummaries = computed(() => {
                      <div class="flex items-center justify-between text-xs bg-muted/20 border border-border rounded-md px-3.5 py-2.5 gap-3 flex-1 overflow-x-auto">
                        <div class="flex flex-col items-end shrink-0">
                          <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Opening</span>
-                         <span class="font-mono font-bold text-foreground text-sm text-right">{{ formatNumber(camsSummaries[index]?.openingBalance || 0) }}</span>
+                         <span class="font-mono font-bold text-foreground text-sm text-right">{{ formatNumber(asset.openingBalance || 0) }}</span>
                        </div>
                        <div class="w-px h-8 bg-border/60"></div>
                        <div class="flex flex-col items-end shrink-0">
                          <div class="flex items-center gap-1.5 mb-0.5">
-                           <span v-if="camsSummaries[index]?.periodBuyCount" class="text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded font-mono border border-border/50">{{ camsSummaries[index]?.periodBuyCount }}</span>
+                           <span v-if="asset.periodBuyCount" class="text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded font-mono border border-border/50">{{ asset.periodBuyCount }}</span>
                            <span class="text-[10px] text-muted-foreground uppercase tracking-wider">Buys</span>
                          </div>
-                         <span class="font-mono font-bold text-sm text-right" :class="camsSummaries[index]?.periodBuyUnits ? 'text-emerald-500' : 'text-foreground'"><span v-if="camsSummaries[index]?.periodBuyUnits">+ </span>{{ formatNumber(camsSummaries[index]?.periodBuyUnits || 0) }}</span>
+                         <span class="font-mono font-bold text-sm text-right" :class="asset.periodBuyUnits ? 'text-emerald-500' : 'text-foreground'"><span v-if="asset.periodBuyUnits">+ </span>{{ formatNumber(asset.periodBuyUnits || 0) }}</span>
                        </div>
                        <div class="w-px h-8 bg-border/60"></div>
                        <div class="flex flex-col items-end shrink-0">
                          <div class="flex items-center gap-1.5 mb-0.5">
-                           <span v-if="camsSummaries[index]?.periodSellCount" class="text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded font-mono border border-border/50">{{ camsSummaries[index]?.periodSellCount }}</span>
+                           <span v-if="asset.periodSellCount" class="text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded font-mono border border-border/50">{{ asset.periodSellCount }}</span>
                            <span class="text-[10px] text-muted-foreground uppercase tracking-wider">Sells</span>
                          </div>
-                         <span class="font-mono font-bold text-foreground text-sm text-right"><span v-if="camsSummaries[index]?.periodSellUnits">- </span>{{ formatNumber(camsSummaries[index]?.periodSellUnits || 0) }}</span>
+                         <span class="font-mono font-bold text-foreground text-sm text-right"><span v-if="asset.periodSellUnits">- </span>{{ formatNumber(asset.periodSellUnits || 0) }}</span>
                        </div>
                        <div class="w-px h-8 bg-border/60"></div>
                        <div class="flex flex-col items-end shrink-0">
                          <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Closing</span>
-                         <span class="font-mono font-bold text-primary text-sm text-right">{{ formatNumber(camsSummaries[index]?.closingBalance || 0) }}</span>
+                         <span class="font-mono font-bold text-primary text-sm text-right">{{ formatNumber(asset.closingBalance || 0) }}</span>
                        </div>
                        <div class="w-px h-8 bg-border/60"></div>
                        <div class="flex flex-col items-end shrink-0">
                          <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">NAV</span>
-                         <span class="font-mono font-bold text-foreground text-sm text-right">{{ formatCurrency(camsSummaries[index]?.nav) }}</span>
+                         <span class="font-mono font-bold text-foreground text-sm text-right">{{ formatCurrency(asset.nav) }}</span>
                        </div>
-                       <div class="w-px h-8 bg-border/60" v-if="camsSummaries[index]?.navDate"></div>
-                       <div class="flex flex-col items-end shrink-0" v-if="camsSummaries[index]?.navDate">
+                       <div class="w-px h-8 bg-border/60" v-if="asset.navDate"></div>
+                       <div class="flex flex-col items-end shrink-0" v-if="asset.navDate">
                          <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">NAV Date</span>
-                         <span class="font-mono font-medium text-foreground text-sm text-right">{{ formatDate(camsSummaries[index]?.navDate) }}</span>
+                         <span class="font-mono font-medium text-foreground text-sm text-right">{{ formatDate(asset.navDate) }}</span>
                        </div>
                      </div>
                      
                      <div class="flex items-center text-right bg-muted/20 border border-border rounded-md px-3.5 py-2.5 shrink-0 gap-3">
                        <div class="flex flex-col items-end w-[130px] shrink-0">
                          <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Total Invested</span>
-                         <span class="text-sm font-medium font-mono text-foreground">{{ formatCurrency(camsSummaries[index]?.totalInvested) }}</span>
+                         <span class="text-sm font-medium font-mono text-foreground">{{ formatCurrency(asset.totalInvested) }}</span>
                        </div>
                        <div class="w-px h-8 bg-border/60"></div>
                        <div class="flex flex-col items-end w-[130px] shrink-0">
                          <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Market Value</span>
-                         <span class="text-sm font-bold font-mono text-primary">{{ formatCurrency(camsSummaries[index]?.marketValue) }}</span>
+                         <span class="text-sm font-bold font-mono text-primary">{{ formatCurrency(asset.marketValue) }}</span>
                        </div>
                        <div class="w-px h-8 bg-border/60"></div>
                        <div class="flex flex-col items-end w-[130px] shrink-0">
                          <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Unrealized P&L</span>
                          <span class="font-mono font-bold text-sm" 
-                               :class="camsSummaries[index]?.unrealizedPl >= 0 ? 'text-emerald-500' : 'text-rose-500'">
-                           {{ camsSummaries[index]?.unrealizedPl >= 0 ? '+ ' : '' }}{{ formatCurrency(camsSummaries[index]?.unrealizedPl) }}
+                               :class="asset.unrealizedPl >= 0 ? 'text-emerald-500' : 'text-rose-500'">
+                           {{ asset.unrealizedPl >= 0 ? '+ ' : '' }}{{ formatCurrency(asset.unrealizedPl) }}
                          </span>
                        </div>
                      </div>
@@ -757,18 +775,18 @@ const camsSummaries = computed(() => {
                      </TableHeader>
                      <TableBody>
                        <TableRow v-for="(txn, idx) in asset.transactions" :key="idx" class="hover:bg-muted/50 transition-colors">
-                         <TableCell class="text-foreground whitespace-nowrap">{{ formatDateTime(txn.date, 'transactions.date', portfolio.date_only_paths) }}</TableCell>
+                         <TableCell class="text-foreground whitespace-nowrap">{{ formatDateTime(txn.orderDate, 'transactions.transaction.orderDate', mfStatement.xfina?.dateOnlyPaths) }}</TableCell>
                          <TableCell class="text-foreground">
-                            <span :class="{'text-emerald-500': txn.tx_type === 'BUY', 'text-rose-500': txn.tx_type === 'SELL'}">
-                              {{ txn.tx_type || '-' }}
+                            <span :class="{'text-emerald-500': txn.type === 'BUY', 'text-rose-500': txn.type === 'SELL'}">
+                              {{ txn.type || '-' }}
                             </span>
                          </TableCell>
-                         <TableCell class="text-foreground text-xs">{{ txn.description || '-' }}</TableCell>
+                         <TableCell class="text-foreground text-xs">{{ txn.narration || '-' }}</TableCell>
                          <TableCell class="text-right font-mono text-foreground">{{ formatCurrency(txn.amount) }}</TableCell>
-                         <TableCell class="text-right font-mono text-foreground">{{ formatNumber(txn.units) }}</TableCell>
+                         <TableCell class="text-right font-mono text-foreground">{{ formatNumber(txn.xfina?.units) }}</TableCell>
                          <TableCell class="text-right font-mono text-foreground">{{ formatCurrency(txn.nav) }}</TableCell>
-                         <TableCell class="text-right font-mono text-foreground">{{ txn.fee ? formatCurrency(txn.fee) : '-' }}</TableCell>
-                         <TableCell class="text-right font-mono text-foreground">{{ formatNumber(txn.balance) }}</TableCell>
+                         <TableCell class="text-right font-mono text-foreground">{{ txn.xfina?.fees ? formatCurrency(txn.xfina.fees) : '-' }}</TableCell>
+                         <TableCell class="text-right font-mono text-foreground">-</TableCell>
                        </TableRow>
                      </TableBody>
                    </Table>

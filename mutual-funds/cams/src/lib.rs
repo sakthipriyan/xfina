@@ -2,9 +2,9 @@ pub mod parser;
 pub mod layout;
 pub mod cas;
 
-use xfina_models::{Portfolio, InvestorInfo, Asset};
+use xfina_models::MutualFundsAccount;
 
-pub fn parse_cams_pdf(bytes: &[u8], password: Option<&str>) -> Result<Portfolio, String> {
+pub fn parse_cams_pdf(bytes: &[u8], password: Option<&str>) -> Result<MutualFundsAccount, String> {
     let pages = parser::extract_spatial_pages(bytes, password)?;
     
     let mut all_pages_lines = Vec::new();
