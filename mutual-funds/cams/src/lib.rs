@@ -4,7 +4,7 @@ pub mod cas;
 
 use xfina_models::MutualFundsAccount;
 
-pub fn parse_cams_pdf(bytes: &[u8], password: Option<&str>) -> Result<MutualFundsAccount, String> {
+pub fn parse_cams_pdf(bytes: &[u8], password: Option<&str>, filename: Option<&str>) -> Result<MutualFundsAccount, String> {
     let pages = parser::extract_spatial_pages(bytes, password)?;
     
     let mut all_pages_lines = Vec::new();
@@ -13,5 +13,5 @@ pub fn parse_cams_pdf(bytes: &[u8], password: Option<&str>) -> Result<MutualFund
         all_pages_lines.push(lines);
     }
 
-    cas::parse_cas_lines(all_pages_lines)
+    cas::parse_cas_lines(all_pages_lines, filename)
 }

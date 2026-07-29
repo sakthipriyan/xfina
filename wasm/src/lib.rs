@@ -15,10 +15,11 @@ pub fn parse_ibkr(csv_content: &str, format: Option<String>) -> Result<String, J
 use xfina_mf_cams::parse_cams_pdf;
 
 #[wasm_bindgen]
-pub fn parse_cams(bytes: &[u8], password: Option<String>) -> Result<String, JsValue> {
-    match parse_cams_pdf(bytes, password.as_deref()) {
+pub fn parse_cams(bytes: &[u8], password: Option<String>, format: Option<String>, filename: Option<String>) -> Result<String, JsValue> {
+    match parse_cams_pdf(bytes, password.as_deref(), filename.as_deref()) {
         Ok(portfolio) => {
-            serde_json::to_string(&portfolio)
+            let json = if format.as_deref() == Some("rebit") { portfolio.to_rebit_json() } else { portfolio.to_xfina_json() };
+            serde_json::to_string(&json)
                 .map_err(|e| JsValue::from_str(&format!("JSON serialization error: {}", e)))
         },
         Err(e) => Err(JsValue::from_str(&e)),
