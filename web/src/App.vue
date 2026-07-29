@@ -140,7 +140,7 @@ const onFileSelect = async (event) => {
         } else if (selectedSource.value === 'CAMS') {
             const arrayBuffer = await file.arrayBuffer();
             const uint8Array = new Uint8Array(arrayBuffer);
-            jsonString = parse_cams(uint8Array, password.value ? password.value : null);
+            jsonString = parse_cams(uint8Array, password.value ? password.value : null, undefined, file.name);
             mfStatement.value = JSON.parse(jsonString);
         } else if (selectedSource.value === 'HDFC') {
             const text = await file.text();
@@ -676,47 +676,63 @@ const camsGroupedAssets = computed(() => {
              v-for="(asset, index) in camsGroupedAssets" 
              :key="index" 
              :value="`item-${index}`"
-             class="border rounded-lg bg-card text-card-foreground shadow-sm overflow-hidden"
+             class="border rounded-lg bg-card text-card-foreground shadow-sm overflow-hidden group/item"
              :disabled="!asset.transactions?.length"
            >
-               <AccordionTrigger class="group hover:no-underline px-4 py-4 data-[state=open]:border-b border-border">
-                 <div class="flex flex-col items-start w-full pr-0 gap-3">
+               <div class="px-4 py-4 flex flex-col items-start w-full gap-3 border-b border-transparent transition-colors group-data-[state=open]/item:border-border group-data-[state=open]/item:border-b">
+                 <div class="flex flex-col items-start w-full gap-3">
                    <!-- Top Row: Chevron, Name, Tags, Txn Pill -->
-                   <div class="flex items-center gap-2.5 flex-wrap w-full">
-                     <span class="text-xs font-medium font-mono bg-muted/30 border border-primary/20 rounded px-2 py-0.5 text-primary shadow-sm" v-if="asset.isin">{{ asset.isin }}</span>
-                     <span class="font-medium text-foreground text-lg">{{ asset.name }}</span>
-                     <span class="text-xs font-medium font-mono bg-muted/30 border border-primary/20 rounded px-2 py-0.5 text-primary shadow-sm" v-if="asset.symbol">{{ asset.symbol }}</span>
+                   <div class="grid grid-cols-[auto_1fr_auto] items-start gap-4 w-full">
+                     <span class="text-xs font-medium font-mono bg-muted/30 border border-primary/20 rounded px-2 py-0.5 text-primary shadow-sm shrink-0" v-if="asset.isin">{{ asset.isin }}</span>
                      
-                     <div class="flex items-center gap-1.5 text-xs font-mono bg-primary/10 text-primary pl-2.5 pr-2 py-1.5 rounded ml-auto shrink-0">
+                     <div class="flex flex-wrap items-center gap-2 min-w-0">
+                       <span class="font-medium text-foreground text-left text-base lg:text-lg leading-tight break-words">{{ asset.name }}</span>
+                       <span class="text-xs font-medium font-mono bg-muted/30 border border-primary/20 rounded px-2 py-0.5 text-primary shadow-sm shrink-0" v-if="asset.symbol">{{ asset.symbol }}</span>
+                     </div>
+                     
+                     <AccordionTrigger class="py-1.5 flex-none font-mono text-xs font-normal hover:no-underline justify-end gap-1.5 bg-primary/10 text-primary hover:bg-primary/20 transition-colors pl-2.5 pr-2 rounded shrink-0 group w-auto" :disabled="!asset.transactions?.length">
                        <span>{{ asset.transactions?.length || 0 }} {{ asset.transactions?.length === 1 ? 'Txn' : 'Txns' }}</span>
                        <ChevronDown v-if="asset.transactions?.length" class="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                     </div>
+                       <template #icon><span class="hidden"></span></template>
+                     </AccordionTrigger>
                    </div>
                    
                    <!-- 2-Column Blocks -->
                    <div class="flex flex-col lg:flex-row gap-3 w-full">
-                     <div class="flex items-center justify-between text-xs bg-muted/20 border border-border rounded-md px-3.5 py-2.5 gap-3 flex-1 overflow-x-auto">
-                       <div class="flex flex-col items-end shrink-0">
-                         <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Opening</span>
-                         <span class="font-mono font-bold text-foreground text-sm text-right">{{ formatNumber(asset.openingBalance || 0) }}</span>
-                       </div>
-                       <div class="w-px h-8 bg-border/60"></div>
-                       <div class="flex flex-col items-end shrink-0">
-                         <div class="flex items-center gap-1.5 mb-0.5">
-                           <span v-if="asset.periodBuyCount" class="text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded font-mono border border-border/50">{{ asset.periodBuyCount }}</span>
-                           <span class="text-[10px] text-muted-foreground uppercase tracking-wider">Buys</span>
+                     <!-- Box 1: Opening | Buys | Sells -->
+                     <div v-if="asset.openingBalance !== asset.closingBalance || asset.periodBuyUnits || asset.periodBuyCount || asset.periodSellUnits || asset.periodSellCount" 
+                          class="flex items-center justify-between text-xs bg-muted/20 border border-border rounded-md px-3.5 py-2.5 gap-3 overflow-x-auto [&>.w-px:last-child]:hidden">
+                       <template v-if="asset.openingBalance !== asset.closingBalance">
+                         <div class="flex flex-col items-end shrink-0">
+                           <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Opening</span>
+                           <span class="font-mono font-bold text-foreground text-sm text-right">{{ formatNumber(asset.openingBalance || 0) }}</span>
                          </div>
-                         <span class="font-mono font-bold text-sm text-right" :class="asset.periodBuyUnits ? 'text-emerald-500' : 'text-foreground'"><span v-if="asset.periodBuyUnits">+ </span>{{ formatNumber(asset.periodBuyUnits || 0) }}</span>
-                       </div>
-                       <div class="w-px h-8 bg-border/60"></div>
-                       <div class="flex flex-col items-end shrink-0">
-                         <div class="flex items-center gap-1.5 mb-0.5">
-                           <span v-if="asset.periodSellCount" class="text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded font-mono border border-border/50">{{ asset.periodSellCount }}</span>
-                           <span class="text-[10px] text-muted-foreground uppercase tracking-wider">Sells</span>
+                         <div class="w-px h-8 bg-border/60"></div>
+                       </template>
+                       <template v-if="asset.periodBuyUnits || asset.periodBuyCount">
+                         <div class="flex flex-col items-end shrink-0">
+                           <div class="flex items-center gap-1.5 mb-0.5">
+                             <span v-if="asset.periodBuyCount" class="text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded font-mono border border-border/50">{{ asset.periodBuyCount }}</span>
+                             <span class="text-[10px] text-muted-foreground uppercase tracking-wider">Buys</span>
+                           </div>
+                           <span class="font-mono font-bold text-sm text-right" :class="asset.periodBuyUnits ? 'text-emerald-500' : 'text-foreground'"><span v-if="asset.periodBuyUnits">+ </span>{{ formatNumber(asset.periodBuyUnits || 0) }}</span>
                          </div>
-                         <span class="font-mono font-bold text-foreground text-sm text-right"><span v-if="asset.periodSellUnits">- </span>{{ formatNumber(asset.periodSellUnits || 0) }}</span>
-                       </div>
-                       <div class="w-px h-8 bg-border/60"></div>
+                         <div class="w-px h-8 bg-border/60"></div>
+                       </template>
+                       <template v-if="asset.periodSellUnits || asset.periodSellCount">
+                         <div class="flex flex-col items-end shrink-0">
+                           <div class="flex items-center gap-1.5 mb-0.5">
+                             <span v-if="asset.periodSellCount" class="text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded font-mono border border-border/50">{{ asset.periodSellCount }}</span>
+                             <span class="text-[10px] text-muted-foreground uppercase tracking-wider">Sells</span>
+                           </div>
+                           <span class="font-mono font-bold text-foreground text-sm text-right"><span v-if="asset.periodSellUnits">- </span>{{ formatNumber(asset.periodSellUnits || 0) }}</span>
+                         </div>
+                         <div class="w-px h-8 bg-border/60"></div>
+                       </template>
+                     </div>
+                     
+                     <!-- Box 2: Closing | NAV | NAV Date -->
+                     <div class="flex items-center justify-between text-xs bg-muted/20 border border-border rounded-md px-3.5 py-2.5 gap-3 flex-1 overflow-x-auto [&>.w-px:last-child]:hidden">
                        <div class="flex flex-col items-end shrink-0">
                          <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Closing</span>
                          <span class="font-mono font-bold text-primary text-sm text-right">{{ formatNumber(asset.closingBalance || 0) }}</span>
@@ -755,9 +771,7 @@ const camsGroupedAssets = computed(() => {
                    </div>
                  </div>
                  
-                 <!-- Empty slot to prevent Shadcn from rendering a right-aligned icon -->
-                 <template #icon><div></div></template>
-               </AccordionTrigger>
+               </div>
                <AccordionContent>
                  <div class="rounded-md border border-border mt-2 overflow-x-auto">
                    <Table>
@@ -775,7 +789,7 @@ const camsGroupedAssets = computed(() => {
                      </TableHeader>
                      <TableBody>
                        <TableRow v-for="(txn, idx) in asset.transactions" :key="idx" class="hover:bg-muted/50 transition-colors">
-                         <TableCell class="text-foreground whitespace-nowrap">{{ formatDateTime(txn.orderDate, 'transactions.transaction.orderDate', mfStatement.xfina?.dateOnlyPaths) }}</TableCell>
+                         <TableCell class="text-foreground whitespace-nowrap">{{ formatDate(txn.orderDate) }}</TableCell>
                          <TableCell class="text-foreground">
                             <span :class="{'text-emerald-500': txn.type === 'BUY', 'text-rose-500': txn.type === 'SELL'}">
                               {{ txn.type || '-' }}
@@ -786,7 +800,7 @@ const camsGroupedAssets = computed(() => {
                          <TableCell class="text-right font-mono text-foreground">{{ formatNumber(txn.xfina?.units) }}</TableCell>
                          <TableCell class="text-right font-mono text-foreground">{{ formatCurrency(txn.nav) }}</TableCell>
                          <TableCell class="text-right font-mono text-foreground">{{ txn.xfina?.fees ? formatCurrency(txn.xfina.fees) : '-' }}</TableCell>
-                         <TableCell class="text-right font-mono text-foreground">-</TableCell>
+                         <TableCell class="text-right font-mono text-foreground">{{ txn.closingUnits ? formatNumber(txn.closingUnits) : '-' }}</TableCell>
                        </TableRow>
                      </TableBody>
                    </Table>
