@@ -1721,6 +1721,7 @@ dependencies = [
 name = "xfina-mf-cams"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "clap",
  "pdf-extract",
  "regex",

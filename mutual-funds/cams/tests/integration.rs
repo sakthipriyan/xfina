@@ -20,7 +20,7 @@ fn test_cams_parser() {
             if extension == "pdf" {
                 let bytes = fs::read(&path).unwrap();
                 let file_name = path.file_stem().unwrap().to_str().unwrap();
-                let parsed = parse_cams_pdf(&bytes, Some("***REDACTED***")).expect("Failed to parse CAMS PDF");
+                let parsed = parse_cams_pdf(&bytes, Some("***REDACTED***"), Some(file_name)).expect("Failed to parse CAMS PDF");
 
                 let xfina_json = serde_json::to_string_pretty(&parsed.to_xfina_json()).unwrap();
                 let rebit_json = serde_json::to_string_pretty(&parsed.to_rebit_json()).unwrap();
