@@ -1,26 +1,16 @@
-use clap::Parser;
-use std::fs;
-use xfina_mf_cams::parser::extract_spatial_pages;
-use xfina_mf_cams::layout::group_into_lines;
-
-#[derive(Parser, Debug)]
-struct Args {
-    #[arg(short, long)]
-    filepath: String,
-    #[arg(short, long)]
-    password: Option<String>,
-}
+use xfina_mf_cams::{parser, layout};
 
 fn main() {
-    let args = Args::parse();
-    let bytes = fs::read(&args.filepath).unwrap();
-    let pages = extract_spatial_pages(&bytes, args.password.as_deref()).unwrap();
+    let path = std::env::args().nth(1).unwrap_or_else(|| "../../../xfina-test-data/mutual-funds/cams/CAS_01042026-04072026_CP216237462_04072026054022992.pdf".to_string());
+    let password = std::env::args().nth(2).unwrap_or_else(|| "".to_string());
     
-    for (i, page) in pages.iter().enumerate() {
-        println!("--- PAGE {} ---", i + 1);
-        let lines = group_into_lines(page, 2.0);
-        for line in lines {
-            println!("Y: {:.2} | TEXT: '{}'", line.baseline, line.text);
+    let bytes = std::fs::read(&path).expect("Failed to read file");
+    let pages = parser::extract_spatial_pages(&bytes, Some(&password)).unwrap();
+    
+    for (p, page) in pages.iter().enumerate() {
+        let lines = layout::group_into_lines(page, 2.0);
+        for (l, line) in lines.iter().enumerate() {
+            println!("Page {}, Line {}: {}", p, l, line.text);
         }
     }
 }

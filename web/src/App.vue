@@ -35,7 +35,7 @@ onMounted(() => {
 
 const wasmLoaded = ref(false);
 const error = ref(null);
-const portfolio = ref(null);
+const mfStatement = ref(null);
 const ccStatement = ref(null);
 const bankStatement = ref(null);
 const equityStatement = ref(null);
@@ -79,7 +79,7 @@ const getAcceptString = computed(() => {
 
 const setCategory = (cat) => {
     selectedCategory.value = cat;
-    portfolio.value = null;
+    mfStatement.value = null;
     ccStatement.value = null;
     bankStatement.value = null;
     equityStatement.value = null;
@@ -104,7 +104,7 @@ const onFileSelect = async (event) => {
     if (!file) return;
 
     error.value = null;
-    portfolio.value = null;
+    mfStatement.value = null;
     ccStatement.value = null;
     bankStatement.value = null;
     equityStatement.value = null;
@@ -140,8 +140,8 @@ const onFileSelect = async (event) => {
         } else if (selectedSource.value === 'CAMS') {
             const arrayBuffer = await file.arrayBuffer();
             const uint8Array = new Uint8Array(arrayBuffer);
-            jsonString = parse_cams(uint8Array, password.value ? password.value : null);
-            portfolio.value = JSON.parse(jsonString);
+            jsonString = parse_cams(uint8Array, password.value ? password.value : null, undefined, file.name);
+            mfStatement.value = JSON.parse(jsonString);
         } else if (selectedSource.value === 'HDFC') {
             const text = await file.text();
             jsonString = parse_hdfc_cc(text, file.name);
@@ -165,10 +165,10 @@ const onFileSelect = async (event) => {
                 ccStatement.value.xfina.generatedDate = Math.floor(file.lastModified / 1000);
                 ccStatement.value.xfina.generatedDateDerived = true;
             }
-        } else if (portfolio.value) {
-            if (!portfolio.value.generated_date && file.lastModified) {
-                portfolio.value.generated_date = Math.floor(file.lastModified / 1000);
-                portfolio.value.generated_date_derived = true;
+        } else if (mfStatement.value) {
+            if (!mfStatement.value.generated_date && file.lastModified) {
+                mfStatement.value.generated_date = Math.floor(file.lastModified / 1000);
+                mfStatement.value.generated_date_derived = true;
             }
         } else if (equityStatement.value) {
             if (!equityStatement.value.xfina) equityStatement.value.xfina = {};
@@ -200,7 +200,15 @@ const formatCurrency = (val) => {
     if (val === null || val === undefined) return '-';
     const num = Number(val);
     const formatted = Math.abs(num).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return (num < 0 ? '-' : '') + getCurrencySymbol() + formatted;
+    return (num < 0 ? '\u2011' : '') + getCurrencySymbol() + formatted;
+};
+
+
+const formatUnits = (val) => {
+    if (val === null || val === undefined) return '-';
+    const num = Number(val);
+    if (num === 0) return '0';
+    return num.toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 };
 
 const formatNumber = (val) => {
@@ -212,7 +220,7 @@ const formatDate = (ts) => {
     if (ts === null || ts === undefined || ts === '') return '-';
     const d = new Date(Number(ts) * 1000);
     if (isNaN(d)) return ts;
-    return new Intl.DateTimeFormat(undefined, { 
+    return new Intl.DateTimeFormat('en-US', { 
         year: 'numeric', 
         month: 'short', 
         day: 'numeric',
@@ -282,42 +290,47 @@ const getAssetTransactions = (holding) => {
     });
 };
 
-const getCamsAssetSummary = (asset) => {
-    let periodBuyUnits = 0;
-    let periodBuyCount = 0;
-    let periodSellUnits = 0;
-    let periodSellCount = 0;
+const camsGroupedAssets = computed(() => {
+    if (!mfStatement.value?.summary?.investment?.holdings?.holding) return [];
     
-    if (asset.transactions) {
-        for (const txn of asset.transactions) {
-            if (txn.units > 0) {
-                periodBuyUnits += txn.units;
-                periodBuyCount++;
-            } else if (txn.units < 0) {
-                periodSellUnits += Math.abs(txn.units);
-                periodSellCount++;
-            }
+    const txnsByKey = {};
+    if (mfStatement.value.transactions?.transaction) {
+        for (const txn of mfStatement.value.transactions.transaction) {
+            const key = `${txn.isin || 'noisin'}-${txn.xfina?.folioNo || 'nofolio'}`;
+            if (!txnsByKey[key]) txnsByKey[key] = [];
+            txnsByKey[key].push(txn);
         }
     }
-    
-    return {
-        openingBalance: asset.total_units - asset.period_units,
-        periodBuyUnits,
-        periodBuyCount,
-        periodSellUnits,
-        periodSellCount,
-        closingBalance: asset.total_units,
-        nav: asset.current_nav,
-        navDate: asset.current_nav_date,
-        marketValue: asset.current_value || 0,
-        totalInvested: asset.total_cost_basis || 0,
-        unrealizedPl: (asset.current_value || 0) - (asset.total_cost_basis || 0)
-    };
-};
 
-const camsSummaries = computed(() => {
-    if (!portfolio.value?.assets) return [];
-    return portfolio.value.assets.map(asset => getCamsAssetSummary(asset));
+    return mfStatement.value.summary.investment.holdings.holding.map(h => {
+        const key = `${h.isin || 'noisin'}-${h.folioNo || 'nofolio'}`;
+        const txns = txnsByKey[key] || [];
+        
+        return {
+            isin: h.isin,
+            name: h.xfina?.schemeName || 'Unknown Scheme',
+            folioNo: h.folioNo,
+            registrar: h.registrar,
+            advisor: h.xfina?.advisor,
+            kyc: h.xfina?.kyc,
+            panKyc: h.xfina?.panKyc,
+            nominees: h.xfina?.nominees,
+            transactions: txns,
+            
+            periodBuyUnits: h.xfina?.periodBuyUnits || 0,
+            periodBuyCount: h.xfina?.periodBuyCount || 0,
+            periodSellUnits: h.xfina?.periodSellUnits || 0,
+            periodSellCount: h.xfina?.periodSellCount || 0,
+            closingBalance: h.units || 0,
+            openingBalance: h.xfina?.openingBalance !== undefined ? h.xfina.openingBalance : 0,
+            
+            nav: h.nav || h.rate || 0,
+            navDate: h.xfina?.navDate,
+            marketValue: h.xfina?.currentValue || 0,
+            totalInvested: h.xfina?.totalInvested || 0,
+            unrealizedPl: h.xfina?.unrealizedPl || 0
+        };
+    });
 });
 </script>
 
@@ -637,109 +650,167 @@ const camsSummaries = computed(() => {
       </div>
 
       <!-- Results Table -->
-      <div v-if="portfolio" class="space-y-6">
+      <div v-if="mfStatement" class="space-y-6">
         
         <!-- Standardized Header -->
         <StatementHeader 
-          v-if="portfolio.investor_info"
-          :customerName="portfolio.investor_info.name || 'Investor'"
+          v-if="mfStatement.profile?.holders?.holder?.length"
+          :customerName="mfStatement.profile.holders.holder[0].name || 'Investor'"
           :institutionName="selectedSource"
           statementType="Mutual Funds"
-          :accountNumber="portfolio.investor_info.account_number || ''"
+          :accountNumber="mfStatement.profile.holders.holder[0].pan || ''"
           :statementDetails="[
-            ...(portfolio.statement_start_date ? [{ label: 'From', value: formatDate(portfolio.statement_start_date) }] : []),
-            ...(portfolio.statement_end_date ? [{ label: 'To', value: formatDate(portfolio.statement_end_date) }] : []),
-            ...(portfolio.generated_date ? [{ label: 'Generated', value: formatDateTime(portfolio.generated_date, 'generated_date', portfolio.date_only_paths), derived: portfolio.generated_date_derived }] : [])
+            ...(mfStatement.transactions?.startDate ? [{ label: 'From', value: formatDate(mfStatement.transactions.startDate) }] : []),
+            ...(mfStatement.transactions?.endDate ? [{ label: 'To', value: formatDate(mfStatement.transactions.endDate) }] : []),
+            ...(mfStatement.xfina?.generatedDate ? [{ label: 'Generated', value: formatDateTime(mfStatement.xfina.generatedDate, 'xfina.generatedDate', mfStatement.xfina?.dateOnlyPaths), derived: mfStatement.xfina?.generatedDateDerived }] : [])
           ]"
         />
 
+        <div class="grid grid-cols-1 gap-4" v-if="mfStatement.summary?.investmentValue !== undefined || mfStatement.summary?.currentValue !== undefined">
+          <Card class="bg-card text-card-foreground shadow-sm">
+            <CardHeader class="pb-2 border-b mb-3">
+              <CardTitle class="text-sm text-muted-foreground font-semibold uppercase tracking-wider">Portfolio Summary</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div class="flex flex-col">
+                  <span class="text-xs text-muted-foreground mb-1">Total Assets</span>
+                  <span class="font-medium font-mono text-xl text-foreground">{{ camsGroupedAssets.length || 0 }}</span>
+                </div>
+                <div class="flex flex-col">
+                  <span class="text-xs text-muted-foreground mb-1">Total Invested</span>
+                  <span class="font-medium font-mono text-xl">{{ formatCurrency(mfStatement.summary?.investmentValue) }}</span>
+                </div>
+                <div class="flex flex-col">
+                  <span class="text-xs text-muted-foreground mb-1">Market Value</span>
+                  <span class="font-medium font-mono text-xl text-primary">{{ formatCurrency(mfStatement.summary?.currentValue) }}</span>
+                </div>
+                <div class="flex flex-col">
+                  <span class="text-xs text-muted-foreground mb-1">Unrealized P&L</span>
+                  <span class="font-medium font-mono text-xl" 
+                        :class="(mfStatement.summary?.currentValue || 0) > (mfStatement.summary?.investmentValue || 0) ? 'text-emerald-500' : ((mfStatement.summary?.currentValue || 0) < (mfStatement.summary?.investmentValue || 0) ? 'text-rose-500' : 'text-foreground')">
+                    {{ (mfStatement.summary?.currentValue || 0) > (mfStatement.summary?.investmentValue || 0) ? '+ ' : '' }}{{ formatCurrency((mfStatement.summary?.currentValue || 0) - (mfStatement.summary?.investmentValue || 0)) }}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         <Accordion type="multiple" class="w-full space-y-4">
            <AccordionItem 
-             v-for="(asset, index) in portfolio.assets" 
+             v-for="(asset, index) in camsGroupedAssets" 
              :key="index" 
              :value="`item-${index}`"
-             class="border rounded-lg bg-card text-card-foreground shadow-sm overflow-hidden"
+             class="border rounded-lg bg-card text-card-foreground shadow-sm overflow-hidden group/item"
              :disabled="!asset.transactions?.length"
            >
-               <AccordionTrigger class="group hover:no-underline px-4 py-4 data-[state=open]:border-b border-border">
-                 <div class="flex flex-col items-start w-full pr-0 gap-3">
+               <div class="px-4 py-4 flex flex-col items-start w-full gap-3 border-b border-transparent transition-colors group-data-[state=open]/item:border-border group-data-[state=open]/item:border-b">
+                 <div class="flex flex-col items-start w-full gap-3">
                    <!-- Top Row: Chevron, Name, Tags, Txn Pill -->
-                   <div class="flex items-center gap-2.5 flex-wrap w-full">
-                     <span class="text-xs font-medium font-mono bg-muted/30 border border-primary/20 rounded px-2 py-0.5 text-primary shadow-sm" v-if="asset.isin">{{ asset.isin }}</span>
-                     <span class="font-medium text-foreground text-lg">{{ asset.name }}</span>
-                     <span class="text-xs font-medium font-mono bg-muted/30 border border-primary/20 rounded px-2 py-0.5 text-primary shadow-sm" v-if="asset.symbol">{{ asset.symbol }}</span>
+                   <div class="grid grid-cols-[auto_1fr_auto] items-start gap-4 w-full">
+                     <span class="text-xs font-medium font-mono bg-muted/30 border border-primary/20 rounded px-2 py-0.5 text-primary shadow-sm shrink-0" v-if="asset.isin">{{ asset.isin }}</span>
                      
-                     <div class="flex items-center gap-1.5 text-xs font-mono bg-primary/10 text-primary pl-2.5 pr-2 py-1.5 rounded ml-auto shrink-0">
+                     <div class="flex flex-wrap items-center gap-2 min-w-0">
+                       <span class="font-medium text-foreground text-left text-base lg:text-lg leading-tight break-words">{{ asset.name }}</span>
+                       <span class="text-xs font-medium font-mono bg-muted/30 border border-primary/20 rounded px-2 py-0.5 text-primary shadow-sm shrink-0" v-if="asset.symbol">{{ asset.symbol }}</span>
+                     </div>
+                     
+                     <AccordionTrigger class="py-1.5 flex-none font-mono text-xs font-normal hover:no-underline justify-end gap-1.5 bg-primary/10 text-primary hover:bg-primary/20 transition-colors pl-2.5 pr-2 rounded shrink-0 group w-auto" :disabled="!asset.transactions?.length">
                        <span>{{ asset.transactions?.length || 0 }} {{ asset.transactions?.length === 1 ? 'Txn' : 'Txns' }}</span>
                        <ChevronDown v-if="asset.transactions?.length" class="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                       <template #icon><span class="hidden"></span></template>
+                     </AccordionTrigger>
+                   </div>
+
+                   
+                   <!-- Metadata / Account Details -->
+                   <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-x-6 gap-y-3 w-full px-1 pt-1 pb-2" v-if="asset.folioNo || asset.registrar || asset.kyc || asset.advisor || (asset.nominees && asset.nominees.length)">
+                     <div class="flex flex-col" v-if="asset.folioNo">
+                       <span class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">Folio No</span>
+                       <span class="font-medium font-mono text-xs">{{ asset.folioNo }}</span>
+                     </div>
+                     <div class="flex flex-col" v-if="asset.registrar">
+                       <span class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">Registrar</span>
+                       <span class="font-medium text-xs truncate" :title="asset.registrar">{{ asset.registrar }}</span>
+                     </div>
+                     <div class="flex flex-col" v-if="asset.kyc || asset.panKyc">
+                       <span class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">KYC / PAN</span>
+                       <span class="font-medium text-xs">{{ asset.kyc || '-' }} / {{ asset.panKyc || '-' }}</span>
+                     </div>
+                     <div class="flex flex-col" v-if="asset.advisor">
+                       <span class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">Advisor</span>
+                       <span class="font-medium text-xs truncate" :title="asset.advisor">{{ asset.advisor }}</span>
+                     </div>
+                     <div class="flex flex-col" v-if="asset.nominees && asset.nominees.length">
+                       <span class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">Nominees</span>
+                       <span class="font-medium text-xs truncate" :title="asset.nominees.join(', ')">{{ asset.nominees.join(', ') }}</span>
                      </div>
                    </div>
                    
                    <!-- 2-Column Blocks -->
                    <div class="flex flex-col lg:flex-row gap-3 w-full">
-                     <div class="flex items-center justify-between text-xs bg-muted/20 border border-border rounded-md px-3.5 py-2.5 gap-3 flex-1 overflow-x-auto">
+                     <!-- Box 1: Asset Summary (Opening, Buys, Sells, Closing, NAV, NAV Date) -->
+                     <div class="flex items-center justify-between text-xs bg-muted/20 border border-border rounded-md px-3.5 py-2.5 gap-3 flex-1 overflow-x-auto [&>.w-px:last-child]:hidden">
                        <div class="flex flex-col items-end shrink-0">
                          <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Opening</span>
-                         <span class="font-mono font-bold text-foreground text-sm text-right">{{ formatNumber(camsSummaries[index]?.openingBalance || 0) }}</span>
+                         <span class="font-mono font-bold text-foreground text-sm text-right">{{ formatUnits(asset.openingBalance || 0) }}</span>
                        </div>
                        <div class="w-px h-8 bg-border/60"></div>
-                       <div class="flex flex-col items-end shrink-0">
+                       <div class="flex flex-col items-end shrink-0" v-if="asset.periodBuyUnits || asset.periodBuyCount">
                          <div class="flex items-center gap-1.5 mb-0.5">
-                           <span v-if="camsSummaries[index]?.periodBuyCount" class="text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded font-mono border border-border/50">{{ camsSummaries[index]?.periodBuyCount }}</span>
+                           <span v-if="asset.periodBuyCount" class="text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded font-mono border border-border/50">{{ asset.periodBuyCount }}</span>
                            <span class="text-[10px] text-muted-foreground uppercase tracking-wider">Buys</span>
                          </div>
-                         <span class="font-mono font-bold text-sm text-right" :class="camsSummaries[index]?.periodBuyUnits ? 'text-emerald-500' : 'text-foreground'"><span v-if="camsSummaries[index]?.periodBuyUnits">+ </span>{{ formatNumber(camsSummaries[index]?.periodBuyUnits || 0) }}</span>
+                         <span class="font-mono font-bold text-foreground text-sm text-right">{{ formatUnits(asset.periodBuyUnits || 0) }}</span>
                        </div>
-                       <div class="w-px h-8 bg-border/60"></div>
-                       <div class="flex flex-col items-end shrink-0">
+                       <div class="w-px h-8 bg-border/60" v-if="asset.periodBuyUnits || asset.periodBuyCount"></div>
+                       <div class="flex flex-col items-end shrink-0" v-if="asset.periodSellUnits || asset.periodSellCount">
                          <div class="flex items-center gap-1.5 mb-0.5">
-                           <span v-if="camsSummaries[index]?.periodSellCount" class="text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded font-mono border border-border/50">{{ camsSummaries[index]?.periodSellCount }}</span>
+                           <span v-if="asset.periodSellCount" class="text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded font-mono border border-border/50">{{ asset.periodSellCount }}</span>
                            <span class="text-[10px] text-muted-foreground uppercase tracking-wider">Sells</span>
                          </div>
-                         <span class="font-mono font-bold text-foreground text-sm text-right"><span v-if="camsSummaries[index]?.periodSellUnits">- </span>{{ formatNumber(camsSummaries[index]?.periodSellUnits || 0) }}</span>
+                         <span class="font-mono font-bold text-foreground text-sm text-right">{{ formatUnits(asset.periodSellUnits || 0) }}</span>
                        </div>
-                       <div class="w-px h-8 bg-border/60"></div>
+                       <div class="w-px h-8 bg-border/60" v-if="asset.periodSellUnits || asset.periodSellCount"></div>
                        <div class="flex flex-col items-end shrink-0">
                          <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Closing</span>
-                         <span class="font-mono font-bold text-primary text-sm text-right">{{ formatNumber(camsSummaries[index]?.closingBalance || 0) }}</span>
+                         <span class="font-mono font-bold text-primary text-sm text-right">{{ formatUnits(asset.closingBalance || 0) }}</span>
                        </div>
                        <div class="w-px h-8 bg-border/60"></div>
                        <div class="flex flex-col items-end shrink-0">
                          <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">NAV</span>
-                         <span class="font-mono font-bold text-foreground text-sm text-right">{{ formatCurrency(camsSummaries[index]?.nav) }}</span>
+                         <span class="font-mono font-bold text-foreground text-sm text-right">{{ formatCurrency(asset.nav) }}</span>
                        </div>
-                       <div class="w-px h-8 bg-border/60" v-if="camsSummaries[index]?.navDate"></div>
-                       <div class="flex flex-col items-end shrink-0" v-if="camsSummaries[index]?.navDate">
+                       <div class="w-px h-8 bg-border/60" v-if="asset.navDate"></div>
+                       <div class="flex flex-col items-end shrink-0" v-if="asset.navDate">
                          <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">NAV Date</span>
-                         <span class="font-mono font-medium text-foreground text-sm text-right">{{ formatDate(camsSummaries[index]?.navDate) }}</span>
+                         <span class="font-mono font-medium text-foreground text-sm text-right">{{ formatDate(asset.navDate) }}</span>
                        </div>
                      </div>
                      
                      <div class="flex items-center text-right bg-muted/20 border border-border rounded-md px-3.5 py-2.5 shrink-0 gap-3">
                        <div class="flex flex-col items-end w-[130px] shrink-0">
                          <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Total Invested</span>
-                         <span class="text-sm font-medium font-mono text-foreground">{{ formatCurrency(camsSummaries[index]?.totalInvested) }}</span>
+                         <span class="text-sm font-medium font-mono text-foreground">{{ formatCurrency(asset.totalInvested) }}</span>
                        </div>
                        <div class="w-px h-8 bg-border/60"></div>
                        <div class="flex flex-col items-end w-[130px] shrink-0">
                          <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Market Value</span>
-                         <span class="text-sm font-bold font-mono text-primary">{{ formatCurrency(camsSummaries[index]?.marketValue) }}</span>
+                         <span class="text-sm font-bold font-mono text-primary">{{ formatCurrency(asset.marketValue) }}</span>
                        </div>
                        <div class="w-px h-8 bg-border/60"></div>
                        <div class="flex flex-col items-end w-[130px] shrink-0">
                          <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Unrealized P&L</span>
-                         <span class="font-mono font-bold text-sm" 
-                               :class="camsSummaries[index]?.unrealizedPl >= 0 ? 'text-emerald-500' : 'text-rose-500'">
-                           {{ camsSummaries[index]?.unrealizedPl >= 0 ? '+ ' : '' }}{{ formatCurrency(camsSummaries[index]?.unrealizedPl) }}
+                         <span class="font-mono font-bold text-sm text-foreground">
+                           {{ asset.unrealizedPl > 0 ? '+ ' : '' }}{{ formatCurrency(asset.unrealizedPl) }}
                          </span>
                        </div>
                      </div>
                    </div>
                  </div>
                  
-                 <!-- Empty slot to prevent Shadcn from rendering a right-aligned icon -->
-                 <template #icon><div></div></template>
-               </AccordionTrigger>
+               </div>
                <AccordionContent>
                  <div class="rounded-md border border-border mt-2 overflow-x-auto">
                    <Table>
@@ -748,27 +819,43 @@ const camsSummaries = computed(() => {
                          <TableHead class="w-[150px] text-muted-foreground whitespace-nowrap">Date</TableHead>
                          <TableHead class="w-[100px] text-muted-foreground whitespace-nowrap">Type</TableHead>
                          <TableHead class="text-muted-foreground whitespace-nowrap">Description</TableHead>
-                         <TableHead class="w-[140px] text-right text-muted-foreground whitespace-nowrap">Total Amount</TableHead>
-                         <TableHead class="w-[120px] text-right text-muted-foreground whitespace-nowrap">Units / Qty</TableHead>
-                         <TableHead class="w-[120px] text-right text-muted-foreground whitespace-nowrap">NAV / Price</TableHead>
-                         <TableHead class="w-[120px] text-right text-muted-foreground whitespace-nowrap">Duty / STT / Fee</TableHead>
+                         <TableHead class="w-[140px] text-right text-muted-foreground whitespace-nowrap">
+                           <div class="flex items-center justify-end gap-1.5">
+                             <span>Amount</span>
+                             <TooltipProvider>
+                               <Tooltip>
+                                 <TooltipTrigger class="cursor-help">
+                                   <HelpCircle class="h-3.5 w-3.5 text-muted-foreground" />
+                                 </TooltipTrigger>
+                                 <TooltipContent>
+                                   <p class="max-w-[200px] text-xs font-normal whitespace-normal text-left">Invested (including the fee), if redeemed it is excluding the fee</p>
+                                 </TooltipContent>
+                               </Tooltip>
+                             </TooltipProvider>
+                           </div>
+                         </TableHead>
+                         <TableHead class="w-[120px] text-right text-muted-foreground whitespace-nowrap">Units</TableHead>
+                         <TableHead class="w-[120px] text-right text-muted-foreground whitespace-nowrap">Price</TableHead>
+                         <TableHead class="w-[120px] text-right text-muted-foreground whitespace-nowrap">Fees</TableHead>
                          <TableHead class="w-[140px] text-right text-muted-foreground whitespace-nowrap">Balance</TableHead>
                        </TableRow>
                      </TableHeader>
                      <TableBody>
                        <TableRow v-for="(txn, idx) in asset.transactions" :key="idx" class="hover:bg-muted/50 transition-colors">
-                         <TableCell class="text-foreground whitespace-nowrap">{{ formatDateTime(txn.date, 'transactions.date', portfolio.date_only_paths) }}</TableCell>
+                         <TableCell class="text-foreground whitespace-nowrap">{{ formatDate(txn.orderDate) }}</TableCell>
                          <TableCell class="text-foreground">
-                            <span :class="{'text-emerald-500': txn.tx_type === 'BUY', 'text-rose-500': txn.tx_type === 'SELL'}">
-                              {{ txn.tx_type || '-' }}
+                            <span class="font-medium text-xs px-2 py-1 rounded" :class="{'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400': txn.type === 'BUY', 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400': txn.type === 'SELL'}">
+                              {{ txn.type || '-' }}
                             </span>
-                         </TableCell>
-                         <TableCell class="text-foreground text-xs">{{ txn.description || '-' }}</TableCell>
-                         <TableCell class="text-right font-mono text-foreground">{{ formatCurrency(txn.amount) }}</TableCell>
-                         <TableCell class="text-right font-mono text-foreground">{{ formatNumber(txn.units) }}</TableCell>
-                         <TableCell class="text-right font-mono text-foreground">{{ formatCurrency(txn.nav) }}</TableCell>
-                         <TableCell class="text-right font-mono text-foreground">{{ txn.fee ? formatCurrency(txn.fee) : '-' }}</TableCell>
-                         <TableCell class="text-right font-mono text-foreground">{{ formatNumber(txn.balance) }}</TableCell>
+                          </TableCell>
+                         <TableCell class="text-foreground text-xs whitespace-pre-line">{{ txn.narration || '-' }}</TableCell>
+                         <TableCell class="text-right font-mono text-foreground whitespace-nowrap">
+                            {{ formatCurrency(txn.type === 'BUY' ? (Number(txn.amount) + Number(txn.xfina?.fees || 0)) : Number(txn.amount)) }}
+                          </TableCell>
+                         <TableCell class="text-right font-mono text-foreground whitespace-nowrap">{{ formatUnits(txn.xfina?.units) }}</TableCell>
+                         <TableCell class="text-right font-mono text-foreground whitespace-nowrap">{{ formatCurrency(txn.nav) }}</TableCell>
+                         <TableCell class="text-right font-mono text-foreground whitespace-nowrap">{{ txn.xfina?.fees > 0 ? formatCurrency(txn.xfina.fees) : '' }}</TableCell>
+                         <TableCell class="text-right font-mono text-foreground whitespace-nowrap">{{ txn.closingUnits !== undefined && txn.closingUnits !== null ? formatUnits(txn.closingUnits) : '-' }}</TableCell>
                        </TableRow>
                      </TableBody>
                    </Table>
@@ -998,7 +1085,7 @@ const camsSummaries = computed(() => {
                      <div class="flex items-center justify-between text-xs bg-muted/20 border border-border rounded-md px-3.5 py-2.5 gap-3 flex-1 overflow-x-auto">
                        <div class="flex flex-col items-end shrink-0">
                          <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Opening</span>
-                         <span class="font-mono font-bold text-foreground text-sm text-right">{{ formatNumber(holding.xfina?.openingBalance || 0) }}</span>
+                         <span class="font-mono font-bold text-foreground text-sm text-right">{{ formatUnits(holding.xfina?.openingBalance || 0) }}</span>
                        </div>
                        <div class="w-px h-8 bg-border/60"></div>
                        <div class="flex flex-col items-end shrink-0">
@@ -1006,7 +1093,7 @@ const camsSummaries = computed(() => {
                            <span v-if="holding.xfina?.periodBuyCount" class="text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded font-mono border border-border/50">{{ holding.xfina?.periodBuyCount }}</span>
                            <span class="text-[10px] text-muted-foreground uppercase tracking-wider">Buys</span>
                          </div>
-                         <span class="font-mono font-bold text-sm text-right" :class="(holding.xfina?.periodBuyUnits || 0) > 0 ? 'text-emerald-500' : 'text-foreground'"><span v-if="(holding.xfina?.periodBuyUnits || 0) > 0">+ </span>{{ formatNumber(holding.xfina?.periodBuyUnits || 0) }}</span>
+                         <span class="font-mono font-bold text-sm text-right" :class="(holding.xfina?.periodBuyUnits || 0) > 0 ? 'text-emerald-500' : 'text-foreground'"><span v-if="(holding.xfina?.periodBuyUnits || 0) > 0">+ </span>{{ formatUnits(holding.xfina?.periodBuyUnits || 0) }}</span>
                        </div>
                        <div class="w-px h-8 bg-border/60"></div>
                        <div class="flex flex-col items-end shrink-0">
@@ -1014,12 +1101,12 @@ const camsSummaries = computed(() => {
                            <span v-if="holding.xfina?.periodSellCount" class="text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded font-mono border border-border/50">{{ holding.xfina?.periodSellCount }}</span>
                            <span class="text-[10px] text-muted-foreground uppercase tracking-wider">Sells</span>
                          </div>
-                         <span class="font-mono font-bold text-foreground text-sm text-right"><span v-if="holding.xfina?.periodSellUnits">-</span>{{ formatNumber(holding.xfina?.periodSellUnits || 0) }}</span>
+                         <span class="font-mono font-bold text-foreground text-sm text-right"><span v-if="holding.xfina?.periodSellUnits">-</span>{{ formatUnits(holding.xfina?.periodSellUnits || 0) }}</span>
                        </div>
                        <div class="w-px h-8 bg-border/60"></div>
                        <div class="flex flex-col items-end shrink-0">
                          <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Closing</span>
-                         <span class="font-mono font-bold text-primary text-sm text-right">{{ formatNumber(holding.units) }}</span>
+                         <span class="font-mono font-bold text-primary text-sm text-right">{{ formatUnits(holding.units) }}</span>
                        </div>
                        <div class="w-px h-8 bg-border/60"></div>
                        <div class="flex flex-col items-end shrink-0">
@@ -1046,8 +1133,7 @@ const camsSummaries = computed(() => {
                        <div class="w-px h-8 bg-border/60"></div>
                        <div class="flex flex-col items-end w-[130px] shrink-0">
                          <span class="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Unrealized P&L</span>
-                         <span class="font-mono font-bold text-sm" 
-                               :class="((holding.units || 0) * (holding.lastTradedPrice || 0)) >= ((holding.units || 0) * (holding.rate || 0)) ? 'text-emerald-500' : 'text-rose-500'">
+                         <span class="font-mono font-bold text-sm text-foreground">
                            {{ ((holding.units || 0) * (holding.lastTradedPrice || 0)) >= ((holding.units || 0) * (holding.rate || 0)) ? '+ ' : '' }}{{ formatCurrency(((holding.units || 0) * (holding.lastTradedPrice || 0)) - ((holding.units || 0) * (holding.rate || 0))) }}
                          </span>
                        </div>
@@ -1066,9 +1152,23 @@ const camsSummaries = computed(() => {
                          <TableHead class="w-[150px] text-muted-foreground whitespace-nowrap">Date</TableHead>
                          <TableHead class="w-[100px] text-muted-foreground whitespace-nowrap">Type</TableHead>
                          <TableHead class="text-muted-foreground whitespace-nowrap">Description</TableHead>
-                         <TableHead class="w-[140px] text-right text-muted-foreground whitespace-nowrap">Total Amount</TableHead>
-                         <TableHead class="w-[120px] text-right text-muted-foreground whitespace-nowrap">Units / Qty</TableHead>
-                         <TableHead class="w-[120px] text-right text-muted-foreground whitespace-nowrap">Rate / Price</TableHead>
+                         <TableHead class="w-[140px] text-right text-muted-foreground whitespace-nowrap">
+                           <div class="flex items-center justify-end gap-1.5">
+                             <span>Amount</span>
+                             <TooltipProvider>
+                               <Tooltip>
+                                 <TooltipTrigger class="cursor-help">
+                                   <HelpCircle class="h-3.5 w-3.5 text-muted-foreground" />
+                                 </TooltipTrigger>
+                                 <TooltipContent>
+                                   <p class="max-w-[200px] text-xs font-normal whitespace-normal text-left">Invested (including the fee), if redeemed it is excluding the fee</p>
+                                 </TooltipContent>
+                               </Tooltip>
+                             </TooltipProvider>
+                           </div>
+                         </TableHead>
+                         <TableHead class="w-[120px] text-right text-muted-foreground whitespace-nowrap">Units</TableHead>
+                         <TableHead class="w-[120px] text-right text-muted-foreground whitespace-nowrap">Price</TableHead>
                          <TableHead class="w-[120px] text-right text-muted-foreground whitespace-nowrap">Fees</TableHead>
                          <TableHead class="w-[140px] text-right text-muted-foreground whitespace-nowrap">Balance</TableHead>
                        </TableRow>
@@ -1082,11 +1182,11 @@ const camsSummaries = computed(() => {
                             </span>
                          </TableCell>
                          <TableCell class="text-foreground text-xs">-</TableCell>
-                         <TableCell class="text-right font-mono text-foreground">{{ formatCurrency(txn.tradeValue) }}</TableCell>
-                         <TableCell class="text-right font-mono text-foreground">{{ formatNumber(txn.units) }}</TableCell>
-                         <TableCell class="text-right font-mono text-foreground">{{ formatCurrency(txn.rate) }}</TableCell>
-                         <TableCell class="text-right font-mono text-foreground">{{ formatCurrency(txn.totalCharge) }}</TableCell>
-                         <TableCell class="text-right font-mono text-foreground">{{ formatNumber(txn._runningBalance) }}</TableCell>
+                         <TableCell class="text-right font-mono text-foreground whitespace-nowrap">{{ formatCurrency(txn.tradeValue) }}</TableCell>
+                         <TableCell class="text-right font-mono text-foreground whitespace-nowrap">{{ formatUnits(txn.units) }}</TableCell>
+                         <TableCell class="text-right font-mono text-foreground whitespace-nowrap">{{ formatCurrency(txn.rate) }}</TableCell>
+                         <TableCell class="text-right font-mono text-foreground whitespace-nowrap">{{ formatCurrency(txn.totalCharge) }}</TableCell>
+                         <TableCell class="text-right font-mono text-foreground whitespace-nowrap">{{ formatUnits(txn._runningBalance) }}</TableCell>
                        </TableRow>
                      </TableBody>
                    </Table>
