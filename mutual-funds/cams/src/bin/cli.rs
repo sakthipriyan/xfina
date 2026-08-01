@@ -28,7 +28,7 @@ fn main() {
     };
 
     println!("Parsing PDF...");
-    match parse_cams_pdf(&bytes, args.password.as_deref()) {
+    match parse_cams_pdf(&bytes, args.password.as_deref(), None) {
         Ok(portfolio) => {
             let json = serde_json::to_string_pretty(&portfolio).unwrap();
             println!("Parsed Portfolio:\n{}", json);
