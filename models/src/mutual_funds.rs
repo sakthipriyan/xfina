@@ -317,6 +317,31 @@ pub struct MfTransaction {
 // Xfina Custom Structs
 // -----------------------------------------------------------------------------
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum XfinaTransactionCategory {
+    Purchase,
+    PurchaseSip,
+    Redemption,
+    SwitchIn,
+    SwitchOut,
+    SwitchInMerger,
+    SwitchOutMerger,
+    StpIn,
+    StpOut,
+    DividendPayout,
+    DividendReinvest,
+    SttTax,
+    StampDutyTax,
+    TdsTax,
+    Misc,
+    GiftIn,
+    GiftOut,
+    Segregation,
+    Reversal,
+    Unknown,
+}
+
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -349,6 +374,11 @@ pub struct XfinaMutualFundsHolding {
     pub opening_balance: Decimal,
     
     pub nav_date: Option<NaiveDate>,
+
+    pub nominees: Option<Vec<String>>,
+    pub advisor: Option<String>,
+    pub kyc: Option<String>,
+    pub pan_kyc: Option<String>,
 }
 
 #[skip_serializing_none]
@@ -362,4 +392,11 @@ pub struct XfinaMutualFundsTransaction {
     pub fees: Decimal,
     
     pub transaction_date_time: Option<DateTime<Utc>>,
+
+    pub transaction_category: Option<XfinaTransactionCategory>,
+    
+    #[serde(with = "rust_decimal::serde::float_option", default)]
+    pub dividend_rate: Option<Decimal>,
+    
+    pub folio_no: Option<String>,
 }
