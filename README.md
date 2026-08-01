@@ -49,7 +49,7 @@ By building Xfina in **Rust**, we achieve:
 
 | Crate | Provider | Format | Status | Notes |
 |---|---|---|---|---|
-| `xfina-mf-cams` | CAMS | PDF (password protected) | **Needs more work** | Combined Account Statement (CAS) |
+| `xfina-mf-cams` | CAMS | PDF (password protected) | **Production Ready** | Combined Account Statement (CAS) |
 
 ### 🌍 International Brokers
 
