@@ -42,6 +42,7 @@ By building Xfina in **Rust**, we achieve:
 
 | Crate | Institution | Format | Status | Notes |
 |---|---|---|---|---|
+| `xfina-cc-axis` | Axis Bank | TBA | **TODO** | |
 | `xfina-cc-hdfc` | HDFC Bank | CSV | **Production Ready** | Full support incl. add-on cardholders, reward points |
 | `xfina-cc-icici` | ICICI Bank | Excel (`.xls`/`.xlsx`) | **Production Ready** | Tested card without any add-on cards |
 
@@ -50,6 +51,7 @@ By building Xfina in **Rust**, we achieve:
 | Crate | Provider | Format | Status | Notes |
 |---|---|---|---|---|
 | `xfina-mf-cams` | CAMS | PDF (password protected) | **Production Ready** | Combined Account Statement (CAS) |
+| `xfina-mf-kfintech` | KFinTech | PDF (password protected) | **TODO** | Combined Account Statement (CAS) |
 
 ### 🌍 International Brokers
 
