@@ -1,66 +1,13 @@
-use pdf_extract::{OutputDev, OutputError, Transform, Document, MediaBox};
-
-#[derive(Debug, Clone)]
-pub struct CharItem {
-    pub text: String,
-    pub x0: f64,
-    pub y0: f64,
-    pub x1: f64,
-    pub y1: f64,
-}
-
-pub struct SpatialOutputDev {
-    pub pages: Vec<Vec<CharItem>>,
-    current_page: Vec<CharItem>,
-    flip_ctm: Transform,
-}
-
-impl SpatialOutputDev {
-    pub fn new() -> Self {
-        Self {
-            pages: Vec::new(),
-            current_page: Vec::new(),
-            flip_ctm: Transform::default(),
-        }
-    }
-}
-
-impl OutputDev for SpatialOutputDev {
-    fn begin_page(&mut self, _page_num: u32, media_box: &MediaBox, _: Option<(f64, f64, f64, f64)>) -> Result<(), OutputError> {
-        self.current_page.clear();
-        self.flip_ctm = Transform::row_major(1., 0., 0., -1., 0., media_box.ury - media_box.lly);
-        Ok(())
-    }
-
-    fn end_page(&mut self) -> Result<(), OutputError> {
-        self.pages.push(self.current_page.clone());
-        Ok(())
-    }
-
-    fn output_character(&mut self, trm: &Transform, width: f64, _spacing: f64, font_size: f64, char: &str) -> Result<(), OutputError> {
-        let position = trm.post_transform(&self.flip_ctm);
-        let x = position.m31;
-        let y = position.m32;
-        
-        // Approximate width
-        let scaled_w = trm.m11 * width * font_size; 
-        let scaled_h = trm.m22 * font_size;
-
-        self.current_page.push(CharItem {
-            text: char.to_string(),
-            x0: x,
-            y0: y,
-            x1: x + scaled_w.abs(),
-            y1: y + scaled_h.abs(),
-        });
-        Ok(())
-    }
-
-    fn begin_word(&mut self) -> Result<(), OutputError> { Ok(()) }
-    fn end_word(&mut self) -> Result<(), OutputError> { Ok(()) }
-    fn end_line(&mut self) -> Result<(), OutputError> { Ok(()) }
-}
+use pdf_extract::extract_text;
 
 fn main() {
-    println!("Compiled successfully!");
+    let path = std::env::args().nth(1).unwrap_or_else(|| "../xfina-test-data/mutual-funds/cams/CAS_01042026-04072026_CP216237462_04072026054022992.pdf".to_string());
+    let bytes = std::fs::read(&path).expect("Failed to read file");
+    let password = std::env::args().nth(2).unwrap_or_else(|| "".to_string());
+    let text = if password.is_empty() {
+        pdf_extract::extract_text_from_mem(&bytes).unwrap()
+    } else {
+        pdf_extract::extract_text_from_mem_encrypted(&bytes, &password).unwrap()
+    };
+    println!("{}", text);
 }
