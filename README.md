@@ -132,11 +132,10 @@ Pushed to `main` → GitHub Actions automatically builds WASM + Vue and deploys 
 
 ### Over next few weeks
 - [ ] CSV / JSON export in the web app
-- [ ] Complete robust parsing for IBKR using 
-- [ ] CAMS CAS (Mutual Funds)
-- [ ] Publish `xfina` to Rust crates.io
-- [ ] Publish JavaScript/TypeScript WASM bindings to npm
-- [ ] Publish Python bindings (`xfina-py`) via `pyo3` to PyPI
+- [ ] Publishing
+  - [ ] Publish `xfina` to Rust crates.io
+  - [ ] Publish JavaScript/TypeScript WASM bindings to npm
+  - [ ] Publish Python bindings (`xfina-py`) via `pyo3` to PyPI
 
 ## License
 
