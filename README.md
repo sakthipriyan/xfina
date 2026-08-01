@@ -80,7 +80,8 @@ xfina/
 
 - **`CreditCardAccount`** — card details, statement period, account summary, transactions, reward points
 - **`DepositAccount`** — account info, opening/closing balances, transactions
-- **`Portfolio`** — investor info, assets, NAV, transactions (mutual funds & stocks)
+- **`EquityAccount`** — investor info, stock holdings, corporate actions, trades (International Brokers)
+- **`MutualFundsAccount`** — investor info, AMC schemes, NAV, transactions (Mutual Funds)
 
 All data structures inherently map to the Sahamati AA specifications, with project-specific extensions nested in the `xfina` object.
 
