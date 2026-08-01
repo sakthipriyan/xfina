@@ -1714,6 +1714,7 @@ dependencies = [
  "chrono-tz",
  "csv",
  "rust_decimal",
+ "serde_json",
  "xfina-models",
 ]
 

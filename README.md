@@ -121,12 +121,13 @@ Pushed to `main` → GitHub Actions automatically builds WASM + Vue and deploys 
 
 | Institution / Provider | Bank Account | Credit Card | Mutual Funds | Intl Brokers |
 |---|:---:|:---:|:---:|:---:|
-| Axis Bank | ✅ | | | |
+| Axis Bank | ✅ | ⏳ | | |
 | Bank of Baroda | ✅ | | | |
 | CAMS | | | ✅ | |
 | HDFC Bank | ✅ | ✅ | | |
 | IBKR | | | | ✅ |
 | ICICI Bank | ✅ | ✅ | | |
+| KFinTech | | | ⏳ | |
 | State Bank of India | ✅ | | | |
 
 ### Over next few weeks
