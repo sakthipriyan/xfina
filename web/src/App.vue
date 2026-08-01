@@ -715,14 +715,12 @@ const camsGroupedAssets = computed(() => {
                        <span class="font-medium text-foreground text-left text-base lg:text-lg leading-tight break-words">{{ asset.name }}</span>
                        <span class="text-xs font-medium font-mono bg-muted/30 border border-primary/20 rounded px-2 py-0.5 text-primary shadow-sm shrink-0" v-if="asset.symbol">{{ asset.symbol }}</span>
                      </div>
-                     
-                     <AccordionTrigger class="py-1.5 flex-none font-mono text-xs font-normal hover:no-underline justify-end gap-1.5 bg-primary/10 text-primary hover:bg-primary/20 transition-colors pl-2.5 pr-2 rounded shrink-0 group w-auto" :disabled="!asset.transactions?.length">
+                    <AccordionTrigger class="py-1.5 flex-none font-mono text-xs font-normal hover:no-underline justify-end gap-1.5 bg-primary/10 text-primary hover:bg-primary/20 transition-colors pl-2.5 pr-2 rounded shrink-0 group w-auto" :disabled="!asset.transactions?.length">
                        <span>{{ asset.transactions?.length || 0 }} {{ asset.transactions?.length === 1 ? 'Txn' : 'Txns' }}</span>
                        <ChevronDown v-if="asset.transactions?.length" class="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
                        <template #icon><span class="hidden"></span></template>
                      </AccordionTrigger>
                    </div>
-                 </div>
                    
                    <!-- Metadata / Account Details -->
                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-x-6 gap-y-3 w-full px-1 pt-1 pb-2" v-if="asset.folioNo || asset.registrar || asset.kyc || asset.advisor || (asset.nominees && asset.nominees.length)">
@@ -808,8 +806,8 @@ const camsGroupedAssets = computed(() => {
                        </div>
                      </div>
                    </div>
+                 </div>
                   </div>
-                </div>
                 <AccordionContent>
                  <div class="rounded-md border border-border mt-2 overflow-x-auto">
                    <Table>
@@ -1079,7 +1077,6 @@ const camsGroupedAssets = computed(() => {
                        <template #icon><span class="hidden"></span></template>
                      </AccordionTrigger>
                    </div>
-                 </div>
                    
                    <!-- 2-Column Blocks -->
                    <div class="flex flex-col lg:flex-row gap-3 w-full">

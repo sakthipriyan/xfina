@@ -621,11 +621,11 @@ fn parse_scheme_header(folio_no: String, amc: String, buffer: &[String]) -> MfHo
     clean_text = isin_strip_re.replace(&clean_text, "").to_string();
 
     // 3. Scheme Code
-    let code_re = Regex::new(r"^\s*([A-Za-z0-9\s]+)-").unwrap();
+    let code_re = Regex::new(r"^\s*([A-Za-z0-9]+)\s*-").unwrap();
     let mut scheme_code = String::new();
     let mut raw_name = clean_text.clone();
 
-    for line in buffer.iter().rev() {
+    for line in buffer {
         if let Some(caps) = code_re.captures(line) {
             let code = caps.get(1).unwrap().as_str().trim();
             if code.chars().any(|c| c.is_ascii_alphabetic()) {
