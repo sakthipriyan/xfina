@@ -47,3 +47,6 @@ xfina-ba-icici = { path = "bank-accounts/icici" }
 xfina-ba-sbi = { path = "bank-accounts/sbi" }
 xfina-ba-bob = { path = "bank-accounts/bob" }
 xfina-ba-axis = { path = "bank-accounts/axis" }
+clap = { version = "4.5", features = ["derive"] }
+anyhow = "1.0"
+serde_json = "1.0"
