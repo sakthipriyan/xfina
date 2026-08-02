@@ -1,3 +1,8 @@
+[package]
+name = "xfina"
+version.workspace = true
+edition.workspace = true
+
 [workspace]
 resolver = "2"
 members = [
@@ -5,10 +10,15 @@ members = [
     "mutual-funds/cams",
     "intl-stocks/ibkr",
     "wasm",
-    "credit-cards/hdfc", "credit-cards/icici",
-    "bank-accounts/hdfc", "bank-accounts/icici", "bank-accounts/sbi", "bank-accounts/bob", "bank-accounts/axis",
-    "cli"
-, "xfina-py"]
+    "credit-cards/hdfc",
+    "credit-cards/icici",
+    "bank-accounts/hdfc",
+    "bank-accounts/icici",
+    "bank-accounts/sbi",
+    "bank-accounts/bob",
+    "bank-accounts/axis",
+    "xfina-py"
+]
 
 [workspace.package]
 version = "0.1.0"
@@ -24,3 +34,16 @@ serde_json = "1.0"
 regex = "1.10"
 chrono = "0.4"
 serde_with = "3"
+
+[dependencies]
+calamine = "0.36.0"
+xfina-models = { path = "models" }
+xfina-mf-cams = { path = "mutual-funds/cams" }
+xfina-intl-stocks-ibkr = { path = "intl-stocks/ibkr" }
+xfina-cc-hdfc = { path = "credit-cards/hdfc" }
+xfina-cc-icici = { path = "credit-cards/icici" }
+xfina-ba-hdfc = { path = "bank-accounts/hdfc" }
+xfina-ba-icici = { path = "bank-accounts/icici" }
+xfina-ba-sbi = { path = "bank-accounts/sbi" }
+xfina-ba-bob = { path = "bank-accounts/bob" }
+xfina-ba-axis = { path = "bank-accounts/axis" }
