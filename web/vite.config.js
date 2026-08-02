@@ -10,7 +10,7 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
-  base: '/',
+  base: process.env.VITE_BASE_URL || '/',
   build: {
     outDir: '../docs',
     emptyOutDir: true
