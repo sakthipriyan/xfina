@@ -44,6 +44,7 @@ const parseTime = ref(null);
 
 const availableVersions = ref(['main']);
 const currentVersion = ref('main');
+const isLocalhost = ref(false);
 
 const onVersionChange = (version) => {
     if (version === 'main') {
@@ -117,6 +118,12 @@ onMounted(async () => {
         if (!availableVersions.value.includes(match[1])) {
             availableVersions.value.push(match[1]);
         }
+    }
+
+    // Skip API fetch if on localhost
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        isLocalhost.value = true;
+        return;
     }
 
     // Fetch tags from GitHub API
@@ -384,8 +391,11 @@ const camsGroupedAssets = computed(() => {
           </div>
         </div>
         <div class="flex items-start space-x-3">
-          <Select v-model="currentVersion" @update:modelValue="onVersionChange">
-            <SelectTrigger class="w-[110px] h-9 border-border bg-background shadow-sm">
+          <div v-if="isLocalhost" class="flex items-center h-9 px-3 border border-border bg-muted/30 rounded-md shadow-sm text-sm font-medium text-muted-foreground">
+            main (local)
+          </div>
+          <Select v-else v-model="currentVersion" @update:modelValue="onVersionChange">
+            <SelectTrigger class="w-[140px] h-9 border-border bg-background shadow-sm">
               <SelectValue placeholder="Version" />
             </SelectTrigger>
             <SelectContent>
