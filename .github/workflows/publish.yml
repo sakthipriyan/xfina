@@ -59,11 +59,6 @@ jobs:
       - name: Build WASM (Bundler Target)
         working-directory: wasm
         run: wasm-pack build --target bundler
-      - name: Rename Package to xfina
-        working-directory: wasm/pkg
-        run: |
-          jq '.name = "xfina"' package.json > package.json.tmp
-          mv package.json.tmp package.json
       - name: Publish to NPM
         working-directory: wasm/pkg
         run: npm publish --access public --provenance
