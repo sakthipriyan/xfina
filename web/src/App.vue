@@ -42,6 +42,17 @@ const equityStatement = ref(null);
 const isProcessing = ref(false);
 const parseTime = ref(null);
 
+const availableVersions = ref(['main']);
+const currentVersion = ref('main');
+
+const onVersionChange = (version) => {
+    if (version === 'main') {
+        window.location.href = '/';
+    } else {
+        window.location.href = `/${version}/`;
+    }
+};
+
 const selectedCategory = ref('Mutual Funds');
 const selectedSource = ref('CAMS');
 const password = ref('');
@@ -96,6 +107,28 @@ onMounted(async () => {
         wasmLoaded.value = true;
     } catch (e) {
         error.value = "Failed to load WebAssembly module: " + e;
+    }
+
+    // Check current version from URL
+    const path = window.location.pathname;
+    const match = path.match(/^\/(v\d+\.\d+\.\d+)\/?$/);
+    if (match) {
+        currentVersion.value = match[1];
+        if (!availableVersions.value.includes(match[1])) {
+            availableVersions.value.push(match[1]);
+        }
+    }
+
+    // Fetch tags from GitHub API
+    try {
+        const res = await fetch("https://api.github.com/repos/sakthipriyan/xfina/tags");
+        if (res.ok) {
+            const tags = await res.json();
+            const tagNames = tags.map(t => t.name);
+            availableVersions.value = ['main', ...tagNames];
+        }
+    } catch (e) {
+        console.warn("Failed to fetch versions", e);
     }
 });
 
@@ -351,6 +384,18 @@ const camsGroupedAssets = computed(() => {
           </div>
         </div>
         <div class="flex items-start space-x-3">
+          <Select v-model="currentVersion" @update:modelValue="onVersionChange">
+            <SelectTrigger class="w-[110px] h-9 border-border bg-background shadow-sm">
+              <SelectValue placeholder="Version" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem v-for="v in availableVersions" :key="v" :value="v">
+                  {{ v === 'main' ? 'main (latest)' : v }}
+                </SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
           <a href="https://github.com/sakthipriyan/xfina" target="_blank" rel="noopener noreferrer" class="no-underline">
             <Button variant="outline" class="flex items-center gap-2 px-3">
               <Github class="h-[1.2rem] w-[1.2rem]" />
