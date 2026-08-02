@@ -62,7 +62,7 @@ jobs:
       - name: Rename Package to xfina
         working-directory: wasm/pkg
         run: |
-          jq '.name = "@spriyan/xfina"' package.json > package.json.tmp
+          jq '.name = "xfina"' package.json > package.json.tmp
           mv package.json.tmp package.json
       - name: Publish to NPM
         working-directory: wasm/pkg
