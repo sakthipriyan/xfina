@@ -1,0 +1,22 @@
+[package]
+name = "xfina-py"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[lib]
+name = "xfina_py"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.21", features = ["extension-module"] }
+xfina-models.workspace = true
+xfina-mf-cams = { path = "../mutual-funds/cams" }
+xfina-intl-stocks-ibkr = { path = "../intl-stocks/ibkr" }
+xfina-ba-axis = { path = "../bank-accounts/axis" }
+xfina-ba-bob = { path = "../bank-accounts/bob" }
+xfina-ba-hdfc = { path = "../bank-accounts/hdfc" }
+xfina-ba-icici = { path = "../bank-accounts/icici" }
+xfina-ba-sbi = { path = "../bank-accounts/sbi" }
+xfina-cc-hdfc = { path = "../credit-cards/hdfc" }
+xfina-cc-icici = { path = "../credit-cards/icici" }
