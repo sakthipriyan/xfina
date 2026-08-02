@@ -45,6 +45,8 @@ const parseTime = ref(null);
 const availableVersions = ref(['main']);
 const currentVersion = ref('main');
 const isLocalhost = ref(false);
+const commitHash = import.meta.env.VITE_COMMIT_HASH || '';
+const shortCommitHash = commitHash ? commitHash.substring(0, 7) : '';
 
 const onVersionChange = (version) => {
     if (version === 'main') {
@@ -390,22 +392,31 @@ const camsGroupedAssets = computed(() => {
             </p>
           </div>
         </div>
-        <div class="flex items-start space-x-3">
+        <div class="flex items-center space-x-3">
           <div v-if="isLocalhost" class="flex items-center h-9 px-3 border border-border bg-muted/30 rounded-md shadow-sm text-sm font-medium text-muted-foreground">
-            main (local)
+            Local Build
           </div>
-          <Select v-else v-model="currentVersion" @update:modelValue="onVersionChange">
-            <SelectTrigger class="w-[140px] h-9 border-border bg-background shadow-sm">
-              <SelectValue placeholder="Version" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectItem v-for="v in availableVersions" :key="v" :value="v">
-                  {{ v === 'main' ? 'main (latest)' : v }}
-                </SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+          <div v-else class="flex items-center space-x-2">
+            <Select v-model="currentVersion" @update:modelValue="onVersionChange">
+              <SelectTrigger class="w-[140px] h-9 border-border bg-background shadow-sm">
+                <SelectValue placeholder="Version" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem v-for="v in availableVersions" :key="v" :value="v">
+                    {{ v === 'main' ? 'main (latest)' : v }}
+                  </SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <a v-if="currentVersion === 'main' && shortCommitHash" 
+               :href="`https://github.com/sakthipriyan/xfina/commit/${commitHash}`" 
+               target="_blank" 
+               rel="noopener noreferrer" 
+               class="text-xs font-mono text-muted-foreground hover:text-primary transition-colors hover:underline px-2">
+              {{ shortCommitHash }}
+            </a>
+          </div>
           <a href="https://github.com/sakthipriyan/xfina" target="_blank" rel="noopener noreferrer" class="no-underline">
             <Button variant="outline" class="flex items-center gap-2 px-3">
               <Github class="h-[1.2rem] w-[1.2rem]" />
