@@ -17,7 +17,7 @@ members = [
     "bank-accounts/sbi",
     "bank-accounts/bob",
     "bank-accounts/axis",
-    "xfina-py"
+    "python"
 ]
 
 [workspace.package]
