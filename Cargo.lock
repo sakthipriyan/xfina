@@ -97,6 +97,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.104"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
+
+[[package]]
 name = "arbitrary"
 version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1774,6 +1780,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "xfina"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "calamine 0.36.0",
+ "clap",
+ "serde_json",
+ "xfina-ba-axis",
+ "xfina-ba-bob",
+ "xfina-ba-hdfc",
+ "xfina-ba-icici",
+ "xfina-ba-sbi",
+ "xfina-cc-hdfc",
+ "xfina-cc-icici",
+ "xfina-intl-stocks-ibkr",
+ "xfina-mf-cams",
+ "xfina-models",
+]
+
+[[package]]
 name = "xfina-ba-axis"
 version = "0.1.0"
 dependencies = [
@@ -1861,13 +1887,6 @@ dependencies = [
  "serde",
  "serde_json",
  "xfina-models",
-]
-
-[[package]]
-name = "xfina-cli"
-version = "0.1.0"
-dependencies = [
- "calamine 0.36.0",
 ]
 
 [[package]]
