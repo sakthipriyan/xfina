@@ -14,5 +14,8 @@ export default defineConfig({
   build: {
     outDir: '../docs',
     emptyOutDir: true
+  },
+  define: {
+    __COMMIT_HASH__: JSON.stringify(process.env.VITE_COMMIT_HASH || '')
   }
 })
