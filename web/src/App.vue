@@ -46,7 +46,7 @@ const availableVersions = ref(['main']);
 const currentVersion = ref('main');
 const isLocalhost = ref(false);
 const commitHash = __COMMIT_HASH__;
-const shortCommitHash = commitHash ? commitHash.substring(0, 7) : '';
+const shortCommitHash = commitHash ? commitHash.substring(0, 8) : '';
 
 const onVersionChange = (version) => {
     if (version === 'main') {
@@ -393,10 +393,7 @@ const camsGroupedAssets = computed(() => {
           </div>
         </div>
         <div class="flex items-center space-x-3">
-          <div v-if="isLocalhost" class="flex items-center h-9 px-3 border border-border bg-muted/30 rounded-md shadow-sm text-sm font-medium text-muted-foreground">
-            Local Build
-          </div>
-          <div v-else class="flex items-center space-x-2">
+          <div class="flex items-center space-x-2">
             <a v-if="currentVersion === 'main' && shortCommitHash" 
                :href="`https://github.com/sakthipriyan/xfina/commit/${commitHash}`" 
                target="_blank" 
