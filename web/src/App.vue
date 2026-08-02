@@ -404,7 +404,7 @@ const camsGroupedAssets = computed(() => {
               <SelectContent>
                 <SelectGroup>
                   <SelectItem v-for="v in availableVersions" :key="v" :value="v">
-                    {{ v === 'main' ? 'main (latest)' : v }}
+                    {{ v === 'main' ? 'latest' : v }}
                   </SelectItem>
                 </SelectGroup>
               </SelectContent>
