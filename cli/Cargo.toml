@@ -1,5 +1,5 @@
 [package]
-name = "xfina-cli"
+name = "xfina"
 version.workspace = true
 edition.workspace = true
 
