@@ -9,13 +9,13 @@ It runs **100% in the browser** or Node.js, extracting structured data from raw 
 ## Installation
 
 ```bash
-npm install xfina
+npm install xfina-wasm
 ```
 
 ## Quick Start (Browser / Vite)
 
 ```javascript
-import init, { parse_hdfc_ba, parse_cams } from 'xfina';
+import init, { parse_hdfc_ba, parse_cams } from 'xfina-wasm';
 
 async function parseStatement(file) {
   // Initialize the WASM module
