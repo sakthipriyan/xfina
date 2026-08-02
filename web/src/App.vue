@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
 import init, { parse_ibkr, parse_cams, parse_hdfc_cc, parse_icici_cc, parse_hdfc_ba, parse_icici_ba, parse_sbi_ba, parse_bob_ba, parse_axis_ba } from './wasm/xfina_wasm.js';
-import { Sun, Moon, Github, HelpCircle, ChevronDown, Loader2, ArrowUp, ArrowDown } from 'lucide-vue-next';
+import { Sun, Moon, Github, HelpCircle, ChevronDown, Loader2, ArrowUp, ArrowDown, GitCommit } from 'lucide-vue-next';
 
 // Shadcn components
 import { Button } from '@/components/ui/button';
@@ -397,6 +397,16 @@ const camsGroupedAssets = computed(() => {
             Local Build
           </div>
           <div v-else class="flex items-center space-x-2">
+            <a v-if="currentVersion === 'main' && shortCommitHash" 
+               :href="`https://github.com/sakthipriyan/xfina/commit/${commitHash}`" 
+               target="_blank" 
+               rel="noopener noreferrer" 
+               class="no-underline">
+               <Button variant="outline" class="flex items-center gap-1.5 h-9 px-3 text-xs font-mono text-muted-foreground hover:text-foreground shadow-sm">
+                 <GitCommit class="w-3.5 h-3.5" />
+                 {{ shortCommitHash }}
+               </Button>
+            </a>
             <Select v-model="currentVersion" @update:modelValue="onVersionChange">
               <SelectTrigger class="w-[140px] h-9 border-border bg-background shadow-sm">
                 <SelectValue placeholder="Version" />
@@ -409,13 +419,6 @@ const camsGroupedAssets = computed(() => {
                 </SelectGroup>
               </SelectContent>
             </Select>
-            <a v-if="currentVersion === 'main' && shortCommitHash" 
-               :href="`https://github.com/sakthipriyan/xfina/commit/${commitHash}`" 
-               target="_blank" 
-               rel="noopener noreferrer" 
-               class="text-xs font-mono text-muted-foreground hover:text-primary transition-colors hover:underline px-2">
-              {{ shortCommitHash }}
-            </a>
           </div>
           <a href="https://github.com/sakthipriyan/xfina" target="_blank" rel="noopener noreferrer" class="no-underline">
             <Button variant="outline" class="flex items-center gap-2 px-3">
