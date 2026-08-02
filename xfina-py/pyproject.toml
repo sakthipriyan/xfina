@@ -3,7 +3,7 @@ requires = ["maturin>=1.5,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "xfina-py"
+name = "xfina"
 requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Rust",
@@ -15,4 +15,4 @@ description = "Python bindings for xfina financial parsers"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
-module-name = "xfina_py"
+module-name = "xfina"
