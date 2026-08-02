@@ -1,5 +1,5 @@
 [package]
-name = "xfina"
+name = "xfina-wasm"
 version.workspace = true
 edition.workspace = true
 publish = false
