@@ -45,7 +45,7 @@ const parseTime = ref(null);
 const availableVersions = ref(['main']);
 const currentVersion = ref('main');
 const isLocalhost = ref(false);
-const commitHash = import.meta.env.VITE_COMMIT_HASH || '';
+const commitHash = __COMMIT_HASH__;
 const shortCommitHash = commitHash ? commitHash.substring(0, 7) : '';
 
 const onVersionChange = (version) => {
