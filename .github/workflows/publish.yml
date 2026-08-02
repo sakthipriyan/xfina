@@ -40,12 +40,15 @@ jobs:
     name: Publish to NPM
     runs-on: ubuntu-latest
     needs: crates_io
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           registry-url: 'https://registry.npmjs.org'
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -58,14 +61,15 @@ jobs:
         run: wasm-pack build --target bundler
       - name: Publish to NPM
         working-directory: wasm/pkg
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --provenance
 
   pypi:
     name: Publish to PyPI
     runs-on: ubuntu-latest
     needs: crates_io
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Setup Python
@@ -74,11 +78,13 @@ jobs:
           python-version: '3.11'
       - name: Install Maturin
         run: pip install maturin
-      - name: Build and Publish Wheels
+      - name: Build Wheels
         working-directory: xfina-py
-        env:
-          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-        run: maturin publish --release
+        run: maturin build --release --out dist
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: xfina-py/dist/
 
   deploy_docs:
     name: Deploy Versioned Docs
