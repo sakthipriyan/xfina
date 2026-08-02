@@ -87,6 +87,40 @@ All data structures inherently map to the Sahamati AA specifications, with proje
 
 ---
 
+## Command Line Interface (CLI)
+
+Xfina provides a blazing fast Rust CLI tool for parsing statements directly from your terminal and exporting them to JSON.
+
+### Installation
+
+```bash
+cargo install xfina
+```
+
+### Usage
+
+```bash
+xfina <CATEGORY> <INSTITUTION> <FILE> [OPTIONS]
+```
+
+**Options:**
+- `-p, --password <PWD>`: Password to unlock encrypted PDFs
+- `-o, --output <DIR>`: Output file path. Defaults to `<input_file_stem>.json` in the same directory.
+
+**Examples:**
+```bash
+# Parse a bank statement
+xfina bank-account hdfc statement.xls
+
+# Parse a password-protected mutual fund statement
+xfina mutual-fund cams portfolio.pdf --password "mysecret"
+
+# Parse a credit card statement and export to a specific location
+xfina credit-card icici statement.xls --output ./exports/january.json
+```
+
+---
+
 ## Web App
 
 The [`web/`](./web) directory contains a **Vue 3 + Vite** frontend that uses the WASM module to parse files directly in the browser.
