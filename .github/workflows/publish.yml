@@ -84,12 +84,12 @@ jobs:
       - name: Install Maturin
         run: pip install maturin
       - name: Build Wheels
-        working-directory: xfina-py
+        working-directory: python
         run: maturin build --release --out dist
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: xfina-py/dist/
+          packages-dir: python/dist/
 
   deploy_docs:
     name: Deploy Versioned Docs
