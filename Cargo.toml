@@ -18,7 +18,8 @@ members = [
     "bank-accounts/bob",
     "bank-accounts/axis",
     "python",
-    "cli"
+    "cli",
+    "xtask"
 ]
 
 [workspace.package]
