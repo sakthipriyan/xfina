@@ -2,6 +2,9 @@
 name = "xfina-py"
 version.workspace = true
 edition.workspace = true
+description.workspace = true
+license.workspace = true
+repository.workspace = true
 publish = false
 
 [lib]
