@@ -96,7 +96,7 @@ Xfina provides a blazing fast Rust CLI tool for parsing statements directly from
 ### Installation
 
 ```bash
-cargo install xfina-cli
+cargo install xfina --features cli
 ```
 
 ### Usage
@@ -108,6 +108,7 @@ xfina <CATEGORY> <INSTITUTION> <FILE> [OPTIONS]
 **Options:**
 - `-p, --password <PWD>`: Password to unlock encrypted PDFs
 - `-o, --output <DIR>`: Output file path. Defaults to `<input_file_stem>.json` in the same directory.
+- `-f, --format <FORMAT>`: JSON format to output. Either `rebit` or `xfina` (default).
 
 **Examples:**
 ```bash
@@ -117,8 +118,34 @@ xfina bank-account hdfc statement.xls
 # Parse a password-protected mutual fund statement
 xfina mutual-fund cams portfolio.pdf --password "mysecret"
 
-# Parse a credit card statement and export to a specific location
-xfina credit-card icici statement.xls --output ./exports/january.json
+# Parse a credit card statement and export to a specific location in strict ReBIT format
+xfina credit-card icici statement.xls --output ./exports/january.json --format rebit
+```
+
+---
+
+## Rust Library Usage
+
+You can also use Xfina directly as a Rust library in your own projects:
+
+```toml
+[dependencies]
+xfina = "0.1.0"
+```
+
+```rust
+use xfina::bank_accounts::hdfc::parse_hdfc_bank_statement;
+
+fn main() {
+    let bytes = std::fs::read("hdfc_statement.xls").unwrap();
+    
+    // Parse the statement
+    let statement = parse_hdfc_bank_statement(&bytes, None).unwrap();
+    
+    // Convert to JSON (choose either strict ReBIT or extended Xfina format)
+    let json = statement.to_xfina_json();
+    println!("{}", serde_json::to_string_pretty(&json).unwrap());
+}
 ```
 
 ---

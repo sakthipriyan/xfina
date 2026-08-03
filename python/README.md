@@ -27,7 +27,8 @@ with open("hdfc_statement.xls", "rb") as f:
 
 # Parse it! 
 # The second argument is an optional password (None for Excel)
-account_data = xfina.parse_hdfc_ba(file_bytes, None)
+# The format parameter defaults to "xfina" if omitted, but can be "rebit"
+account_data = xfina.parse_hdfc_ba(file_bytes, password=None, format="xfina")
 
 print(f"Account Name: {account_data['profile']['holders']['holder'][0]['name']}")
 ```
@@ -42,7 +43,7 @@ with open("cams_cas.pdf", "rb") as f:
     file_bytes = f.read()
 
 # Pass the password to decrypt the PDF
-mf_data = xfina.parse_cams(file_bytes, "PAN1234567")
+mf_data = xfina.parse_cams(file_bytes, password="PAN1234567")
 
 # It returns a standard Python dictionary. You can easily dump it to JSON:
 with open("output.json", "w") as f:
@@ -58,21 +59,21 @@ import xfina
 with open("ibkr_activity.csv", "r", encoding="utf-8") as f:
     csv_content = f.read()
 
-ibkr_data = xfina.parse_ibkr(csv_content)
+ibkr_data = xfina.parse_ibkr(csv_content, format="rebit")
 ```
 
 ## Available Parsers
 
-All parsers return a structured Python dictionary that mirrors the ReBIT JSON schema.
+All parsers return a structured Python dictionary that mirrors the ReBIT JSON schema. Each parser accepts an optional `format` parameter which defaults to `"xfina"`, but can be `"rebit"` for strict AA schema compliance without our extended data fields.
 
 | Category | Institution | Format | Python Function | Input Type |
 |---|---|---|---|---|
-| Bank Account | HDFC | `.xls` | `parse_hdfc_ba(bytes, password=None)` | `bytes` |
-| Bank Account | ICICI | `.xls` | `parse_icici_ba(bytes, filename=None)` | `bytes` |
-| Bank Account | SBI | PDF | `parse_sbi_ba(bytes, password=None, filename=None)` | `bytes` |
-| Bank Account | BOB | `.xls` | `parse_bob_ba(bytes)` | `bytes` |
-| Bank Account | Axis | `.xls` | `parse_axis_ba(bytes, filename=None)` | `bytes` |
-| Credit Card | HDFC | CSV | `parse_hdfc_cc(content, filename=None)` | `str` |
-| Credit Card | ICICI | `.xls` | `parse_icici_cc(bytes, filename=None)` | `bytes` |
-| Mutual Funds | CAMS | PDF | `parse_cams(bytes, password=None, filename=None)` | `bytes` |
-| Intl Stocks | IBKR | CSV | `parse_ibkr(content)` | `str` |
+| Bank Account | HDFC | `.xls` | `parse_hdfc_ba(bytes, password=None, format=None)` | `bytes` |
+| Bank Account | ICICI | `.xls` | `parse_icici_ba(bytes, filename=None, format=None)` | `bytes` |
+| Bank Account | SBI | PDF | `parse_sbi_ba(bytes, password=None, filename=None, format=None)` | `bytes` |
+| Bank Account | BOB | `.xls` | `parse_bob_ba(bytes, format=None)` | `bytes` |
+| Bank Account | Axis | `.xls` | `parse_axis_ba(bytes, filename=None, format=None)` | `bytes` |
+| Credit Card | HDFC | CSV | `parse_hdfc_cc(content, filename=None, format=None)` | `str` |
+| Credit Card | ICICI | `.xls` | `parse_icici_cc(bytes, filename=None, format=None)` | `bytes` |
+| Mutual Funds | CAMS | PDF | `parse_cams(bytes, password=None, format=None, filename=None)` | `bytes` |
+| Intl Stocks | IBKR | CSV | `parse_ibkr(content, format=None)` | `str` |

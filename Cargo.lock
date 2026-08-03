@@ -989,6 +989,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pythonize"
+version = "0.21.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d0664248812c38cc55a4ed07f88e4df516ce82604b93b1ffdc041aa77a6cb3c"
+dependencies = [
+ "pyo3",
+ "serde",
+]
+
+[[package]]
 name = "quick-xml"
 version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1679,6 +1689,8 @@ name = "xfina-py"
 version = "0.1.0"
 dependencies = [
  "pyo3",
+ "pythonize",
+ "serde_json",
  "xfina",
 ]
 
