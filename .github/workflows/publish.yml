@@ -130,6 +130,7 @@ jobs:
         run: npm ci
       - name: Build Vue App for Tag
         working-directory: web
+        env:
           VITE_BASE_URL: /${{ env.TAG_NAME }}/
         run: npm run build
       - name: Deploy to gh-pages branch subdirectory
