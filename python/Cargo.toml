@@ -13,5 +13,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = { version = "0.21", features = ["extension-module"] }
+pythonize = "0.21"
+serde_json = { workspace = true }
 
 xfina = { path = ".." }
