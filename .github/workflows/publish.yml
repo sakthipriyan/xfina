@@ -40,7 +40,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: 'https://registry.npmjs.org'
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
