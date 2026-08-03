@@ -1781,7 +1781,7 @@ dependencies = [
 
 [[package]]
 name = "xfina"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "xfina-ba-axis",
  "xfina-ba-bob",
@@ -1797,7 +1797,7 @@ dependencies = [
 
 [[package]]
 name = "xfina-ba-axis"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "calamine 0.22.1",
  "chrono",
@@ -1809,7 +1809,7 @@ dependencies = [
 
 [[package]]
 name = "xfina-ba-bob"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "calamine 0.36.0",
  "chrono",
@@ -1821,7 +1821,7 @@ dependencies = [
 
 [[package]]
 name = "xfina-ba-hdfc"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "calamine 0.22.1",
  "chrono",
@@ -1833,7 +1833,7 @@ dependencies = [
 
 [[package]]
 name = "xfina-ba-icici"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "calamine 0.22.1",
  "chrono",
@@ -1845,7 +1845,7 @@ dependencies = [
 
 [[package]]
 name = "xfina-ba-sbi"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "calamine 0.22.1",
  "chrono",
@@ -1859,7 +1859,7 @@ dependencies = [
 
 [[package]]
 name = "xfina-cc-hdfc"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "chrono",
  "num-traits",
@@ -1873,7 +1873,7 @@ dependencies = [
 
 [[package]]
 name = "xfina-cc-icici"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "calamine 0.25.0",
  "chrono",
@@ -1887,7 +1887,7 @@ dependencies = [
 
 [[package]]
 name = "xfina-cli"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -1897,7 +1897,7 @@ dependencies = [
 
 [[package]]
 name = "xfina-intl-stocks-ibkr"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -1909,10 +1909,9 @@ dependencies = [
 
 [[package]]
 name = "xfina-mf-cams"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "chrono",
- "clap",
  "pdf-extract",
  "regex",
  "rust_decimal",
@@ -1922,7 +1921,7 @@ dependencies = [
 
 [[package]]
 name = "xfina-models"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "chrono",
  "rust_decimal",
@@ -1933,7 +1932,7 @@ dependencies = [
 
 [[package]]
 name = "xfina-py"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "pyo3",
  "xfina-ba-axis",
@@ -1950,7 +1949,7 @@ dependencies = [
 
 [[package]]
 name = "xfina-wasm"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "serde_json",
  "wasm-bindgen",
@@ -1968,7 +1967,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.1.0"
+version = "0.0.1"
 
 [[package]]
 name = "zerocopy"
