@@ -1783,10 +1783,6 @@ dependencies = [
 name = "xfina"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "calamine 0.36.0",
- "clap",
- "serde_json",
  "xfina-ba-axis",
  "xfina-ba-bob",
  "xfina-ba-hdfc",
@@ -1890,6 +1886,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "xfina-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "serde_json",
+ "xfina",
+]
+
+[[package]]
 name = "xfina-intl-stocks-ibkr"
 version = "0.1.0"
 dependencies = [
@@ -1959,6 +1965,10 @@ dependencies = [
  "xfina-mf-cams",
  "xfina-models",
 ]
+
+[[package]]
+name = "xtask"
+version = "0.1.0"
 
 [[package]]
 name = "zerocopy"
