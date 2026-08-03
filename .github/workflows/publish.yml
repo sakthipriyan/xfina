@@ -56,9 +56,9 @@ jobs:
           target: wasm32-unknown-unknown
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-      - name: Build WASM (Bundler Target)
+      - name: Build WASM (Web Target)
         working-directory: wasm
-        run: wasm-pack build --target bundler
+        run: wasm-pack build --target web
       - name: Publish to NPM
         working-directory: wasm/pkg
         run: npm publish --access public --provenance
