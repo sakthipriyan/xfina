@@ -40,7 +40,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: 'https://registry.npmjs.org'
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -52,9 +51,9 @@ jobs:
         run: wasm-pack build --target web
       - name: Publish to NPM
         working-directory: wasm/pkg
-        env:
-          NODE_AUTH_TOKEN: ''
-        run: npm publish --access public --provenance
+        run: |
+          unset NODE_AUTH_TOKEN
+          npm publish --access public --provenance
 
   pypi:
     name: Publish to PyPI
