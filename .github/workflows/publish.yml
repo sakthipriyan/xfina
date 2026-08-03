@@ -14,41 +14,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Rust
+      
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-      - name: Publish xfina-models
-        run: cargo publish -p xfina-models --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-      - name: Publish Bank Accounts
+        
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        
+      - name: Publish xfina crate
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
-          sleep 15
-          cargo publish -p xfina-ba-axis --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-          sleep 15
-          cargo publish -p xfina-ba-bob --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-          sleep 15
-          cargo publish -p xfina-ba-hdfc --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-          sleep 15
-          cargo publish -p xfina-ba-icici --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-          sleep 15
-          cargo publish -p xfina-ba-sbi --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-      - name: Publish Credit Cards
-        run: |
-          sleep 15
-          cargo publish -p xfina-cc-hdfc --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-          sleep 15
-          cargo publish -p xfina-cc-icici --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-      - name: Publish Mutual Funds & Intl Stocks
-        run: |
-          sleep 15
-          cargo publish -p xfina-mf-cams --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-          sleep 15
-          cargo publish -p xfina-intl-stocks-ibkr --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-      - name: Publish xfina & xfina-cli
-        run: |
-          sleep 15
-          cargo publish -p xfina --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-          sleep 15
-          cargo publish -p xfina-cli --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-
+          cargo publish --package xfina
+          
   npm:
     name: Publish to NPM
     runs-on: ubuntu-latest

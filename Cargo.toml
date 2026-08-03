@@ -6,22 +6,16 @@ description.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[[bin]]
+name = "xfina"
+path = "src/main.rs"
+required-features = ["cli"]
+
 [workspace]
 resolver = "2"
 members = [
-    "models",
-    "mutual-funds/cams",
-    "intl-stocks/ibkr",
     "wasm",
-    "credit-cards/hdfc",
-    "credit-cards/icici",
-    "bank-accounts/hdfc",
-    "bank-accounts/icici",
-    "bank-accounts/sbi",
-    "bank-accounts/bob",
-    "bank-accounts/axis",
     "python",
-    "cli",
     "xtask"
 ]
 
@@ -33,26 +27,57 @@ repository = "https://github.com/sakthipriyan/xfina"
 description = "Fast, privacy-first parser for Indian financial statements (ReBIT/AA standard)"
 
 [workspace.dependencies]
-xfina-models = { version = "0.1.0", path = "models" }
-serde = "1.0"
+serde = { version = "1.0", features = ["derive"] }
 pdf-extract = "0.7"
 csv = "1.3"
 wasm-bindgen = "0.2"
 serde_json = "1.0"
 regex = "1.10"
-chrono = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
 serde_with = "3"
 clap = { version = "4.5", features = ["derive"] }
 anyhow = "1.0"
+calamine = "0.36"
+rust_decimal = { version = "1.42", features = ["serde", "serde-with-float", "serde-with-str"] }
+num-traits = "0.2"
+chrono-tz = "0.10"
 
 [dependencies]
-xfina-models = { version = "0.1.0", path = "models" }
-xfina-mf-cams = { version = "0.1.0", path = "mutual-funds/cams" }
-xfina-intl-stocks-ibkr = { version = "0.1.0", path = "intl-stocks/ibkr" }
-xfina-cc-hdfc = { version = "0.1.0", path = "credit-cards/hdfc" }
-xfina-cc-icici = { version = "0.1.0", path = "credit-cards/icici" }
-xfina-ba-hdfc = { version = "0.1.0", path = "bank-accounts/hdfc" }
-xfina-ba-icici = { version = "0.1.0", path = "bank-accounts/icici" }
-xfina-ba-sbi = { version = "0.1.0", path = "bank-accounts/sbi" }
-xfina-ba-bob = { version = "0.1.0", path = "bank-accounts/bob" }
-xfina-ba-axis = { version = "0.1.0", path = "bank-accounts/axis" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_with = { workspace = true }
+regex = { workspace = true, optional = true }
+chrono = { workspace = true, optional = true }
+pdf-extract = { workspace = true, optional = true }
+csv = { workspace = true, optional = true }
+calamine = { workspace = true, optional = true }
+rust_decimal = { workspace = true, optional = true }
+num-traits = { workspace = true, optional = true }
+chrono-tz = { workspace = true, optional = true }
+
+# CLI Dependencies
+clap = { workspace = true, optional = true }
+anyhow = { workspace = true, optional = true }
+
+[features]
+default = ["all"]
+all = ["ba-hdfc", "ba-icici", "ba-sbi", "ba-bob", "ba-axis", "cc-hdfc", "cc-icici", "mf-cams", "is-ibkr"]
+cli = ["clap", "anyhow", "all"]
+
+# Bank Accounts
+ba-hdfc = ["calamine", "chrono", "regex", "rust_decimal"]
+ba-icici = ["calamine", "chrono", "regex", "rust_decimal"]
+ba-sbi = ["pdf-extract", "chrono", "regex", "rust_decimal"]
+ba-bob = ["calamine", "chrono", "regex", "rust_decimal"]
+ba-axis = ["calamine", "chrono", "regex", "rust_decimal"]
+
+# Credit Cards
+cc-hdfc = ["chrono", "regex", "rust_decimal", "num-traits"]
+cc-icici = ["calamine", "chrono", "regex", "rust_decimal", "num-traits"]
+
+# Mutual Funds & International Stocks
+mf-cams = ["pdf-extract", "regex", "chrono", "rust_decimal"]
+is-ibkr = ["csv", "chrono", "chrono-tz", "rust_decimal"]
+
+[dev-dependencies]
+serde_json = { workspace = true }

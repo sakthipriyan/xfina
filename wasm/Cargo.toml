@@ -13,13 +13,5 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 wasm-bindgen.workspace = true
 serde_json.workspace = true
-xfina-models.workspace = true
-xfina-intl-stocks-ibkr = { path = "../intl-stocks/ibkr" }
-xfina-mf-cams = { path = "../mutual-funds/cams" }
-xfina-cc-hdfc = { path = "../credit-cards/hdfc" }
-xfina-cc-icici = { path = "../credit-cards/icici" }
-xfina-ba-hdfc = { path = "../bank-accounts/hdfc" }
-xfina-ba-icici = { path = "../bank-accounts/icici" }
-xfina-ba-sbi = { path = "../bank-accounts/sbi" }
-xfina-ba-bob = { path = "../bank-accounts/bob" }
-xfina-ba-axis = { path = "../bank-accounts/axis" }
+
+xfina = { path = ".." }
