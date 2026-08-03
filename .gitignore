@@ -36,3 +36,4 @@ parse_test[0-9]*
 *.rs.scratch
 test_out.txt
 parse_test*.rs
+*.py
