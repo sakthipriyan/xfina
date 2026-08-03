@@ -394,7 +394,7 @@ const camsGroupedAssets = computed(() => {
         </div>
         <div class="flex items-center space-x-3">
           <div class="flex items-center space-x-2">
-            <a v-if="currentVersion === 'main' && shortCommitHash" 
+            <a v-if="shortCommitHash" 
                :href="`https://github.com/sakthipriyan/xfina/commit/${commitHash}`" 
                target="_blank" 
                rel="noopener noreferrer" 
