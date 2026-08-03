@@ -13,7 +13,10 @@
 //! let bytes = std::fs::read("statement.xls").unwrap();
 //! let account = parse_hdfc_bank_statement(&bytes, None)?;
 //!
-//! println!("Account Name: {}", account.profile.holders.holder[0].name);
+//! // Example: Accessing parsed data (this will compile if you load an actual account)
+//! if let Some(profile) = account.profile {
+//!     println!("Account Name: {}", profile.holders.holder[0].name);
+//! }
 //! # Ok(())
 //! # }
 //! ```
@@ -28,25 +31,45 @@
 //! - [`mutual_funds`]: Parsers for mutual fund statements (CAMS CAS)
 //! - [`intl_stocks`]: Parsers for international broker statements (IBKR)
 
-pub use xfina_models as models;
+
 
 pub mod mutual_funds {
-    pub use xfina_mf_cams as cams;
+    #[cfg(feature = "mf-cams")]
+    pub mod cams;
+    #[cfg(feature = "mf-cams")]
+    pub mod cas;
+    #[cfg(feature = "mf-cams")]
+    pub mod layout;
 }
 
 pub mod intl_stocks {
-    pub use xfina_intl_stocks_ibkr as ibkr;
+    #[cfg(feature = "is-ibkr")]
+    pub mod ibkr;
 }
 
 pub mod credit_cards {
-    pub use xfina_cc_hdfc as hdfc;
-    pub use xfina_cc_icici as icici;
+    #[cfg(feature = "cc-hdfc")]
+    pub mod hdfc;
+    #[cfg(feature = "cc-icici")]
+    pub mod icici;
 }
 
 pub mod bank_accounts {
-    pub use xfina_ba_hdfc as hdfc;
-    pub use xfina_ba_icici as icici;
-    pub use xfina_ba_sbi as sbi;
-    pub use xfina_ba_bob as bob;
-    pub use xfina_ba_axis as axis;
+    #[cfg(feature = "ba-hdfc")]
+    pub mod hdfc;
+    #[cfg(feature = "ba-icici")]
+    pub mod icici;
+    #[cfg(feature = "ba-sbi")]
+    pub mod sbi;
+    #[cfg(feature = "ba-bob")]
+    pub mod bob;
+    #[cfg(feature = "ba-axis")]
+    pub mod axis;
+    
+    #[cfg(feature = "ba-sbi")]
+    pub(crate) mod layout;
+    #[cfg(feature = "ba-sbi")]
+    pub(crate) mod pdf_parser;
 }
+
+pub mod models;
