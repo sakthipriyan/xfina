@@ -2,6 +2,9 @@
 name = "xfina"
 version.workspace = true
 edition.workspace = true
+description = "Fast, privacy-first parser for Indian financial statements (ReBIT/AA standard)"
+license.workspace = true
+repository.workspace = true
 
 [workspace]
 resolver = "2"
@@ -25,6 +28,8 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/sakthipriyan/xfina"
 
 [workspace.dependencies]
 xfina-models = { path = "models" }
