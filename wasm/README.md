@@ -1,6 +1,6 @@
 # Xfina (WASM Bindings)
 
-[![npm version](https://badge.fury.io/js/xfina.svg)](https://badge.fury.io/js/xfina)
+[![npm version](https://badge.fury.io/js/xfina-wasm.svg)](https://badge.fury.io/js/xfina-wasm)
 
 **Xfina** is a blazingly fast WebAssembly (WASM) library for parsing Indian financial statements (Bank Accounts, Credit Cards, Mutual Funds) and international brokers (IBKR).
 
