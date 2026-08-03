@@ -64,6 +64,8 @@ jobs:
       - name: Publish to NPM
         working-directory: wasm/pkg
         run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   pypi:
     name: Publish to PyPI
@@ -87,6 +89,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: python/dist/
+          skip-existing: true
 
   deploy_docs:
     name: Deploy Versioned Docs
