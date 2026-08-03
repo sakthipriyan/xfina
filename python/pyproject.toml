@@ -12,6 +12,7 @@ classifiers = [
 ]
 dynamic = ["version"]
 description = "Python bindings for xfina financial parsers"
+readme = "README.md"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
