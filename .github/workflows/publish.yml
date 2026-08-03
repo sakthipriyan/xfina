@@ -52,6 +52,7 @@ jobs:
       - name: Publish to NPM
         working-directory: wasm/pkg
         run: |
+          npm install -g npm@latest
           unset NODE_AUTH_TOKEN
           npm publish --access public --provenance
 
