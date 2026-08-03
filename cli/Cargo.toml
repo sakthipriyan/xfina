@@ -12,7 +12,7 @@ name = "xfina"
 path = "src/main.rs"
 
 [dependencies]
-xfina = { path = ".." }
+xfina = { version = "0.1.0", path = ".." }
 clap = { workspace = true }
 anyhow = { workspace = true }
 serde_json = { workspace = true }
