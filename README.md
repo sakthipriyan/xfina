@@ -68,11 +68,13 @@ The project is a **Cargo workspace** with these crates:
 ```
 xfina/
 ├── models/               # xfina-models: shared data models (ReBIT / AA standard compatible)
-├── bank-accounts/        # Bank Account parsers (HDFC, ICICI, SBI, BoB)
+├── bank-accounts/        # Bank Account parsers (HDFC, ICICI, SBI, BoB, Axis)
 ├── credit-cards/         # Credit Card parsers (HDFC, ICICI)
 ├── mutual-funds/         # Mutual Fund parsers (CAMS)
 ├── intl-stocks/          # International Broker parsers (IBKR)
+├── cli/                  # xfina-cli: Terminal command-line interface
 ├── wasm/                 # xfina-wasm: WASM bindings (wasm-bindgen)
+├── python/               # python: Python bindings (pyo3)
 └── web/                  # Vue 3 + Vite frontend (deployed via GitHub Pages)
 ```
 
@@ -94,7 +96,7 @@ Xfina provides a blazing fast Rust CLI tool for parsing statements directly from
 ### Installation
 
 ```bash
-cargo install xfina
+cargo install xfina-cli
 ```
 
 ### Usage
@@ -167,12 +169,12 @@ Pushed to `main` → GitHub Actions automatically builds WASM + Vue and deploys 
 | KFinTech | | | ⏳ | |
 | State Bank of India | ✅ | | | |
 
-### Over next few weeks
+### Status
 - [ ] CSV / JSON export in the web app
-- [ ] Publishing
-  - [ ] Publish `xfina` to Rust crates.io
-  - [ ] Publish JavaScript/TypeScript WASM bindings to npm
-  - [ ] Publish Python bindings (`xfina-py`) via `pyo3` to PyPI
+- [x] Publishing
+  - [x] Publish `xfina` and `xfina-cli` to Rust crates.io
+  - [x] Publish WebAssembly bindings (`xfina-wasm`) to npm
+  - [x] Publish Python bindings (`xfina`) via `pyo3` to PyPI
 
 ## License
 
