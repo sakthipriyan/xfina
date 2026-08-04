@@ -441,7 +441,7 @@ const camsGroupedAssets = computed(() => {
         </div>
         <div class="flex items-center space-x-3">
           <a href="https://sakthipriyan.com/building-wealth" target="_blank" rel="noopener noreferrer" class="no-underline">
-            <Button variant="outline" class="h-9 px-3 font-medium text-foreground">sakthipriyan.com/building-wealth</Button>
+            <Button variant="outline" class="h-9 px-3 font-medium text-foreground">sakthipriyan.com</Button>
           </a>
           <a href="https://github.com/sakthipriyan/xfina" target="_blank" rel="noopener noreferrer" class="no-underline" title="GitHub Repository">
             <Button variant="outline" size="icon">
