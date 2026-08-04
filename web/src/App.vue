@@ -409,7 +409,7 @@ const camsGroupedAssets = computed(() => {
                  {{ shortCommitHash }}
                </Button>
             </a>
-            <Select :modelValue="selectedDropdownValue" @update:modelValue="onVersionChange">
+            <Select :key="versionsData ? 'loaded' : 'loading'" :modelValue="selectedDropdownValue" @update:modelValue="onVersionChange">
               <SelectTrigger class="w-[150px] h-9 border-border bg-background shadow-sm">
                 <SelectValue placeholder="Version" />
               </SelectTrigger>
