@@ -100,6 +100,9 @@ pub fn run(args: &[String]) {
         println!("Building Unreleased version...");
         run_cmd(&wasm_dir, "wasm-pack", &["build", "--target", "web"]);
         
+        // Ensure dependencies like Vite are installed
+        run_cmd(&web_dir, "npm", &["install"]);
+        
         let mut build_cmd = Command::new("npm");
         build_cmd.current_dir(&web_dir)
             .args(&["run", "build"])
