@@ -11,6 +11,9 @@ fn test_cams_parser() {
     let _ = fs::create_dir_all(&xfina_dir);
     let _ = fs::create_dir_all(&rebit_dir);
 
+    let passwords_str = fs::read_to_string(format!("{}/passwords.json", cams_dir)).unwrap_or_else(|_| "{}".to_string());
+    let passwords: std::collections::HashMap<String, String> = serde_json::from_str(&passwords_str).unwrap_or_default();
+
     let paths = fs::read_dir(format!("{}/raw", cams_dir)).unwrap();
 
     for path in paths {
@@ -20,7 +23,10 @@ fn test_cams_parser() {
             if extension == "pdf" {
                 let bytes = fs::read(&path).unwrap();
                 let file_name = path.file_stem().unwrap().to_str().unwrap();
-                let parsed = parse_cams_pdf(&bytes, Some("***REDACTED***"), Some(file_name)).expect("Failed to parse CAMS PDF");
+                let file_name_with_ext = path.file_name().unwrap().to_str().unwrap();
+                let password = passwords.get(file_name_with_ext).or_else(|| passwords.get("default")).map(|s| s.as_str());
+
+                let parsed = parse_cams_pdf(&bytes, password, Some(file_name)).expect("Failed to parse CAMS PDF");
 
                 let xfina_json = serde_json::to_string_pretty(&parsed.to_xfina_json()).unwrap();
                 let rebit_json = serde_json::to_string_pretty(&parsed.to_rebit_json()).unwrap();
