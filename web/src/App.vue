@@ -48,7 +48,7 @@ const activeMinor = appVersion !== 'Unreleased' ? appVersion.split('.').slice(0,
 const isLocalhost = ref(false);
 const commitHash = __COMMIT_HASH__;
 const cleanCommitHash = commitHash ? commitHash.replace('*', '') : '';
-const shortCommitHash = commitHash ? commitHash.substring(0, 8) : '';
+const shortCommitHash = cleanCommitHash ? cleanCommitHash.substring(0, 7) : '';
 
 const selectedDropdownValue = computed(() => {
     if (appVersion === 'Unreleased') return 'unreleased';
