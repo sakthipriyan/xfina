@@ -5,10 +5,10 @@
 # Xfina
 
 [![Crates.io](https://img.shields.io/crates/v/xfina.svg)](https://crates.io/crates/xfina)
-[![npm](https://img.shields.io/npm/v/xfina-wasm.svg)](https://www.npmjs.com/package/xfina-wasm)
 [![PyPI](https://img.shields.io/pypi/v/xfina.svg)](https://pypi.org/project/xfina/)
+[![npm](https://img.shields.io/npm/v/xfina-wasm.svg)](https://www.npmjs.com/package/xfina-wasm)
 
-**Xfina** is a collection of libraries (Rust, Python, JS) and a web interface for extracting structured financial data from **Indian** bank statements, credit card statements, mutual fund reports, and international brokerage reports.
+**Xfina** is a collection of libraries (Rust, Python, JS), a command-line interface (CLI), and a web interface for extracting structured financial data from **Indian** bank statements, credit card statements, mutual fund reports, and international brokerage reports.
 
 All parsers are compiled to **WebAssembly (WASM)** and run entirely in the browser — your financial data never leaves your device. 
 
@@ -203,10 +203,6 @@ Tagged releases (`v0.1.3`) → Deploys a permanent, versioned snapshot (`/0.1/`)
 
 ### Status
 - [ ] CSV / JSON export in the web app
-- [x] Publishing
-  - [x] Publish `xfina` and `xfina-cli` to Rust crates.io
-  - [x] Publish WebAssembly bindings (`xfina-wasm`) to npm
-  - [x] Publish Python bindings (`xfina`) via `pyo3` to PyPI
 
 ## License
 
