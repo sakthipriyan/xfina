@@ -398,19 +398,9 @@ const camsGroupedAssets = computed(() => {
           </div>
         </div>
         <div class="flex items-center space-x-3">
-          <div class="flex items-center space-x-2">
-            <a v-if="shortCommitHash" 
-               :href="`https://github.com/sakthipriyan/xfina/commit/${cleanCommitHash}`" 
-               target="_blank" 
-               rel="noopener noreferrer" 
-               class="no-underline">
-               <Button variant="outline" class="flex items-center gap-1.5 h-9 px-3 text-xs font-mono text-muted-foreground hover:text-foreground shadow-sm">
-                 <GitCommit class="w-3.5 h-3.5" />
-                 {{ shortCommitHash }}
-               </Button>
-            </a>
+          <div class="flex items-center">
             <Select :key="versionsData ? 'loaded' : 'loading'" :modelValue="selectedDropdownValue" @update:modelValue="onVersionChange">
-              <SelectTrigger class="w-[150px] h-9 border-border bg-background shadow-sm">
+              <SelectTrigger class="w-[140px] h-9 border-border bg-background shadow-sm rounded-r-none focus:z-10 focus:ring-1">
                 <SelectValue placeholder="Version" />
               </SelectTrigger>
               <SelectContent v-if="versionsData">
@@ -437,6 +427,16 @@ const camsGroupedAssets = computed(() => {
                 </SelectGroup>
               </SelectContent>
             </Select>
+            <a v-if="shortCommitHash" 
+               :href="`https://github.com/sakthipriyan/xfina/commit/${cleanCommitHash}`" 
+               target="_blank" 
+               rel="noopener noreferrer" 
+               class="no-underline relative z-0">
+               <Button variant="outline" class="flex items-center gap-1.5 h-9 px-3 text-xs font-mono text-muted-foreground hover:text-foreground shadow-sm rounded-l-none border-l-0">
+                 <GitCommit class="w-3.5 h-3.5" />
+                 {{ shortCommitHash }}
+               </Button>
+            </a>
           </div>
           <a href="https://github.com/sakthipriyan/xfina" target="_blank" rel="noopener noreferrer" class="no-underline">
             <Button variant="outline" class="flex items-center gap-2 px-3">
