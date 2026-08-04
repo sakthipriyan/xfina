@@ -202,6 +202,8 @@ Tagged releases (`v0.1.3`) → Deploys a permanent, versioned snapshot (`/0.1/`)
 | State Bank of India | ✅ | | | |
 
 ### Status
+- [ ] Axis Credit Card parser
+- [ ] KFinTech combined statement parser
 - [ ] CSV / JSON export in the web app
 
 ## License
