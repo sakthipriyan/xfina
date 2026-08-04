@@ -43,14 +43,40 @@ const isProcessing = ref(false);
 const parseTime = ref(null);
 
 const versionsData = ref(null);
-const currentVersion = import.meta.env.VITE_APP_VERSION || 'Unreleased';
+const appVersion = import.meta.env.VITE_APP_VERSION || 'Unreleased';
+const activeMinor = appVersion !== 'Unreleased' ? appVersion.split('.').slice(0, 2).join('.') : null;
 const isLocalhost = ref(false);
 const commitHash = __COMMIT_HASH__;
 const cleanCommitHash = commitHash ? commitHash.replace('*', '') : '';
 const shortCommitHash = commitHash ? commitHash.substring(0, 8) : '';
 
-const onVersionChange = (path) => {
-    window.location.href = path;
+const selectedDropdownValue = computed(() => {
+    if (appVersion === 'Unreleased') return 'unreleased';
+    if (versionsData.value && versionsData.value.latest && activeMinor === versionsData.value.latest.minor) {
+        return 'latest';
+    }
+    return activeMinor;
+});
+
+const pastSeries = computed(() => {
+    if (!versionsData.value) return [];
+    if (!versionsData.value.latest) return versionsData.value.series;
+    return versionsData.value.series.filter(s => s.minor !== versionsData.value.latest.minor);
+});
+
+const onVersionChange = (val) => {
+    if (!versionsData.value || val === selectedDropdownValue.value) return;
+    
+    if (val === 'latest') {
+        window.location.href = '/';
+    } else if (val === 'unreleased') {
+        window.location.href = '/unreleased/';
+    } else {
+        const series = versionsData.value.series.find(s => s.minor === val);
+        if (series) {
+            window.location.href = series.path;
+        }
+    }
 };
 
 const selectedCategory = ref('Mutual Funds');
@@ -383,7 +409,7 @@ const camsGroupedAssets = computed(() => {
                  {{ shortCommitHash }}
                </Button>
             </a>
-            <Select :modelValue="currentVersion" @update:modelValue="onVersionChange">
+            <Select :modelValue="selectedDropdownValue" @update:modelValue="onVersionChange">
               <SelectTrigger class="w-[150px] h-9 border-border bg-background shadow-sm">
                 <SelectValue placeholder="Version" />
               </SelectTrigger>
@@ -391,20 +417,20 @@ const camsGroupedAssets = computed(() => {
                 <SelectGroup>
                   <SelectItem 
                     v-if="versionsData.latest" 
-                    :value="versionsData.latest.minor === currentVersion ? currentVersion : '/'"
+                    value="latest"
                   >
                     {{ versionsData.latest.minor }}.x (Latest)
                   </SelectItem>
                   <SelectItem 
-                    v-for="series in versionsData.series" 
+                    v-for="series in pastSeries" 
                     :key="series.minor" 
-                    :value="series.minor === currentVersion ? currentVersion : series.path"
+                    :value="series.minor"
                   >
                     {{ series.minor }}.x
                   </SelectItem>
                   <SelectItem 
                     v-if="versionsData.unreleased" 
-                    :value="'Unreleased' === currentVersion ? currentVersion : '/unreleased/'"
+                    value="unreleased"
                   >
                     Unreleased
                   </SelectItem>
