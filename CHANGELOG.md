@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Deployment:** Re-architected website deployment pipeline via `cargo xtask deploy-site` to generate immutable, permanent archives for all minor releases in `gh-pages`.
+- **Infrastructure:** Updated `.github/workflows/publish.yml` to trigger orchestrated GitHub Actions deployments and handle safe concurrency locking.
+
+### Changed
+- **Web App:** Configured Vite with `base: './'` for path-agnostic artifact generation.
+- **Web App:** Transitioned from fetching version lists via GitHub API to a dynamically generated `versions.json` registry.
+
+### Fixed
+- **Web App:** Fixed Issue #23 where the version dropdown failed to properly display or navigate to the latest active version.
+
 ## [0.1.2] - 2026-08-03
 
 ## [0.1.1] - 2026-08-03

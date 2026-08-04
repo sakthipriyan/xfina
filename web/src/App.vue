@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
-import init, { parse_ibkr, parse_cams, parse_hdfc_cc, parse_icici_cc, parse_hdfc_ba, parse_icici_ba, parse_sbi_ba, parse_bob_ba, parse_axis_ba } from './wasm/xfina_wasm.js';
+import init, { parse_ibkr, parse_cams, parse_hdfc_cc, parse_icici_cc, parse_hdfc_ba, parse_icici_ba, parse_sbi_ba, parse_bob_ba, parse_axis_ba } from 'xfina-wasm';
 import { Sun, Moon, Github, HelpCircle, ChevronDown, Loader2, ArrowUp, ArrowDown, GitCommit } from 'lucide-vue-next';
 
 // Shadcn components
@@ -42,18 +42,14 @@ const equityStatement = ref(null);
 const isProcessing = ref(false);
 const parseTime = ref(null);
 
-const availableVersions = ref(['main']);
-const currentVersion = ref('main');
+const versionsData = ref(null);
+const currentVersion = import.meta.env.VITE_APP_VERSION || 'Unreleased';
 const isLocalhost = ref(false);
 const commitHash = __COMMIT_HASH__;
 const shortCommitHash = commitHash ? commitHash.substring(0, 8) : '';
 
-const onVersionChange = (version) => {
-    if (version === 'main') {
-        window.location.href = '/';
-    } else {
-        window.location.href = `/${version}/`;
-    }
+const onVersionChange = (path) => {
+    window.location.href = path;
 };
 
 const selectedCategory = ref('Mutual Funds');
@@ -112,32 +108,14 @@ onMounted(async () => {
         error.value = "Failed to load WebAssembly module: " + e;
     }
 
-    // Check current version from URL
-    const path = window.location.pathname;
-    const match = path.match(/^\/(v\d+\.\d+\.\d+)\/?$/);
-    if (match) {
-        currentVersion.value = match[1];
-        if (!availableVersions.value.includes(match[1])) {
-            availableVersions.value.push(match[1]);
-        }
-    }
-
-    // Skip API fetch if on localhost
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        isLocalhost.value = true;
-        return;
-    }
-
-    // Fetch tags from GitHub API
+    // Fetch versions.json
     try {
-        const res = await fetch("https://api.github.com/repos/sakthipriyan/xfina/tags");
+        const res = await fetch("/versions.json");
         if (res.ok) {
-            const tags = await res.json();
-            const tagNames = tags.map(t => t.name);
-            availableVersions.value = ['main', ...tagNames];
+            versionsData.value = await res.json();
         }
     } catch (e) {
-        console.warn("Failed to fetch versions", e);
+        console.warn("Failed to fetch versions.json", e);
     }
 });
 
@@ -404,14 +382,30 @@ const camsGroupedAssets = computed(() => {
                  {{ shortCommitHash }}
                </Button>
             </a>
-            <Select v-model="currentVersion" @update:modelValue="onVersionChange">
-              <SelectTrigger class="w-[140px] h-9 border-border bg-background shadow-sm">
+            <Select :modelValue="currentVersion" @update:modelValue="onVersionChange">
+              <SelectTrigger class="w-[150px] h-9 border-border bg-background shadow-sm">
                 <SelectValue placeholder="Version" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent v-if="versionsData">
                 <SelectGroup>
-                  <SelectItem v-for="v in availableVersions" :key="v" :value="v">
-                    {{ v === 'main' ? 'latest' : v }}
+                  <SelectItem 
+                    v-if="versionsData.latest" 
+                    :value="versionsData.latest.minor === currentVersion ? currentVersion : '/'"
+                  >
+                    {{ versionsData.latest.minor }}.x (Latest)
+                  </SelectItem>
+                  <SelectItem 
+                    v-for="series in versionsData.series" 
+                    :key="series.minor" 
+                    :value="series.minor === currentVersion ? currentVersion : series.path"
+                  >
+                    {{ series.minor }}.x
+                  </SelectItem>
+                  <SelectItem 
+                    v-if="versionsData.unreleased" 
+                    :value="'Unreleased' === currentVersion ? currentVersion : '/unreleased/'"
+                  >
+                    Unreleased
                   </SelectItem>
                 </SelectGroup>
               </SelectContent>
