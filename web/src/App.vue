@@ -390,7 +390,49 @@ const camsGroupedAssets = computed(() => {
         <div class="flex items-start gap-5">
           <img src="/favicon.svg" alt="Xfina Logo" class="w-16 h-16" />
           <div class="space-y-2">
-            <h1 class="text-3xl font-bold tracking-tight">Xfina<span class="text-xl font-medium text-muted-foreground ml-2">sakthipriyan.com</span></h1>
+            <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+              <h1 class="text-3xl font-bold tracking-tight">Xfina</h1>
+              <div class="flex items-center">
+                <Select :key="versionsData ? 'loaded' : 'loading'" :modelValue="selectedDropdownValue" @update:modelValue="onVersionChange">
+                  <SelectTrigger class="w-[140px] h-9 border-border bg-background shadow-sm rounded-r-none focus:z-10 focus:ring-1">
+                    <SelectValue placeholder="Version" />
+                  </SelectTrigger>
+                  <SelectContent v-if="versionsData">
+                    <SelectGroup>
+                      <SelectItem 
+                        v-if="versionsData.latest" 
+                        value="latest"
+                      >
+                        {{ versionsData.latest.minor }}.x (Latest)
+                      </SelectItem>
+                      <SelectItem 
+                        v-for="series in pastSeries" 
+                        :key="series.minor" 
+                        :value="series.minor"
+                      >
+                        {{ series.minor }}.x
+                      </SelectItem>
+                      <SelectItem 
+                        v-if="versionsData.unreleased" 
+                        value="unreleased"
+                      >
+                        Unreleased
+                      </SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+                <a v-if="shortCommitHash" 
+                   :href="`https://github.com/sakthipriyan/xfina/commit/${cleanCommitHash}`" 
+                   target="_blank" 
+                   rel="noopener noreferrer" 
+                   class="no-underline relative z-0">
+                   <Button variant="outline" class="flex items-center gap-1.5 h-9 px-3 text-xs font-mono text-muted-foreground hover:text-foreground shadow-sm rounded-l-none border-l-0">
+                     <GitCommit class="w-3.5 h-3.5" />
+                     {{ shortCommitHash }}
+                   </Button>
+                </a>
+              </div>
+            </div>
             <p class="text-muted-foreground mt-2 leading-relaxed">
               e<strong>X</strong>tract <strong>fina</strong>ncial statements entirely in your browser with Rust/Wasm<br />
               Fast, private, zero-setup, and without uploading your files to any server.
@@ -398,51 +440,14 @@ const camsGroupedAssets = computed(() => {
           </div>
         </div>
         <div class="flex items-center space-x-3">
-          <div class="flex items-center">
-            <Select :key="versionsData ? 'loaded' : 'loading'" :modelValue="selectedDropdownValue" @update:modelValue="onVersionChange">
-              <SelectTrigger class="w-[140px] h-9 border-border bg-background shadow-sm rounded-r-none focus:z-10 focus:ring-1">
-                <SelectValue placeholder="Version" />
-              </SelectTrigger>
-              <SelectContent v-if="versionsData">
-                <SelectGroup>
-                  <SelectItem 
-                    v-if="versionsData.latest" 
-                    value="latest"
-                  >
-                    {{ versionsData.latest.minor }}.x (Latest)
-                  </SelectItem>
-                  <SelectItem 
-                    v-for="series in pastSeries" 
-                    :key="series.minor" 
-                    :value="series.minor"
-                  >
-                    {{ series.minor }}.x
-                  </SelectItem>
-                  <SelectItem 
-                    v-if="versionsData.unreleased" 
-                    value="unreleased"
-                  >
-                    Unreleased
-                  </SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-            <a v-if="shortCommitHash" 
-               :href="`https://github.com/sakthipriyan/xfina/commit/${cleanCommitHash}`" 
-               target="_blank" 
-               rel="noopener noreferrer" 
-               class="no-underline relative z-0">
-               <Button variant="outline" class="flex items-center gap-1.5 h-9 px-3 text-xs font-mono text-muted-foreground hover:text-foreground shadow-sm rounded-l-none border-l-0">
-                 <GitCommit class="w-3.5 h-3.5" />
-                 {{ shortCommitHash }}
-               </Button>
-            </a>
-          </div>
           <a href="https://github.com/sakthipriyan/xfina" target="_blank" rel="noopener noreferrer" class="no-underline" title="GitHub Repository">
             <Button variant="outline" size="icon">
               <Github class="h-[1.2rem] w-[1.2rem] text-foreground" />
               <span class="sr-only">GitHub Repository</span>
             </Button>
+          </a>
+          <a href="https://sakthipriyan.com" target="_blank" rel="noopener noreferrer" class="no-underline">
+            <Button variant="ghost" class="text-muted-foreground hover:text-foreground">sakthipriyan.com</Button>
           </a>
           <Button variant="outline" size="icon" @click="toggleDark()">
             <Sun v-if="isDark" class="h-[1.2rem] w-[1.2rem] text-foreground" />
