@@ -147,8 +147,8 @@ enum ParserState {
     InSchemeBody { holding: MfHolding, buffer: Vec<Line> },
 }
 
-fn extract_investor_info(pages_lines: &[Vec<Line>]) -> (Option<String>, Option<String>) {
-    if pages_lines.is_empty() { return (None, None); }
+fn extract_investor_info(pages_lines: &[Vec<Line>]) -> (Option<String>, Option<String>, Option<String>) {
+    if pages_lines.is_empty() { return (None, None, None); }
     let page_lines = &pages_lines[0]; // CAMS prints this on page 1
 
     let mut email_seen = false;
@@ -189,7 +189,8 @@ fn extract_investor_info(pages_lines: &[Vec<Line>]) -> (Option<String>, Option<S
     }
     
     let address = if !address_lines.is_empty() { Some(address_lines.join("\n")) } else { None };
-    (address, mobile)
+    let parsed_name = if !name.is_empty() { Some(name) } else { None };
+    (parsed_name, address, mobile)
 }
 
 
@@ -220,8 +221,9 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> R
         }
     }
 
-    let (address, mobile) = extract_investor_info(&pages_lines);
+    let (name_opt, address, mobile) = extract_investor_info(&pages_lines);
     let mut holder = MfHolder::default();
+    holder.name = name_opt.unwrap_or_default();
     holder.address = address;
     holder.mobile = mobile;
 
@@ -459,9 +461,7 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> R
                 }
             }
             
-            if holder.name.is_empty() && in_investor_info_guess(text) {
-                holder.name = text.to_string();
-            }
+
         }
     }
 
@@ -528,9 +528,7 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> R
     Ok(account)
 }
 
-fn in_investor_info_guess(text: &str) -> bool {
-    text.contains("HARI KRISHNAN") || text.contains("SAKTHI")
-}
+
 
 fn parse_scheme_header(folio_no: String, amc: String, buffer: &[String]) -> MfHolding {
     let mut holding = MfHolding::default();
