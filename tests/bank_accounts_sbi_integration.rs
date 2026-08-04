@@ -13,7 +13,8 @@ fn test_sbi_pdf_parser() {
     fs::create_dir_all(&xfina_dir).unwrap();
     fs::create_dir_all(&rebit_dir).unwrap();
 
-    let password = "***REDACTED***"; // Hardcoded for tests based on user's input
+    let passwords_str = fs::read_to_string(test_dir.join("passwords.json")).unwrap_or_else(|_| "{}".to_string());
+    let passwords: std::collections::HashMap<String, String> = serde_json::from_str(&passwords_str).unwrap_or_default();
 
     for entry in fs::read_dir(raw_dir).unwrap() {
         let entry = entry.unwrap();
@@ -22,7 +23,8 @@ fn test_sbi_pdf_parser() {
         if path.extension().and_then(|s| s.to_str()) == Some("pdf") {
             let bytes = fs::read(&path).unwrap();
             let filename_str = path.file_name().and_then(|s| s.to_str());
-            let statement = parse_sbi_bank_statement(&bytes, Some(password), filename_str).unwrap();
+            let password = filename_str.and_then(|name| passwords.get(name)).or_else(|| passwords.get("default")).map(|s| s.as_str());
+            let statement = parse_sbi_bank_statement(&bytes, password, filename_str).unwrap();
 
             let xfina_json = serde_json::to_string_pretty(&statement.to_xfina_json()).unwrap();
             let rebit_json = serde_json::to_string_pretty(&statement.to_rebit_json()).unwrap();
