@@ -438,10 +438,10 @@ const camsGroupedAssets = computed(() => {
                </Button>
             </a>
           </div>
-          <a href="https://github.com/sakthipriyan/xfina" target="_blank" rel="noopener noreferrer" class="no-underline">
-            <Button variant="outline" class="flex items-center gap-2 px-3">
-              <Github class="h-[1.2rem] w-[1.2rem]" />
-              <span class="font-medium">Open Source</span>
+          <a href="https://github.com/sakthipriyan/xfina" target="_blank" rel="noopener noreferrer" class="no-underline" title="GitHub Repository">
+            <Button variant="outline" size="icon">
+              <Github class="h-[1.2rem] w-[1.2rem] text-foreground" />
+              <span class="sr-only">GitHub Repository</span>
             </Button>
           </a>
           <Button variant="outline" size="icon" @click="toggleDark()">
