@@ -23,7 +23,7 @@ Most open-source financial parsers are written in Python, which requires users t
 By building Xfina in **Rust**, we achieve:
 
 1. **Privacy-first WASM Deployment** — WebAssembly (WASM) enables privacy-first tools that can run efficiently in the user's browser without sending sensitive financial data to any server. This zero-setup, browser-based solution empowers anyone who is comfortable with a web browser, Excel, or Google Sheets to easily extract a standardized data format without any technical overhead.
-2. **Universal Bindings** — The goal is to support Python and JS bindings natively so the core logic can be used in any environment. We will start publishing to all 3 package systems (Rust crates, npm, and PyPI) once the Mutual Funds and IBKR parsers are fully wrapped up.
+2. **Universal Bindings** — Xfina natively supports Python and JS bindings, allowing the core parsing logic to be used seamlessly across any environment. The project is published to Rust crates, npm, and PyPI.
 3. **ReBIT & Sahamati AA Standards** — The internal data schema is heavily built on top of the Sahamati Account Aggregator (AA) and ReBIT standards. Xfina offers a ready-made ReBIT JSON interface out-of-the-box, ensuring interoperability with standard Indian financial ecosystems.
 
 ---
