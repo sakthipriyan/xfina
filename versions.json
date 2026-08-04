@@ -1,13 +1,13 @@
 {
   "latest": {
     "minor": "0.1",
-    "patch": "0.1.3"
+    "patch": "0.1.4"
   },
   "unreleased": false,
   "series": [
     {
       "minor": "0.1",
-      "latestPatch": "0.1.3",
+      "latestPatch": "0.1.4",
       "path": "/0.1/"
     }
   ]
