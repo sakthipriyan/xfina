@@ -18,11 +18,14 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      ...(!process.env.VITE_APP_VERSION || process.env.VITE_APP_VERSION === 'Unreleased'
+        ? { 'xfina-wasm': path.resolve(__dirname, '../wasm/pkg') }
+        : {})
     },
   },
-  base: process.env.VITE_BASE_URL || '/',
+  base: './',
   build: {
-    outDir: '../docs',
+    outDir: 'dist',
     emptyOutDir: true
   },
   define: {
