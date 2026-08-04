@@ -46,6 +46,7 @@ const versionsData = ref(null);
 const currentVersion = import.meta.env.VITE_APP_VERSION || 'Unreleased';
 const isLocalhost = ref(false);
 const commitHash = __COMMIT_HASH__;
+const cleanCommitHash = commitHash ? commitHash.replace('*', '') : '';
 const shortCommitHash = commitHash ? commitHash.substring(0, 8) : '';
 
 const onVersionChange = (path) => {
@@ -373,7 +374,7 @@ const camsGroupedAssets = computed(() => {
         <div class="flex items-center space-x-3">
           <div class="flex items-center space-x-2">
             <a v-if="shortCommitHash" 
-               :href="`https://github.com/sakthipriyan/xfina/commit/${commitHash}`" 
+               :href="`https://github.com/sakthipriyan/xfina/commit/${cleanCommitHash}`" 
                target="_blank" 
                rel="noopener noreferrer" 
                class="no-underline">
