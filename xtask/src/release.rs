@@ -90,8 +90,11 @@ pub fn run(args: &[String]) {
     let new_changelog_content = changelog_content.replacen(unreleased_header, &new_header, 1);
     fs::write(changelog_path, new_changelog_content).expect("Failed to write CHANGELOG.md");
 
-    // 3. Git commands
-    run_cmd("git", &["add", "Cargo.toml", "CHANGELOG.md"]);
+    // 3. Sync Cargo.lock
+    run_cmd("cargo", &["check"]);
+
+    // 4. Git commands
+    run_cmd("git", &["add", "Cargo.toml", "Cargo.lock", "CHANGELOG.md"]);
     
     let commit_msg = format!("chore(release): v{}", current_version);
     run_cmd("git", &["commit", "-m", &commit_msg]);
