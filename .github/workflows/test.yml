@@ -57,8 +57,11 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: Check for warnings
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
       - name: Run tests
-        run: cargo test
+        run: cargo test --workspace
         
       - name: Build WASM
         run: cargo build --target wasm32-unknown-unknown -p xfina-wasm
