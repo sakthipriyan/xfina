@@ -73,26 +73,26 @@ The project is structured as a **Cargo workspace** that unifies data models, par
 graph TD
     %% Core Library Layer
     subgraph Core Library ["xfina (Rust Crate)"]
-        A[models] -->|defines| B(ReBIT / AA Schema)
-        C[bank-accounts] -.->|uses| A
-        D[credit-cards] -.->|uses| A
-        E[mutual-funds] -.->|uses| A
-        F[intl-stocks] -.->|uses| A
+        A[src/models] -->|defines| B(ReBIT / AA Schema)
+        C[src/bank_accounts] -.->|uses| A
+        D[src/credit_cards] -.->|uses| A
+        E[src/mutual_funds] -.->|uses| A
+        F[src/intl_stocks] -.->|uses| A
     end
 
     %% Bindings & Delivery Layer
     subgraph Targets ["Delivery Targets"]
-        C --> G[CLI]
+        C --> G["src/main.rs (CLI)"]
         D --> G
         E --> G
         F --> G
 
-        C --> H[WASM]
+        C --> H[wasm/]
         D --> H
         E --> H
         F --> H
 
-        C --> I[Python]
+        C --> I[python/]
         D --> I
         E --> I
         F --> I
@@ -109,16 +109,18 @@ graph TD
 
 The directory structure is as follows:
 
-```
+```text
 xfina/
-├── models/               # xfina-models: shared data models (ReBIT / AA standard compatible)
-├── bank-accounts/        # Bank Account parsers (HDFC, ICICI, SBI, BoB, Axis)
-├── credit-cards/         # Credit Card parsers (HDFC, ICICI)
-├── mutual-funds/         # Mutual Fund parsers (CAMS)
-├── intl-stocks/          # International Broker parsers (IBKR)
-├── cli/                  # xfina-cli: Terminal command-line interface
-├── wasm/                 # xfina-wasm: WASM bindings (wasm-bindgen)
-├── python/               # python: Python bindings (pyo3)
+├── src/                  # Unified xfina Rust crate
+│   ├── models/           # Shared data models (ReBIT / AA standard compatible)
+│   ├── bank_accounts/    # Bank Account parsers (HDFC, ICICI, SBI, BoB, Axis)
+│   ├── credit_cards/     # Credit Card parsers (HDFC, ICICI)
+│   ├── mutual_funds/     # Mutual Fund parsers (CAMS)
+│   ├── intl_stocks/      # International Broker parsers (IBKR)
+│   └── main.rs           # Terminal command-line interface (CLI)
+├── wasm/                 # WASM bindings (wasm-bindgen)
+├── python/               # Python bindings (pyo3)
+├── xtask/                # Custom build scripts and site deployment logic
 └── web/                  # Vue 3 + Vite frontend (deployed via GitHub Pages)
 ```
 
@@ -174,7 +176,7 @@ You can also use Xfina directly as a Rust library in your own projects:
 
 ```toml
 [dependencies]
-xfina = "0.1.0"
+xfina = "0.1"
 ```
 
 ```rust
