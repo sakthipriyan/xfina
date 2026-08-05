@@ -15,7 +15,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       
+      - name: Check Changelog Update
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          
+          # Define the core paths that require a changelog update
+          CORE_CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- src/ python/ wasm/ web/ xtask/ tests/ Cargo.toml)
+          
+          if [ -n "$CORE_CHANGED" ]; then
+            echo "The following core files were modified:"
+            echo "$CORE_CHANGED"
+            echo "----------------------------------------"
+            
+            # Check if CHANGELOG.md is in the diff
+            if ! git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -q "^CHANGELOG.md$"; then
+              echo "::error::Core files were modified but CHANGELOG.md was not updated. Please document your changes."
+              exit 1
+            fi
+            echo "Success: CHANGELOG.md was updated!"
+          else
+            echo "No core files modified. Changelog update not strictly required."
+          fi
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
