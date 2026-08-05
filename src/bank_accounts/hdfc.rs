@@ -2,7 +2,7 @@ use calamine::{Reader, open_workbook_auto_from_rs};
 use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc, FixedOffset};
 use std::io::Cursor;
 use rust_decimal::Decimal;
-use crate::models::deposit::{DepositAccount, Transaction, XfinaDepositAccount, XfinaTransactions, XfinaSummary, Profile, Holders, Holder, Summary, Transactions, HoldersType, TransactionType, TransactionMode, FiType, StatusTypes, HoldingNominee};
+use crate::models::deposit::{DepositAccount, Transaction, XfinaDepositAccount, XfinaSummary, Profile, Holders, Holder, Summary, Transactions, HoldersType, TransactionType, TransactionMode, FiType, HoldingNominee};
 use crate::models::mask_account_number;
 use regex::Regex;
 
@@ -19,12 +19,17 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<DepositAccount, crate::error::Xfin
     let sheet = workbook.worksheet_range(&sheet_names[0])
         .map_err(|e| format!("Error reading sheet: {}", e))?;
 
-    let mut stmt = DepositAccount::default();
-    stmt.r#type = FiType::Deposit;
+    let mut stmt = DepositAccount {
+        r#type: FiType::Deposit,
+        version: 1.1,
+        ..Default::default()
+    };
     stmt.version = 1.1;
     
-    let mut xfina_account = XfinaDepositAccount::default();
-    xfina_account.institution_name = Some("HDFC Bank".to_string());
+    let mut xfina_account = XfinaDepositAccount {
+        institution_name: Some("HDFC Bank".to_string()),
+        ..Default::default()
+    };
     
     let mut date_only_paths = Vec::new();
 
@@ -78,7 +83,7 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<DepositAccount, crate::error::Xfin
             }
 
             // Address logic: usually left side from rows 5 to 10
-            if row_idx >= 5 && row_idx <= 10 {
+            if (5..=10).contains(&row_idx) {
                 let col0 = row_vec[0].trim();
                 if !col0.is_empty() && !col0.contains("JOINT HOLDERS") && !col0.contains("Nomination") && !col0.contains("MR") && !col0.contains("MS") {
                     address_lines.push(col0.to_string());
@@ -193,7 +198,7 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<DepositAccount, crate::error::Xfin
             parsed_transactions.push(Transaction {
                 txn_id: None,
                 transaction_timestamp: utc_tx_dt,
-                value_date: value_date,
+                value_date,
                 narration: description.to_string(),
                 reference: if ref_no.is_empty() { None } else { Some(ref_no.to_string()) },
                 mode,
@@ -294,8 +299,10 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<DepositAccount, crate::error::Xfin
         ob_val = Some(if first.r#type == TransactionType::Credit { first.current_balance - first.amount } else { first.current_balance + first.amount });
     }
     
-    let mut xfina_sum = XfinaSummary::default();
-    xfina_sum.opening_balance = ob_val;
+    let mut xfina_sum = XfinaSummary {
+        opening_balance: ob_val,
+        ..Default::default()
+    };
     xfina_sum.account_product = account_product;
     
     if xfina_sum.opening_balance.is_some() || xfina_sum.account_product.is_some() {
@@ -317,8 +324,10 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<DepositAccount, crate::error::Xfin
     
     let holders_list = vec![holder];
     let mut profile = Profile::default();
-    let mut holders = Holders::default();
-    holders.r#type = HoldersType::Single;
+    let mut holders = Holders {
+        r#type: HoldersType::Single,
+        ..Default::default()
+    };
     holders.holder = holders_list;
     
     profile.holders = holders;

@@ -2,7 +2,7 @@ use chrono::{NaiveDate, TimeZone, Utc};
 use calamine::{Reader, open_workbook_auto_from_rs};
 use std::io::Cursor;
 use rust_decimal::Decimal;
-use crate::models::deposit::{DepositAccount, Transaction, XfinaDepositAccount, XfinaTransactions, XfinaSummary, Profile, Holders, Holder, Summary, Transactions, HoldersType, TransactionType, TransactionMode, FiType};
+use crate::models::deposit::{DepositAccount, Transaction, XfinaDepositAccount, XfinaSummary, Profile, Holders, Holder, Summary, Transactions, HoldersType, TransactionType, TransactionMode, FiType};
 use crate::models::mask_account_number;
 use regex::Regex;
 
@@ -16,12 +16,16 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAc
         .ok_or("No worksheet found")?
         .map_err(|e| format!("Error reading worksheet: {}", e))?;
 
-    let mut statement = DepositAccount::default();
-    statement.r#type = FiType::Deposit;
-    statement.version = 1.1;
+    let mut statement = DepositAccount {
+        r#type: FiType::Deposit,
+        version: 1.1,
+        ..Default::default()
+    };
     
-    let mut xfina_account = XfinaDepositAccount::default();
-    xfina_account.institution_name = Some("ICICI Bank".to_string());
+    let mut xfina_account = XfinaDepositAccount {
+        institution_name: Some("ICICI Bank".to_string()),
+        ..Default::default()
+    };
 
     let mut date_only_paths = Vec::new();
 
@@ -59,8 +63,10 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAc
                 let acc_no = left_part.split(' ').next().unwrap_or(left_part);
                 statement.masked_acc_number = mask_account_number(acc_no.trim());
                 
-                let mut holder = Holder::default();
-                holder.name = parts.1.trim().to_string();
+                let holder = Holder {
+                    name: parts.1.trim().to_string(),
+                    ..Default::default()
+                };
                 holders.push(holder);
             }
         }
@@ -97,7 +103,7 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAc
                     continue;
                 }
                 
-                let value_date_str = &row_vec[1];
+                let _value_date_str = &row_vec[1];
                 let date_str = &row_vec[2];
                 let ref_num = &row_vec[3];
                 let desc = &row_vec[4];
@@ -129,9 +135,7 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAc
                 let narration_upper = desc.to_uppercase();
                 let mode = if desc.starts_with("UPI/") {
                     Some(TransactionMode::Upi)
-                } else if narration_upper.contains("IMPS") {
-                    Some(TransactionMode::Ft)
-                } else if narration_upper.contains("NEFT") {
+                } else if narration_upper.contains("IMPS") || narration_upper.contains("NEFT") {
                     Some(TransactionMode::Ft)
                 } else if desc.contains("ATM") || desc.starts_with("CASH") {
                     Some(TransactionMode::Cash)
@@ -187,10 +191,11 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAc
     
     transactions_obj.transaction = parsed_transactions;
 
-    let mut profile = Profile::default();
-    profile.holders = Holders {
-        r#type: if holders.len() > 1 { HoldersType::Joint } else { HoldersType::Single },
-        holder: holders,
+    let profile = Profile {
+        holders: Holders {
+            r#type: if holders.len() > 1 { HoldersType::Joint } else { HoldersType::Single },
+            holder: holders,
+        }
     };
     
     statement.profile = Some(profile);

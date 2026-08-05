@@ -17,12 +17,16 @@ pub fn parse_axis_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAcc
         .worksheet_range(sheet_name)
         .map_err(|e| format!("Error reading worksheet: {}", e))?;
 
-    let mut statement = DepositAccount::default();
-    statement.r#type = FiType::Deposit;
-    statement.version = 1.1;
+    let mut statement = DepositAccount {
+        r#type: FiType::Deposit,
+        version: 1.1,
+        ..Default::default()
+    };
     
-    let mut xfina_account = XfinaDepositAccount::default();
-    xfina_account.institution_name = Some("Axis Bank".to_string());
+    let mut xfina_account = XfinaDepositAccount {
+        institution_name: Some("Axis Bank".to_string()),
+        ..Default::default()
+    };
 
     let mut date_only_paths = Vec::new();
 
@@ -59,6 +63,8 @@ pub fn parse_axis_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAcc
 
     let mut start_date: Option<NaiveDate> = None;
     let mut end_date: Option<NaiveDate> = None;
+
+    let re_acc = Regex::new(r"Account No\s*-\s*(\d+).*?From\s*:\s*([\d-]+)\s*To\s*:\s*([\d-]+)").unwrap();
 
     for (row_idx, row) in range.rows().enumerate() {
         let row_vec: Vec<String> = row.iter().map(|c| c.to_string().trim().to_string()).collect();
@@ -114,7 +120,6 @@ pub fn parse_axis_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAcc
                 }
             } else if first_col.starts_with("Statement of Account No") {
                 // Statement of Account No - 914010032444462 for the period (From : 01-07-2026 To : 13-07-2026)
-                let re_acc = Regex::new(r"Account No\s*-\s*(\d+).*?From\s*:\s*([\d-]+)\s*To\s*:\s*([\d-]+)").unwrap();
                 if let Some(caps) = re_acc.captures(first_col) {
                     account_number = caps[1].to_string();
                     start_date = NaiveDate::parse_from_str(&caps[2], "%d-%m-%Y").ok();
@@ -181,9 +186,7 @@ pub fn parse_axis_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAcc
                 let narration_upper = desc.to_uppercase();
                 let mode = if desc.starts_with("UPI/") {
                     Some(TransactionMode::Upi)
-                } else if narration_upper.contains("IMPS") {
-                    Some(TransactionMode::Ft)
-                } else if narration_upper.contains("NEFT") {
+                } else if narration_upper.contains("IMPS") || narration_upper.contains("NEFT") {
                     Some(TransactionMode::Ft)
                 } else if desc.contains("ATM") || desc.starts_with("CASH") {
                     Some(TransactionMode::Cash)
@@ -244,14 +247,17 @@ pub fn parse_axis_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAcc
 
     summary.xfina = Some(xfina_sum);
     
-    let mut transactions_obj = Transactions::default();
-    transactions_obj.start_date = start_date;
-    transactions_obj.end_date = end_date;
-    
-    transactions_obj.transaction = parsed_transactions;
+    let transactions_obj = Transactions {
+        start_date,
+        end_date,
+        transaction: parsed_transactions,
+        ..Default::default()
+    };
 
-    let mut holder = Holder::default();
-    holder.name = name;
+    let mut holder = Holder {
+        name,
+        ..Default::default()
+    };
     
     let address = address_parts.join(", ");
     if !address.is_empty() {
@@ -274,10 +280,11 @@ pub fn parse_axis_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAcc
     }
     holder.xfina = Some(x_holder);
 
-    let mut profile = Profile::default();
-    profile.holders = Holders {
-        r#type: if is_joint { HoldersType::Joint } else { HoldersType::Single },
-        holder: vec![holder],
+    let profile = Profile {
+        holders: Holders {
+            r#type: if is_joint { HoldersType::Joint } else { HoldersType::Single },
+            holder: vec![holder],
+        }
     };
     
     if !account_number.is_empty() {

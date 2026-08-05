@@ -2,7 +2,7 @@ use calamine::{Reader, open_workbook_auto_from_rs};
 use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc, FixedOffset};
 use std::io::Cursor;
 use rust_decimal::Decimal;
-use crate::models::deposit::{DepositAccount, Transaction, XfinaDepositAccount, XfinaTransactions, XfinaSummary, Profile, Holders, Holder, Summary, Transactions, HoldersType, TransactionType, TransactionMode, FiType, HoldingNominee, XfinaHolder};
+use crate::models::deposit::{DepositAccount, Transaction, XfinaDepositAccount, XfinaSummary, Profile, Holders, Holder, Summary, Transactions, HoldersType, TransactionType, TransactionMode, FiType, HoldingNominee, XfinaHolder};
 use crate::models::mask_account_number;
 use regex::Regex;
 
@@ -13,12 +13,16 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, crate::error::Xfina
     let sheet_name = sheet_names.first().ok_or("No sheets found in workbook")?;
     let sheet = workbook.worksheet_range(sheet_name).map_err(|e| format!("Failed to read sheet: {:?}", e))?;
 
-    let mut statement = DepositAccount::default();
-    statement.r#type = FiType::Deposit;
-    statement.version = 1.1;
+    let mut statement = DepositAccount {
+        r#type: FiType::Deposit,
+        version: 1.1,
+        ..Default::default()
+    };
 
-    let mut xfina_account = XfinaDepositAccount::default();
-    xfina_account.institution_name = Some("Bank of Baroda".to_string());
+    let mut xfina_account = XfinaDepositAccount {
+        institution_name: Some("Bank of Baroda".to_string()),
+        ..Default::default()
+    };
     
     let mut account_number = String::new();
     let mut ifsc_code = String::new();
@@ -38,7 +42,7 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, crate::error::Xfina
     let mut generated_date_time: Option<NaiveDateTime> = None;
     
     let mut parsed_transactions = Vec::new();
-    let mut transactions_obj = Transactions::default();
+    let _transactions_obj = Transactions::default();
     let mut xfina_summary = XfinaSummary::default();
     
     let mut date_only_paths = Vec::new();
@@ -121,19 +125,17 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, crate::error::Xfina
         }
         
         // Sometimes Name is at row 12 or 1
-        if row_idx == 0 && row_vec.len() > 13 {
-             if row_vec[1].contains("Holder Name") {
+        if row_idx == 0 && row_vec.len() > 13
+             && row_vec[1].contains("Holder Name") {
                  let parts: Vec<&str> = row_vec[1].split(':').collect();
                  if parts.len() > 1 {
                      name = parts[1].trim().to_string();
                  }
              }
-        }
-        if row_idx == 1 && row_vec.len() > 13 {
-            if !row_vec[13].is_empty() {
+        if row_idx == 1 && row_vec.len() > 13
+            && !row_vec[13].is_empty() {
                 address = row_vec[13].replace('\n', ", ").trim().to_string();
             }
-        }
         if row_idx == 9 && first_col.len() > 5 {
              name = first_col.to_string();
         }
@@ -178,25 +180,18 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, crate::error::Xfina
                 clean.parse().ok()
             };
 
-            let mut amount = Decimal::from(0);
-            let mut tx_type = TransactionType::Debit;
-            
-            if let Some(cr) = parse_amt(credit_str) {
-                amount = cr;
-                tx_type = TransactionType::Credit;
+            let (amount, tx_type) = if let Some(cr) = parse_amt(credit_str) {
+                (cr, TransactionType::Credit)
             } else if let Some(dr) = parse_amt(debit_str) {
-                amount = dr;
-                tx_type = TransactionType::Debit;
+                (dr, TransactionType::Debit)
             } else {
                 continue; // If both empty, maybe a continuation row, but BoB usually fits in one row.
-            }
+            };
             
             let desc_upper = narration.to_uppercase();
             let mode = if desc_upper.contains("UPI") {
                 Some(TransactionMode::Upi)
-            } else if desc_upper.contains("NEFT") {
-                Some(TransactionMode::Ft)
-            } else if desc_upper.contains("IMPS") {
+            } else if desc_upper.contains("NEFT") || desc_upper.contains("IMPS") {
                 Some(TransactionMode::Ft)
             } else if narration.contains("CASH") {
                 Some(TransactionMode::Cash)
@@ -264,11 +259,13 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, crate::error::Xfina
     // Always assign xfina_summary back to summary.xfina as it contains at least defaults/opening balance
     summary.xfina = Some(xfina_summary);
     
-    let mut transactions_obj = Transactions::default();
-    transactions_obj.start_date = start_date;
-    transactions_obj.end_date = end_date;
     parsed_transactions.reverse();
-    transactions_obj.transaction = parsed_transactions;
+    let transactions_obj = Transactions {
+        start_date,
+        end_date,
+        transaction: parsed_transactions,
+        ..Default::default()
+    };
 
     let ist_offset = FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
     if let Some(dt) = generated_date_time {
@@ -281,8 +278,10 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, crate::error::Xfina
         }
     }
     
-    let mut holder = Holder::default();
-    holder.name = name;
+    let mut holder = Holder {
+        name,
+        ..Default::default()
+    };
     if !address.is_empty() {
         holder.address = Some(address.replace("  ", " ").replace(" ,", ","));
     }
@@ -300,10 +299,11 @@ pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, crate::error::Xfina
     
     let holders = vec![holder];
     
-    let mut profile = Profile::default();
-    profile.holders = Holders {
-        r#type: HoldersType::Single,
-        holder: holders,
+    let profile = Profile {
+        holders: Holders {
+            r#type: HoldersType::Single,
+            holder: holders,
+        }
     };
 
     statement.profile = Some(profile);

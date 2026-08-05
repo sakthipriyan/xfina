@@ -39,3 +39,4 @@ parse_test*.rs
 *.py
 gh-pages-worktree/
 /web/public/versions.json
+.venv/

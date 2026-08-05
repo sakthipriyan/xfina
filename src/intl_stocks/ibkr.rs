@@ -141,8 +141,8 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<EquityAccount, crate::error::
                     }
                 }
             }
-            (Some("Trades"), Some("Data"), Some("Order")) => {
-                if record.get(3) == Some("Stocks") {
+            (Some("Trades"), Some("Data"), Some("Order"))
+                if record.get(3) == Some("Stocks") => {
                     let symbol = record.get(5).unwrap_or("").to_string();
                     let date = record.get(6).unwrap_or("").to_string();
                     let quantity: Decimal = record.get(7).unwrap_or("0").parse().unwrap_or(Decimal::ZERO);
@@ -163,10 +163,9 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<EquityAccount, crate::error::
                             comm_fee,
                         };
 
-                        trades.entry(symbol).or_insert_with(Vec::new).push(tx);
+                        trades.entry(symbol).or_default().push(tx);
                     }
                 }
-            }
             _ => {}
         }
     }
@@ -200,7 +199,7 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<EquityAccount, crate::error::
         merged_trades.entry(primary).or_default().append(&mut txs);
     }
 
-    let mut all_symbols = std::collections::HashSet::new();
+    let mut all_symbols = std::collections::BTreeSet::new();
     for sym in merged_positions.keys() { all_symbols.insert(sym.clone()); }
     for sym in merged_trades.keys() { all_symbols.insert(sym.clone()); }
 

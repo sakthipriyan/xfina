@@ -56,14 +56,14 @@ pub fn run(args: &[String]) {
 
     // 1. Cleanup stale worktrees
     println!("Cleaning up any stale git worktrees...");
-    let _ = Command::new("git").current_dir(&workspace_root).args(&["worktree", "remove", "--force", "gh-pages-worktree"]).status();
-    let _ = Command::new("git").current_dir(&workspace_root).args(&["worktree", "prune"]).status();
+    let _ = Command::new("git").current_dir(&workspace_root).args(["worktree", "remove", "--force", "gh-pages-worktree"]).status();
+    let _ = Command::new("git").current_dir(&workspace_root).args(["worktree", "prune"]).status();
 
     // 2. Add worktree
     println!("Checking out gh-pages branch into gh-pages-worktree...");
     let status = Command::new("git")
         .current_dir(&workspace_root)
-        .args(&["worktree", "add", "gh-pages-worktree", "gh-pages"])
+        .args(["worktree", "add", "gh-pages-worktree", "gh-pages"])
         .status()
         .expect("Failed to run git worktree add");
 
@@ -71,7 +71,7 @@ pub fn run(args: &[String]) {
         // If it fails, maybe gh-pages doesn't exist locally. Try to fetch or create orphan
         let status2 = Command::new("git")
             .current_dir(&workspace_root)
-            .args(&["worktree", "add", "-B", "gh-pages", "gh-pages-worktree", "origin/gh-pages"])
+            .args(["worktree", "add", "-B", "gh-pages", "gh-pages-worktree", "origin/gh-pages"])
             .status();
         if !status2.map(|s| s.success()).unwrap_or(false) {
              eprintln!("Could not checkout gh-pages branch. Ensure it exists.");
@@ -105,7 +105,7 @@ pub fn run(args: &[String]) {
         
         let mut build_cmd = Command::new("npm");
         build_cmd.current_dir(&web_dir)
-            .args(&["run", "build"])
+            .args(["run", "build"])
             .env("VITE_APP_VERSION", "Unreleased")
             .env("VITE_DOMAIN_BASE", "/");
         run_cmd_obj(&mut build_cmd);
@@ -128,7 +128,7 @@ pub fn run(args: &[String]) {
         
         let mut build_cmd = Command::new("npm");
         build_cmd.current_dir(&web_dir)
-            .args(&["run", "build"])
+            .args(["run", "build"])
             .env("VITE_APP_VERSION", &tag_version)
             .env("VITE_DOMAIN_BASE", "/");
         run_cmd_obj(&mut build_cmd);
@@ -195,7 +195,7 @@ pub fn run(args: &[String]) {
     println!("Checking for changes...");
     let diff_status = Command::new("git")
         .current_dir(&worktree_dir)
-        .args(&["status", "--porcelain"])
+        .args(["status", "--porcelain"])
         .output()
         .expect("Failed to run git status");
     
@@ -203,13 +203,13 @@ pub fn run(args: &[String]) {
         println!("No changes to publish.");
     } else {
         run_cmd(&worktree_dir, "git", &["add", "."]);
-        run_cmd(&worktree_dir, "git", &["commit", "-m", &format!("Deploy site update")]);
+        run_cmd(&worktree_dir, "git", &["commit", "-m", "Deploy site update"]);
         run_cmd(&worktree_dir, "git", &["push", "origin", "gh-pages"]);
         println!("Successfully deployed to gh-pages.");
     }
     
     // Cleanup
-    let _ = Command::new("git").current_dir(&workspace_root).args(&["worktree", "remove", "--force", "gh-pages-worktree"]).status();
+    let _ = Command::new("git").current_dir(&workspace_root).args(["worktree", "remove", "--force", "gh-pages-worktree"]).status();
 }
 
 fn run_cmd(dir: &Path, cmd: &str, args: &[&str]) {
