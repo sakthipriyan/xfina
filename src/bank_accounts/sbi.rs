@@ -5,7 +5,7 @@ use super::{pdf_parser, layout};
 use regex::Regex;
 use chrono::{NaiveDate, TimeZone, Utc};
 
-pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>, filename: Option<&str>) -> Result<DepositAccount, String> {
+pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>, filename: Option<&str>) -> Result<DepositAccount, crate::error::XfinaError> {
     let pages = pdf_parser::extract_spatial_pages(bytes, password)?;
     
     let mut statement = DepositAccount::default();

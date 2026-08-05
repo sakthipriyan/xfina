@@ -67,7 +67,47 @@ By building Xfina in **Rust**, we achieve:
 
 ## Architecture
 
-The project is a **Cargo workspace** with these crates:
+The project is structured as a **Cargo workspace** that unifies data models, parsers, and cross-platform bindings into a single, cohesive repository:
+
+```mermaid
+graph TD
+    %% Core Library Layer
+    subgraph Core Library ["xfina (Rust Crate)"]
+        A[models] -->|defines| B(ReBIT / AA Schema)
+        C[bank-accounts] -.->|uses| A
+        D[credit-cards] -.->|uses| A
+        E[mutual-funds] -.->|uses| A
+        F[intl-stocks] -.->|uses| A
+    end
+
+    %% Bindings & Delivery Layer
+    subgraph Targets ["Delivery Targets"]
+        C --> G[CLI]
+        D --> G
+        E --> G
+        F --> G
+
+        C --> H[WASM]
+        D --> H
+        E --> H
+        F --> H
+
+        C --> I[Python]
+        D --> I
+        E --> I
+        F --> I
+    end
+
+    %% UI Layer
+    subgraph Interfaces ["User Interfaces"]
+        G --> J(Terminal / Shell)
+        I --> K(PyPI / Python Ecosystem)
+        H --> L(NPM Package)
+        L --> M[Web App (Vue 3 + Vite)]
+    end
+```
+
+The directory structure is as follows:
 
 ```
 xfina/

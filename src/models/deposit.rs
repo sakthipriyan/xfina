@@ -292,7 +292,7 @@ impl DepositAccount {
             .unwrap_or_else(|| Decimal::from(0))
     }
     
-    pub fn verify_running_balance(&self) -> Result<(), String> {
+    pub fn verify_running_balance(&self) -> Result<(), crate::error::XfinaError> {
         let summary = self.summary.as_ref().ok_or("No summary available")?;
         let transactions = self.transactions.as_ref().ok_or("No transactions available")?;
         let mut expected_balance = summary.xfina.as_ref().and_then(|x| x.opening_balance).unwrap_or(Decimal::from(0));
@@ -304,12 +304,12 @@ impl DepositAccount {
                 expected_balance -= txn.amount;
             }
             if expected_balance != txn.current_balance {
-                return Err(format!("Balance mismatch after txn {}: expected {}, got {}", txn.narration, expected_balance, txn.current_balance));
+                return Err(crate::error::XfinaError::from(format!("Balance mismatch after txn {}: expected {}, got {}", txn.narration, expected_balance, txn.current_balance)));
             }
         }
         
         if expected_balance != summary.current_balance {
-            return Err(format!("Final balance mismatch: expected {}, got {}", expected_balance, summary.current_balance));
+            return Err(crate::error::XfinaError::from(format!("Final balance mismatch: expected {}, got {}", expected_balance, summary.current_balance)));
         }
         
         Ok(())

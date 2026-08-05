@@ -194,7 +194,7 @@ fn extract_investor_info(pages_lines: &[Vec<Line>]) -> (Option<String>, Option<S
 }
 
 
-pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> Result<MutualFundsAccount, String> {
+pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> Result<MutualFundsAccount, crate::error::XfinaError> {
     let mut account = MutualFundsAccount {
         r#type: "mutualfunds".to_string(),
         masked_acc_number: String::new(),

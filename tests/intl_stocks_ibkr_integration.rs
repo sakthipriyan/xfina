@@ -3,6 +3,11 @@ use xfina::intl_stocks::ibkr::parse_ibkr_csv;
 
 #[test]
 fn test_ibkr_parser() {
+    if std::env::var("GITHUB_ACTIONS").is_ok() {
+        println!("Skipping integration test in CI");
+        return;
+    }
+
     let ibkr_dir = "../xfina-test-data/intl-stocks/ibkr";
     
     let expected_dir = format!("{}/expected", ibkr_dir);
@@ -29,7 +34,7 @@ fn test_ibkr_parser() {
                 let expected_xfina_path = format!("{}/{}.json", xfina_dir, file_name);
                 let expected_rebit_path = format!("{}/{}.json", rebit_dir, file_name);
 
-                let update_expected = std::env::var("UPDATE_EXPECTED").unwrap_or_else(|_| "1".to_string());
+                let update_expected = std::env::var("UPDATE_EXPECTED").unwrap_or_else(|_| "0".to_string());
                 if update_expected == "1" {
                     fs::write(&expected_xfina_path, &xfina_json).unwrap();
                     fs::write(&expected_rebit_path, &rebit_json).unwrap();

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use crate::models::{
     EquityAccount, EquityProfile, EquityHolders, EquityHolder, EquitySummary, EquityInvestment,
     EquityHoldings, EquityHolding, EquityTransactions, EquityTransaction, XfinaEquityAccount,
@@ -47,7 +47,7 @@ fn parse_datetime(date_str: &str) -> Option<chrono::DateTime<Utc>> {
     chrono::DateTime::parse_from_rfc3339(&iso).map(|d| d.with_timezone(&Utc)).ok()
 }
 
-pub fn parse_ibkr_csv(csv_content: &str) -> Result<EquityAccount, String> {
+pub fn parse_ibkr_csv(csv_content: &str) -> Result<EquityAccount, crate::error::XfinaError> {
     let mut rdr = ReaderBuilder::new()
         .has_headers(false)
         .flexible(true)
@@ -60,7 +60,7 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<EquityAccount, String> {
     let mut generated_date = None;
 
     // symbol -> (primary_symbol, description, isin)
-    let mut instruments: HashMap<String, (String, String, String)> = HashMap::new();
+    let mut instruments: BTreeMap<String, (String, String, String)> = BTreeMap::new();
     
     // Interim trades representation since EquityTransaction expects Decimal
     struct InterimTrade {
@@ -72,10 +72,10 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<EquityAccount, String> {
         comm_fee: Decimal,
     }
     // symbol -> Vec<InterimTrade>
-    let mut trades: HashMap<String, Vec<InterimTrade>> = HashMap::new();
+    let mut trades: BTreeMap<String, Vec<InterimTrade>> = BTreeMap::new();
     
     // symbol -> (quantity, value, cost_basis, close_price)
-    let mut positions: HashMap<String, (Decimal, Decimal, Decimal, Decimal)> = HashMap::new();
+    let mut positions: BTreeMap<String, (Decimal, Decimal, Decimal, Decimal)> = BTreeMap::new();
 
     for result in rdr.records() {
         let record = match result {
@@ -184,7 +184,7 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<EquityAccount, String> {
         }
     };
 
-    let mut merged_positions: HashMap<String, (Decimal, Decimal, Decimal, Decimal)> = HashMap::new();
+    let mut merged_positions: BTreeMap<String, (Decimal, Decimal, Decimal, Decimal)> = BTreeMap::new();
     for (sym, pos) in positions {
         let primary = get_primary(&sym);
         let entry = merged_positions.entry(primary).or_insert((Decimal::ZERO, Decimal::ZERO, Decimal::ZERO, Decimal::ZERO));
@@ -194,7 +194,7 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<EquityAccount, String> {
         entry.3 = pos.3; // Just take the last close price
     }
 
-    let mut merged_trades: HashMap<String, Vec<InterimTrade>> = HashMap::new();
+    let mut merged_trades: BTreeMap<String, Vec<InterimTrade>> = BTreeMap::new();
     for (sym, mut txs) in trades {
         let primary = get_primary(&sym);
         merged_trades.entry(primary).or_default().append(&mut txs);

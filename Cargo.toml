@@ -25,6 +25,9 @@ edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/sakthipriyan/xfina"
 description = "Fast, privacy-first parser for Indian financial statements (ReBIT/AA standard)"
+readme = "README.md"
+keywords = ["finance", "parser", "account-aggregator", "india", "pdf"]
+categories = ["parsing", "finance", "data-structures"]
 
 [workspace.dependencies]
 serde = { version = "1.0", features = ["derive"] }
@@ -58,6 +61,7 @@ chrono-tz = { workspace = true, optional = true }
 # CLI Dependencies
 clap = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
+thiserror = "2.0.19"
 
 [features]
 default = ["all"]

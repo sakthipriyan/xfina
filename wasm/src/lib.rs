@@ -8,7 +8,7 @@ pub fn parse_ibkr(csv_content: &str, format: Option<String>) -> Result<String, J
             let json = if format.as_deref() == Some("rebit") { stmt.to_rebit_json() } else { stmt.to_xfina_json() };
             serde_json::to_string(&json).map_err(|e| JsValue::from_str(&format!("JSON serialization error: {}", e)))
         },
-        Err(e) => Err(JsValue::from_str(&e)),
+        Err(e) => Err(JsValue::from_str(&e.to_string())),
     }
 }
 
@@ -22,7 +22,7 @@ pub fn parse_cams(bytes: &[u8], password: Option<String>, format: Option<String>
             serde_json::to_string(&json)
                 .map_err(|e| JsValue::from_str(&format!("JSON serialization error: {}", e)))
         },
-        Err(e) => Err(JsValue::from_str(&e)),
+        Err(e) => Err(JsValue::from_str(&e.to_string())),
     }
 }
 
@@ -35,7 +35,7 @@ pub fn parse_hdfc_cc(csv_content: &str, filename: Option<String>, format: Option
             let json = if format.as_deref() == Some("rebit") { stmt.to_rebit_json() } else { stmt.to_xfina_json() };
             serde_json::to_string(&json).map_err(|e| JsValue::from_str(&format!("JSON serialization error: {}", e)))
         },
-        Err(e) => Err(JsValue::from_str(&e)),
+        Err(e) => Err(JsValue::from_str(&e.to_string())),
     }
 }
 
@@ -48,7 +48,7 @@ pub fn parse_icici_cc(bytes: &[u8], filename: Option<String>, format: Option<Str
             let json = if format.as_deref() == Some("rebit") { stmt.to_rebit_json() } else { stmt.to_xfina_json() };
             serde_json::to_string(&json).map_err(|e| JsValue::from_str(&format!("JSON serialization error: {}", e)))
         },
-        Err(e) => Err(JsValue::from_str(&e)),
+        Err(e) => Err(JsValue::from_str(&e.to_string())),
     }
 }
 
@@ -60,7 +60,7 @@ pub fn parse_hdfc_ba(bytes: &[u8], password: Option<String>, format: Option<Stri
             let json = if format.as_deref() == Some("rebit") { stmt.to_rebit_json() } else { stmt.to_xfina_json() };
             serde_json::to_string(&json).map_err(|e| JsValue::from_str(&format!("JSON serialization error: {}", e)))
         },
-        Err(e) => Err(JsValue::from_str(&e)),
+        Err(e) => Err(JsValue::from_str(&e.to_string())),
     }
 }
 
@@ -72,7 +72,7 @@ pub fn parse_icici_ba(bytes: &[u8], filename: Option<String>, format: Option<Str
             let json = if format.as_deref() == Some("rebit") { stmt.to_rebit_json() } else { stmt.to_xfina_json() };
             serde_json::to_string(&json).map_err(|e| JsValue::from_str(&format!("JSON serialization error: {}", e)))
         },
-        Err(e) => Err(JsValue::from_str(&e)),
+        Err(e) => Err(JsValue::from_str(&e.to_string())),
     }
 }
 
@@ -84,7 +84,7 @@ pub fn parse_sbi_ba(bytes: &[u8], password: Option<String>, filename: Option<Str
             let json = if format.as_deref() == Some("rebit") { stmt.to_rebit_json() } else { stmt.to_xfina_json() };
             serde_json::to_string(&json).map_err(|e| JsValue::from_str(&format!("JSON serialization error: {}", e)))
         },
-        Err(e) => Err(JsValue::from_str(&e)),
+        Err(e) => Err(JsValue::from_str(&e.to_string())),
     }
 }
 
@@ -96,7 +96,7 @@ pub fn parse_bob_ba(bytes: &[u8], format: Option<String>) -> Result<String, JsVa
             let json = if format.as_deref() == Some("rebit") { stmt.to_rebit_json() } else { stmt.to_xfina_json() };
             serde_json::to_string(&json).map_err(|e| JsValue::from_str(&format!("JSON serialization error: {}", e)))
         },
-        Err(e) => Err(JsValue::from_str(&e)),
+        Err(e) => Err(JsValue::from_str(&e.to_string())),
     }
 }
 
@@ -108,6 +108,6 @@ pub fn parse_axis_ba(bytes: &[u8], filename: Option<String>, format: Option<Stri
             let json = if format.as_deref() == Some("rebit") { stmt.to_rebit_json() } else { stmt.to_xfina_json() };
             serde_json::to_string(&json).map_err(|e| JsValue::from_str(&format!("JSON serialization error: {}", e)))
         },
-        Err(e) => Err(JsValue::from_str(&e)),
+        Err(e) => Err(JsValue::from_str(&e.to_string())),
     }
 }

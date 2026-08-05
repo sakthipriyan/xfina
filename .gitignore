@@ -38,3 +38,4 @@ test_out.txt
 parse_test*.rs
 *.py
 gh-pages-worktree/
+/web/public/versions.json
