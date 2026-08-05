@@ -1,7 +1,6 @@
 use std::fs;
 use std::path::Path;
 use xfina::credit_cards::hdfc::parse_hdfc_statement;
-use pdf_extract::extract_text;
 
 #[test]
 fn test_hdfc_credit_cards() {

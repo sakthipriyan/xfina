@@ -4,7 +4,6 @@ use super::pdf_parser::CharItem;
 pub struct Line {
     pub chars: Vec<CharItem>,
     pub text: String,
-    pub baseline: f64,
 }
 
 pub fn group_into_lines(page: &[CharItem], y_tolerance: f64) -> Vec<Line> {
@@ -46,7 +45,6 @@ pub fn group_into_lines(page: &[CharItem], y_tolerance: f64) -> Vec<Line> {
                 lines.push(Line {
                     chars: current_line_chars.clone(),
                     text: text.trim().to_string(),
-                    baseline: current_baseline,
                 });
                 
                 current_line_chars.clear();
@@ -69,9 +67,8 @@ pub fn group_into_lines(page: &[CharItem], y_tolerance: f64) -> Vec<Line> {
             last_x1 = c.x1;
         }
         lines.push(Line {
-            chars: current_line_chars,
+            chars: current_line_chars.clone(),
             text: text.trim().to_string(),
-            baseline: current_baseline,
         });
     }
 

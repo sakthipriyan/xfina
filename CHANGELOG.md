@@ -18,8 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Web App:** Updated the website header to explicitly link to `sakthipriyan.com/building-wealth` instead of linking generically to GitHub.
 
 ### Fixed
+- **Code Cleanup:** Resolved hundreds of compiler and clippy warnings across the workspace, including unused variables, non-idiomatic default struct reassignments, and dead code.
 - **Testing:** Resolved integration test failures in CI by ensuring snapshot write/assertion tests are skipped via a `GITHUB_ACTIONS=true` environment check.
-- **Testing:** Replaced `HashMap` with `BTreeMap` in the IBKR parser to ensure deterministic serialization order for consistent snapshot tests.
+- **Testing:** Replaced `HashMap` with `BTreeMap` and `HashSet` with `BTreeSet` in the IBKR parser to ensure deterministic serialization order for consistent snapshot tests.
 - **Code Cleanup:** Removed legacy, unused `f64`-based financial models (`Portfolio`, `Asset`, etc.) from `src/models/mod.rs`.
 - **Documentation:** Fixed an inaccuracy in `wasm/README.md` to correctly state that the default parser output format is `"xfina"`, not `"rebit"`.
 

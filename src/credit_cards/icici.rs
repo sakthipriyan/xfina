@@ -1,9 +1,9 @@
 use calamine::{Reader, Xlsx, open_workbook_from_rs};
 use std::io::Cursor;
-use chrono::{NaiveDate, DateTime, Utc, TimeZone};
+use chrono::{NaiveDate, DateTime, Utc};
 use rust_decimal::Decimal;
 use crate::models::credit_card::{
-    CreditCardAccount, CcProfile, CcHolders, CcHolder, CcSummary, PastDues, RewardPointsSummary,
+    CreditCardAccount, CcProfile, CcHolders, CcHolder, CcSummary, RewardPointsSummary,
     CcTransactions, CcTransaction, XfinaCreditCardAccount, CcXfinaSummary, CcXfinaTransactions, CcXfinaTransaction,
 };
 use crate::models::deposit::TransactionType;
@@ -21,13 +21,18 @@ pub fn parse_icici_statement(bytes: &[u8], filename: Option<&str>) -> Result<Cre
     let range = workbook.worksheet_range(first_sheet)
         .map_err(|e| format!("Failed to get worksheet: {}", e))?;
 
-    let mut stmt = CreditCardAccount::default();
-    stmt.r#type = "credit_card".to_string();
+    let mut stmt = CreditCardAccount {
+        r#type: "credit_card".to_string(),
+        version: 1.1,
+        ..Default::default()
+    };
     stmt.version = 1.1;
 
     let mut holder = CcHolder::default();
-    let mut xfina_account = XfinaCreditCardAccount::default();
-    xfina_account.institution_name = Some("ICICI Bank".to_string());
+    let mut xfina_account = XfinaCreditCardAccount {
+        institution_name: Some("ICICI Bank".to_string()),
+        ..Default::default()
+    };
     
     let mut date_only_paths = Vec::new();
 
@@ -56,8 +61,6 @@ pub fn parse_icici_statement(bytes: &[u8], filename: Option<&str>) -> Result<Cre
     let mut previous_balance = Decimal::new(0, 0);
     let mut purchases = Decimal::new(0, 0);
     let mut payments = Decimal::new(0, 0);
-    let mut total_due = Decimal::new(0, 0);
-    let mut min_due = Decimal::new(0, 0);
 
     let mut default_rewards = 0;
     let mut owner_credit_breakdown = HashMap::new();
@@ -67,7 +70,7 @@ pub fn parse_icici_statement(bytes: &[u8], filename: Option<&str>) -> Result<Cre
         let cells: Vec<String> = row.iter().map(|c| c.to_string()).collect();
         if cells.is_empty() { continue; }
 
-        let col0 = cells.get(0).map(|s| s.trim()).unwrap_or("");
+        let _col0 = cells.first().map(|s| s.trim()).unwrap_or("");
 
         if !in_transactions {
             for i in [0, 8] {
@@ -90,11 +93,11 @@ pub fn parse_icici_statement(bytes: &[u8], filename: Option<&str>) -> Result<Cre
                             purchases = parse_decimal(&val).unwrap_or_default();
                         }
                         "Total Amount Due" => {
-                            total_due = parse_decimal(&val).unwrap_or_default();
+                            let total_due = parse_decimal(&val).unwrap_or_default();
                             summary.total_due_amount = Some(total_due);
                         }
                         "Minimum Amount Due" => {
-                            min_due = parse_decimal(&val).unwrap_or_default();
+                            let min_due = parse_decimal(&val).unwrap_or_default();
                             summary.min_due_amount = Some(min_due);
                         }
                         "Available Credit Limit" => {
@@ -117,9 +120,11 @@ pub fn parse_icici_statement(bytes: &[u8], filename: Option<&str>) -> Result<Cre
                         }
                         "Statement Period" => {
                             if let Some((start, end)) = val.split_once(" TO ") {
-                                let mut txns = CcTransactions::default();
-                                txns.start_date = parse_date(start);
-                                txns.end_date = parse_date(end);
+                                let txns = CcTransactions {
+                                    start_date: parse_date(start),
+                                    end_date: parse_date(end),
+                                    ..Default::default()
+                                };
                                 xfina_txns.start_date_derived = Some(false);
                                 xfina_txns.end_date_derived = Some(false);
                                 stmt.transactions = Some(txns);
@@ -135,7 +140,7 @@ pub fn parse_icici_statement(bytes: &[u8], filename: Option<&str>) -> Result<Cre
         } else {
             // Parse Transactions
             // 0=Date, 4=Details, 8=Amount, 12=Reward Points, 16=Ref Number
-            let date_str = cells.get(0).map(|s| s.trim()).unwrap_or("");
+            let date_str = cells.first().map(|s| s.trim()).unwrap_or("");
             if date_str.is_empty() || date_str == "Transaction Date" { continue; } // skip empty or header
             
             let details = cells.get(4).map(|s| s.trim()).unwrap_or("").to_string();
@@ -143,7 +148,7 @@ pub fn parse_icici_statement(bytes: &[u8], filename: Option<&str>) -> Result<Cre
             
             // Parse amount and type
             let is_credit = amount_str.ends_with("Cr.");
-            let is_debit = amount_str.ends_with("Dr.");
+            let _is_debit = amount_str.ends_with("Dr.");
             let txn_type = if is_credit { TransactionType::Credit } else { TransactionType::Debit };
             
             let amt_clean = amount_str.replace("Dr.", "").replace("Cr.", "").replace("INR", "").trim().to_string();
@@ -151,8 +156,10 @@ pub fn parse_icici_statement(bytes: &[u8], filename: Option<&str>) -> Result<Cre
             
             let reward_points = cells.get(12).and_then(|s| s.trim().parse::<i32>().ok());
             
-            let mut tx_xfina = CcXfinaTransaction::default();
-            tx_xfina.owner = Some(card_holder_name.clone());
+            let mut tx_xfina = CcXfinaTransaction {
+                owner: Some(card_holder_name.clone()),
+                ..Default::default()
+            };
             tx_xfina.reward_points = reward_points;
 
             let mut parsed_date: Option<DateTime<Utc>> = parse_datetime(date_str);
@@ -212,7 +219,7 @@ pub fn parse_icici_statement(bytes: &[u8], filename: Option<&str>) -> Result<Cre
         expiring_in_60_days: None,
     });
     
-    let stmt_date_opt = summary.last_statement_date.clone();
+    let stmt_date_opt = summary.last_statement_date;
     summary.xfina = Some(xfina_summary);
     stmt.summary = Some(summary);
     
@@ -222,7 +229,7 @@ pub fn parse_icici_statement(bytes: &[u8], filename: Option<&str>) -> Result<Cre
         }
     });
 
-    transactions_list.sort_by(|a, b| a.txn_date.cmp(&b.txn_date));
+    transactions_list.sort_by_key(|a| a.txn_date);
 
     let mut txns = stmt.transactions.unwrap_or_default();
     

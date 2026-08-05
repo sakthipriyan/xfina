@@ -1,5 +1,5 @@
 use rust_decimal::Decimal;
-use crate::models::deposit::{DepositAccount, Transaction, XfinaDepositAccount, XfinaTransactions, XfinaSummary, Profile, Holders, Holder, Summary, Transactions, HoldersType, TransactionType, TransactionMode, FiType, HoldingNominee};
+use crate::models::deposit::{DepositAccount, Transaction, XfinaDepositAccount, XfinaSummary, Profile, Holders, Holder, Summary, Transactions, HoldersType, TransactionType, TransactionMode, FiType, HoldingNominee};
 use crate::models::mask_account_number;
 use super::{pdf_parser, layout};
 use regex::Regex;
@@ -8,12 +8,16 @@ use chrono::{NaiveDate, TimeZone, Utc};
 pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>, filename: Option<&str>) -> Result<DepositAccount, crate::error::XfinaError> {
     let pages = pdf_parser::extract_spatial_pages(bytes, password)?;
     
-    let mut statement = DepositAccount::default();
-    statement.r#type = FiType::Deposit;
-    statement.version = 1.1;
+    let mut statement = DepositAccount {
+        r#type: FiType::Deposit,
+        version: 1.1,
+        ..Default::default()
+    };
     
-    let mut xfina_account = XfinaDepositAccount::default();
-    xfina_account.institution_name = Some("State Bank of India".to_string());
+    let mut xfina_account = XfinaDepositAccount {
+        institution_name: Some("State Bank of India".to_string()),
+        ..Default::default()
+    };
 
     let mut account_number = String::new();
     let mut account_name = String::new();
@@ -37,9 +41,9 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>, filename: 
             let day = caps.get(1).unwrap().as_str().parse::<u32>().unwrap();
             let month = caps.get(2).unwrap().as_str().parse::<u32>().unwrap();
             let year = caps.get(3).unwrap().as_str().parse::<i32>().unwrap();
-            let hour = caps.get(4).unwrap().as_str().parse::<u32>().unwrap();
-            let min = caps.get(5).unwrap().as_str().parse::<u32>().unwrap();
-            let sec = caps.get(6).unwrap().as_str().parse::<u32>().unwrap();
+            let _hour = caps.get(4).unwrap().as_str().parse::<u32>().unwrap();
+            let _min = caps.get(5).unwrap().as_str().parse::<u32>().unwrap();
+            let _sec = caps.get(6).unwrap().as_str().parse::<u32>().unwrap();
             if let Some(d) = NaiveDate::from_ymd_opt(year, month, day) {
                 let dt = d.and_hms_opt(0, 0, 0).unwrap();
                 let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
@@ -81,12 +85,11 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>, filename: 
         for line in &lines {
             let y = line.chars.first().map(|c| c.y0).unwrap_or(0.0);
             if let Some(ly) = last_y {
-                if (y - ly).abs() > 11.5 {
-                    if !current_block.is_empty() {
+                if (y - ly).abs() > 11.5
+                    && !current_block.is_empty() {
                         blocks.push(current_block);
                         current_block = Vec::new();
                     }
-                }
             }
             current_block.push(line);
             last_y = Some(y);
@@ -188,11 +191,10 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>, filename: 
                         // Assume customer address follows name on the left side
                         in_address = true;
                     }
-                } else if in_address && x0 < 300.0 && !text.starts_with("Not Available") {
-                    if !text.is_empty() {
+                } else if in_address && x0 < 300.0 && !text.starts_with("Not Available")
+                    && !text.is_empty() {
                         address_lines.push(text.to_string());
                     }
-                }
                 if text.contains("Balance") && text.len() < 10 {
                     inside_table = true;
                     is_header_or_footer = true;
@@ -217,7 +219,7 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>, filename: 
             let mut credit = None;
             let mut balance = None;
             
-            let parse_amt = |s: &str| -> Option<Decimal> {
+            let _parse_amt = |s: &str| -> Option<Decimal> {
                 if s == "-" { return None; }
                 s.replace(",", "").replace("CR", "").replace("DR", "").parse().ok()
             };
@@ -272,9 +274,7 @@ pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>, filename: 
                 
                 let mode = if narration.starts_with("UPI/") || narration.starts_with("TRANSFER TO UPI/") || narration.starts_with("TRANSFER FROM UPI/") {
                     Some(TransactionMode::Upi)
-                } else if narration.contains("NEFT") {
-                    Some(TransactionMode::Ft)
-                } else if narration.contains("IMPS") {
+                } else if narration.contains("NEFT") || narration.contains("IMPS") {
                     Some(TransactionMode::Ft)
                 } else if narration.contains("ATM") || narration.contains("CASH") {
                     Some(TransactionMode::Cash)
@@ -340,8 +340,10 @@ if !account_number.is_empty() {
         });
     }
 
-    let mut holder = Holder::default();
-    holder.name = account_name;
+    let mut holder = Holder {
+        name: account_name,
+        ..Default::default()
+    };
     if !address_lines.is_empty() {
         holder.address = Some(address_lines.join(", "));
     }
@@ -356,10 +358,11 @@ if !account_number.is_empty() {
     }
     holder.xfina = Some(xfina_holder);
     
-    let mut profile = Profile::default();
-    profile.holders = Holders {
-        r#type: HoldersType::Single, // Adjust as necessary
-        holder: vec![holder],
+    let profile = Profile {
+        holders: Holders {
+            r#type: HoldersType::Single, // Adjust as necessary
+            holder: vec![holder],
+        }
     };
 
     transactions_obj.transaction = parsed_transactions;
