@@ -7,7 +7,6 @@ use crate::models::credit_card::{
 };
 use crate::models::deposit::TransactionType;
 use std::collections::HashMap;
-use rust_decimal::prelude::FromPrimitive;
 use regex::Regex;
 
 pub fn parse_hdfc_statement(content: &str, filename: Option<&str>) -> Result<CreditCardAccount, crate::error::XfinaError> {
