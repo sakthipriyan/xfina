@@ -6,7 +6,7 @@ use crate::models::deposit::{DepositAccount, Transaction, XfinaDepositAccount, X
 use crate::models::mask_account_number;
 use regex::Regex;
 
-pub fn parse_axis_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAccount, String> {
+pub fn parse_axis_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAccount, crate::error::XfinaError> {
     let cursor = Cursor::new(bytes);
     let mut workbook = open_workbook_auto_from_rs(cursor)
         .map_err(|e| format!("Failed to open Excel workbook: {}", e))?;
@@ -295,6 +295,6 @@ pub fn parse_axis_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAcc
     Ok(statement)
 }
 
-pub fn parse_axis_bank_statement(bytes: &[u8], filename: Option<&str>) -> Result<DepositAccount, String> {
+pub fn parse_axis_bank_statement(bytes: &[u8], filename: Option<&str>) -> Result<DepositAccount, crate::error::XfinaError> {
     parse_axis_xls(bytes, filename)
 }

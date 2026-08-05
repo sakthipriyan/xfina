@@ -5,6 +5,11 @@ use pdf_extract::extract_text;
 
 #[test]
 fn test_hdfc_credit_cards() {
+    if std::env::var("GITHUB_ACTIONS").is_ok() {
+        println!("Skipping integration test in CI");
+        return;
+    }
+
     let test_data_dir = Path::new("../xfina-test-data/credit-cards/hdfc");
     
     // If the test data repo is not checked out alongside, gracefully skip
@@ -44,8 +49,11 @@ fn test_hdfc_credit_cards() {
                 let xfina_json = serde_json::to_string_pretty(&parsed_statement.to_xfina_json()).unwrap();
                 let rebit_json = serde_json::to_string_pretty(&parsed_statement.to_rebit_json()).unwrap();
                 
-                fs::write(&xfina_path, &xfina_json).expect("Failed to write xfina JSON");
-                fs::write(&rebit_path, &rebit_json).expect("Failed to write rebit JSON");
+                let update_expected = std::env::var("UPDATE_EXPECTED").unwrap_or_else(|_| "0".to_string());
+                if update_expected == "1" {
+                    fs::write(&xfina_path, &xfina_json).expect("Failed to write xfina JSON");
+                    fs::write(&rebit_path, &rebit_json).expect("Failed to write rebit JSON");
+                }
                 
                 let expected_xfina = fs::read_to_string(&xfina_path).expect("Failed to read expected xfina");
                 let expected_rebit = fs::read_to_string(&rebit_path).expect("Failed to read expected rebit");

@@ -27,7 +27,7 @@ async function parseStatement(file) {
 
   try {
     // Parse the statement!
-    // The format parameter can be "rebit" (default AA format) or "xfina" (with xfina extensions)
+    // The format parameter can be "xfina" (default, with xfina extensions) or "rebit" (strict AA format)
     const accountData = parse_hdfc_ba(bytes, null, "xfina");
     console.log(accountData);
   } catch (error) {
@@ -38,7 +38,7 @@ async function parseStatement(file) {
 
 ## Available Parsers
 
-All parsers return a structured JavaScript object that mirrors the ReBIT JSON schema. Each parser accepts an optional `format` parameter which can be `"rebit"` (default AA schema) or `"xfina"` (includes our extended data fields).
+All parsers return a structured JavaScript object that mirrors the ReBIT JSON schema. Each parser accepts an optional `format` parameter which can be `"xfina"` (default, includes our extended data fields) or `"rebit"` (strict AA schema).
 
 | Category | Institution | Format | JS Function | Input Type |
 |---|---|---|---|---|

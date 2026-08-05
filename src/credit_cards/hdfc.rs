@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use num_traits::cast::ToPrimitive;
 use regex::Regex;
 
-pub fn parse_hdfc_statement(content: &str, filename: Option<&str>) -> Result<CreditCardAccount, String> {
+pub fn parse_hdfc_statement(content: &str, filename: Option<&str>) -> Result<CreditCardAccount, crate::error::XfinaError> {
     let mut stmt = CreditCardAccount::default();
     stmt.r#type = "credit_card".to_string();
     stmt.version = 1.1;

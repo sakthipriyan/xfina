@@ -24,7 +24,7 @@ fn parse_ibkr(py: Python, csv_content: &str, format: Option<&str>) -> PyResult<P
             let json = if format == Some("rebit") { stmt.to_rebit_json() } else { stmt.to_xfina_json() };
             to_py_dict(py, json)
         },
-        Err(e) => Err(PyValueError::new_err(e)),
+        Err(e) => Err(PyValueError::new_err(e.to_string())),
     }
 }
 
@@ -36,7 +36,7 @@ fn parse_cams(py: Python, bytes: &[u8], password: Option<&str>, format: Option<&
             let json = if format == Some("rebit") { portfolio.to_rebit_json() } else { portfolio.to_xfina_json() };
             to_py_dict(py, json)
         },
-        Err(e) => Err(PyValueError::new_err(e)),
+        Err(e) => Err(PyValueError::new_err(e.to_string())),
     }
 }
 
@@ -48,7 +48,7 @@ fn parse_hdfc_cc(py: Python, content: &str, filename: Option<&str>, format: Opti
             let json = if format == Some("rebit") { stmt.to_rebit_json() } else { stmt.to_xfina_json() };
             to_py_dict(py, json)
         },
-        Err(e) => Err(PyValueError::new_err(e)),
+        Err(e) => Err(PyValueError::new_err(e.to_string())),
     }
 }
 
@@ -60,7 +60,7 @@ fn parse_icici_cc(py: Python, bytes: &[u8], filename: Option<&str>, format: Opti
             let json = if format == Some("rebit") { stmt.to_rebit_json() } else { stmt.to_xfina_json() };
             to_py_dict(py, json)
         },
-        Err(e) => Err(PyValueError::new_err(e)),
+        Err(e) => Err(PyValueError::new_err(e.to_string())),
     }
 }
 
@@ -72,7 +72,7 @@ fn parse_hdfc_ba(py: Python, bytes: &[u8], password: Option<&str>, format: Optio
             let json = if format == Some("rebit") { stmt.to_rebit_json() } else { stmt.to_xfina_json() };
             to_py_dict(py, json)
         },
-        Err(e) => Err(PyValueError::new_err(e)),
+        Err(e) => Err(PyValueError::new_err(e.to_string())),
     }
 }
 
@@ -84,7 +84,7 @@ fn parse_icici_ba(py: Python, bytes: &[u8], filename: Option<&str>, format: Opti
             let json = if format == Some("rebit") { stmt.to_rebit_json() } else { stmt.to_xfina_json() };
             to_py_dict(py, json)
         },
-        Err(e) => Err(PyValueError::new_err(e)),
+        Err(e) => Err(PyValueError::new_err(e.to_string())),
     }
 }
 
@@ -96,7 +96,7 @@ fn parse_sbi_ba(py: Python, bytes: &[u8], password: Option<&str>, filename: Opti
             let json = if format == Some("rebit") { stmt.to_rebit_json() } else { stmt.to_xfina_json() };
             to_py_dict(py, json)
         },
-        Err(e) => Err(PyValueError::new_err(e)),
+        Err(e) => Err(PyValueError::new_err(e.to_string())),
     }
 }
 
@@ -108,7 +108,7 @@ fn parse_bob_ba(py: Python, bytes: &[u8], format: Option<&str>) -> PyResult<PyOb
             let json = if format == Some("rebit") { stmt.to_rebit_json() } else { stmt.to_xfina_json() };
             to_py_dict(py, json)
         },
-        Err(e) => Err(PyValueError::new_err(e)),
+        Err(e) => Err(PyValueError::new_err(e.to_string())),
     }
 }
 
@@ -120,7 +120,7 @@ fn parse_axis_ba(py: Python, bytes: &[u8], filename: Option<&str>, format: Optio
             let json = if format == Some("rebit") { stmt.to_rebit_json() } else { stmt.to_xfina_json() };
             to_py_dict(py, json)
         },
-        Err(e) => Err(PyValueError::new_err(e)),
+        Err(e) => Err(PyValueError::new_err(e.to_string())),
     }
 }
 

@@ -60,12 +60,12 @@ impl OutputDev for SpatialOutputDev {
     fn end_line(&mut self) -> Result<(), OutputError> { Ok(()) }
 }
 
-pub fn extract_spatial_pages(bytes: &[u8], password: Option<&str>) -> Result<Vec<Vec<CharItem>>, String> {
+pub fn extract_spatial_pages(bytes: &[u8], password: Option<&str>) -> Result<Vec<Vec<CharItem>>, crate::error::XfinaError> {
     let mut doc = Document::load_mem(bytes).map_err(|e| format!("Failed to load PDF: {:?}", e))?;
     if let Some(pw) = password {
         doc.decrypt(pw).map_err(|e| format!("Failed to decrypt: {:?}", e))?;
     } else if doc.is_encrypted() {
-        return Err("PDF is encrypted, password required".to_string());
+        return Err(crate::error::XfinaError::from("PDF is encrypted, password required".to_string()));
     }
     
     let mut out = SpatialOutputDev::new();
@@ -73,7 +73,7 @@ pub fn extract_spatial_pages(bytes: &[u8], password: Option<&str>) -> Result<Vec
     Ok(out.pages)
 }
 
-pub fn parse_cams_pdf(bytes: &[u8], password: Option<&str>, filename: Option<&str>) -> Result<crate::models::MutualFundsAccount, String> {
+pub fn parse_cams_pdf(bytes: &[u8], password: Option<&str>, filename: Option<&str>) -> Result<crate::models::MutualFundsAccount, crate::error::XfinaError> {
     let pages = extract_spatial_pages(bytes, password)?;
     
     let mut all_pages_lines = Vec::new();

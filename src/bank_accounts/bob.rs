@@ -6,7 +6,7 @@ use crate::models::deposit::{DepositAccount, Transaction, XfinaDepositAccount, X
 use crate::models::mask_account_number;
 use regex::Regex;
 
-pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
+pub fn parse_bob_xls(bytes: &[u8]) -> Result<DepositAccount, crate::error::XfinaError> {
     let cursor = Cursor::new(bytes);
     let mut workbook = open_workbook_auto_from_rs(cursor).map_err(|e| format!("Failed to open workbook: {:?}", e))?;
     let sheet_names = workbook.sheet_names().to_owned();

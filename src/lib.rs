@@ -9,7 +9,7 @@
 //! ```no_run
 //! use xfina::bank_accounts::hdfc::parse_hdfc_bank_statement;
 //!
-//! # fn main() -> Result<(), String> {
+//! # fn main() -> Result<(), xfina::error::XfinaError> {
 //! let bytes = std::fs::read("statement.xls").unwrap();
 //! let account = parse_hdfc_bank_statement(&bytes, None)?;
 //!
@@ -73,3 +73,4 @@ pub mod bank_accounts {
 }
 
 pub mod models;
+pub mod error;

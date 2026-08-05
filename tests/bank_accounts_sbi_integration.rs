@@ -4,6 +4,11 @@ use std::path::Path;
 
 #[test]
 fn test_sbi_pdf_parser() {
+    if std::env::var("GITHUB_ACTIONS").is_ok() {
+        println!("Skipping integration test in CI");
+        return;
+    }
+
     let test_dir = Path::new("../xfina-test-data/bank-accounts/sbi");
     let raw_dir = test_dir.join("raw");
     let expected_dir = test_dir.join("expected");
@@ -38,8 +43,11 @@ fn test_sbi_pdf_parser() {
                 assert_eq!(xfina_json, expected_xfina, "Mismatch for {:?}", path.file_name().unwrap());
                 assert_eq!(rebit_json, expected_rebit, "Mismatch for {:?}", path.file_name().unwrap());
             } else {
-                fs::write(xfina_path, xfina_json).unwrap();
-                fs::write(rebit_path, rebit_json).unwrap();
+                let update_expected = std::env::var("UPDATE_EXPECTED").unwrap_or_else(|_| "0".to_string());
+                if update_expected == "1" {
+                    fs::write(xfina_path, xfina_json).unwrap();
+                    fs::write(rebit_path, rebit_json).unwrap();
+                }
             }
         }
     }

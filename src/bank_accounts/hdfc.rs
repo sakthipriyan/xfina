@@ -6,14 +6,14 @@ use crate::models::deposit::{DepositAccount, Transaction, XfinaDepositAccount, X
 use crate::models::mask_account_number;
 use regex::Regex;
 
-pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
+pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<DepositAccount, crate::error::XfinaError> {
     let cursor = Cursor::new(bytes);
     let mut workbook = open_workbook_auto_from_rs(cursor)
         .map_err(|e| format!("Failed to open workbook: {}", e))?;
     
     let sheet_names = workbook.sheet_names().to_vec();
     if sheet_names.is_empty() {
-        return Err("No sheets found in workbook".to_string());
+        return Err(crate::error::XfinaError::from("No sheets found in workbook".to_string()));
     }
     
     let sheet = workbook.worksheet_range(&sheet_names[0])
@@ -270,12 +270,12 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
     
     if let Some(sd) = parsed_summary_debits {
         if calc_debits != sd {
-            return Err(format!("Total debits mismatch: expected {}, got {}", sd, calc_debits));
+            return Err(crate::error::XfinaError::from(format!("Total debits mismatch: expected {}, got {}", sd, calc_debits)));
         }
     }
     if let Some(sc) = parsed_summary_credits {
         if calc_credits != sc {
-            return Err(format!("Total credits mismatch: expected {}, got {}", sc, calc_credits));
+            return Err(crate::error::XfinaError::from(format!("Total credits mismatch: expected {}, got {}", sc, calc_credits)));
         }
     }
     
@@ -306,7 +306,7 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<DepositAccount, String> {
         summary.current_balance = cb;
         if let Some(last) = parsed_transactions.last() {
             if summary.current_balance != last.current_balance {
-                return Err(format!("Closing balance mismatch: expected {}, got {}", summary.current_balance, last.current_balance));
+                return Err(crate::error::XfinaError::from(format!("Closing balance mismatch: expected {}, got {}", summary.current_balance, last.current_balance)));
             }
         }
     } else if let Some(last) = parsed_transactions.last() {
@@ -345,6 +345,6 @@ fn parse_date(date_str: &str) -> NaiveDate {
     NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()
 }
 
-pub fn parse_hdfc_bank_statement(bytes: &[u8], _password: Option<&str>) -> Result<DepositAccount, String> {
+pub fn parse_hdfc_bank_statement(bytes: &[u8], _password: Option<&str>) -> Result<DepositAccount, crate::error::XfinaError> {
     parse_hdfc_xls(bytes)
 }

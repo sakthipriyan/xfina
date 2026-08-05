@@ -71,31 +71,31 @@ fn main() -> Result<()> {
     let json_output = match (cli.category, cli.institution) {
         (Category::BankAccount, Institution::Hdfc) => {
             let res = xfina::bank_accounts::hdfc::parse_hdfc_bank_statement(&file_bytes, cli.password.as_deref())
-                .map_err(|e| anyhow::anyhow!(e))?;
+                ?;
             let json = if is_rebit { res.to_rebit_json() } else { res.to_xfina_json() };
             serde_json::to_string_pretty(&json)?
         },
         (Category::BankAccount, Institution::Icici) => {
             let res = xfina::bank_accounts::icici::parse_icici_bank_statement(&file_bytes, file_name)
-                .map_err(|e| anyhow::anyhow!(e))?;
+                ?;
             let json = if is_rebit { res.to_rebit_json() } else { res.to_xfina_json() };
             serde_json::to_string_pretty(&json)?
         },
         (Category::BankAccount, Institution::Sbi) => {
             let res = xfina::bank_accounts::sbi::parse_sbi_bank_statement(&file_bytes, cli.password.as_deref(), file_name)
-                .map_err(|e| anyhow::anyhow!(e))?;
+                ?;
             let json = if is_rebit { res.to_rebit_json() } else { res.to_xfina_json() };
             serde_json::to_string_pretty(&json)?
         },
         (Category::BankAccount, Institution::Bob) => {
             let res = xfina::bank_accounts::bob::parse_bob_xls(&file_bytes)
-                .map_err(|e| anyhow::anyhow!(e))?;
+                ?;
             let json = if is_rebit { res.to_rebit_json() } else { res.to_xfina_json() };
             serde_json::to_string_pretty(&json)?
         },
         (Category::BankAccount, Institution::Axis) => {
             let res = xfina::bank_accounts::axis::parse_axis_bank_statement(&file_bytes, file_name)
-                .map_err(|e| anyhow::anyhow!(e))?;
+                ?;
             let json = if is_rebit { res.to_rebit_json() } else { res.to_xfina_json() };
             serde_json::to_string_pretty(&json)?
         },
@@ -103,19 +103,19 @@ fn main() -> Result<()> {
             let content = String::from_utf8(file_bytes.clone())
                 .context("HDFC Credit Card requires valid UTF-8 text (CSV/TXT)")?;
             let res = xfina::credit_cards::hdfc::parse_hdfc_statement(&content, file_name)
-                .map_err(|e| anyhow::anyhow!(e))?;
+                ?;
             let json = if is_rebit { res.to_rebit_json() } else { res.to_xfina_json() };
             serde_json::to_string_pretty(&json)?
         },
         (Category::CreditCard, Institution::Icici) => {
             let res = xfina::credit_cards::icici::parse_icici_statement(&file_bytes, file_name)
-                .map_err(|e| anyhow::anyhow!(e))?;
+                ?;
             let json = if is_rebit { res.to_rebit_json() } else { res.to_xfina_json() };
             serde_json::to_string_pretty(&json)?
         },
         (Category::MutualFund, Institution::Cams) => {
             let res = xfina::mutual_funds::cams::parse_cams_pdf(&file_bytes, cli.password.as_deref(), file_name)
-                .map_err(|e| anyhow::anyhow!(e))?;
+                ?;
             let json = if is_rebit { res.to_rebit_json() } else { res.to_xfina_json() };
             serde_json::to_string_pretty(&json)?
         },
@@ -123,7 +123,7 @@ fn main() -> Result<()> {
             let content = String::from_utf8(file_bytes.clone())
                 .context("IBKR requires valid UTF-8 text (CSV)")?;
             let res = xfina::intl_stocks::ibkr::parse_ibkr_csv(&content)
-                .map_err(|e| anyhow::anyhow!(e))?;
+                ?;
             let json = if is_rebit { res.to_rebit_json() } else { res.to_xfina_json() };
             serde_json::to_string_pretty(&json)?
         },
