@@ -144,7 +144,7 @@ enum ParserState {
     OutsideFolio,
     InPortfolioSummary,
     InSchemeHeader { folio_no: String, buffer: Vec<Line> },
-    InSchemeBody { holding: MfHolding, buffer: Vec<Line> },
+    InSchemeBody { holding: Box<MfHolding>, buffer: Vec<Line> },
 }
 
 fn extract_investor_info(pages_lines: &[Vec<Line>]) -> (Option<String>, Option<String>, Option<String>) {
@@ -222,10 +222,12 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> R
     }
 
     let (name_opt, address, mobile) = extract_investor_info(&pages_lines);
-    let mut holder = MfHolder::default();
-    holder.name = name_opt.unwrap_or_default();
-    holder.address = address;
-    holder.mobile = mobile;
+    let mut holder = MfHolder {
+        name: name_opt.unwrap_or_default(),
+        address,
+        mobile,
+        ..Default::default()
+    };
 
     let mut holdings: Vec<MfHolding> = Vec::new();
     let mut all_transactions: Vec<MfTransaction> = Vec::new();
@@ -242,6 +244,7 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> R
     let folio_re = Regex::new(r"(?i)Folio\s+No\s*:\s*([a-zA-Z0-9/\-]+)").unwrap();
     let pan_re = Regex::new(r"(?i)PAN\s*:\s*([A-Z]{5}\d{4}[A-Z])").unwrap();
     let kyc_re = Regex::new(r"(?i)KYC\s*:\s*(\S+(?:\s+OK)?)").unwrap();
+    let pan_kyc_re = Regex::new(r"(?i)PAN\s*:\s*(OK)").unwrap();
     
     let mut current_kyc: Option<String> = None;
     let mut current_pan_kyc: Option<String> = None;
@@ -295,7 +298,7 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> R
                     current_kyc = Some(kyc_caps.get(1).unwrap().as_str().to_string());
                 }
                 // Check if PAN: OK exists too
-                if let Some(pan_kyc_caps) = Regex::new(r"(?i)PAN\s*:\s*(OK)").unwrap().captures(text) {
+                if let Some(pan_kyc_caps) = pan_kyc_re.captures(text) {
                     current_pan_kyc = Some(pan_kyc_caps.get(1).unwrap().as_str().to_string());
                 }
                 
@@ -349,7 +352,7 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> R
                             xfina.pan_kyc = current_pan_kyc.clone();
                         }
                         
-                        state = ParserState::InSchemeBody { holding, buffer: vec![line.clone()] };
+                        state = ParserState::InSchemeBody { holding: Box::new(holding), buffer: vec![line.clone()] };
                     } else {
                         buffer.push(line.clone());
                     }
@@ -438,7 +441,7 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> R
                             }
                         }
                         
-                        holdings.push(holding.clone());
+                        holdings.push(*holding.clone());
                         let folio = holding.folio_no.clone().unwrap_or_default();
                         state = ParserState::InSchemeHeader { folio_no: folio, buffer: Vec::new() };
                     } else if lower_text.starts_with("folio no") {
@@ -447,7 +450,7 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> R
                             if let Some(kyc_caps) = kyc_re.captures(text) {
                                 current_kyc = Some(kyc_caps.get(1).unwrap().as_str().to_string());
                             }
-                            if let Some(pan_kyc_caps) = Regex::new(r"(?i)PAN\s*:\s*(OK)").unwrap().captures(text) {
+                            if let Some(pan_kyc_caps) = pan_kyc_re.captures(text) {
                                 current_pan_kyc = Some(pan_kyc_caps.get(1).unwrap().as_str().to_string());
                             }
                             state = ParserState::InSchemeHeader { folio_no, buffer: Vec::new() };
@@ -530,12 +533,12 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> R
 
 
 fn parse_scheme_header(folio_no: String, amc: String, buffer: &[String]) -> MfHolding {
-    let mut holding = MfHolding::default();
-    holding.folio_no = Some(folio_no);
-    if !amc.is_empty() {
-        holding.amc = Some(amc);
-    }
-    holding.xfina = Some(XfinaMutualFundsHolding::default());
+    let mut holding = MfHolding {
+        folio_no: Some(folio_no),
+        amc: if amc.is_empty() { None } else { Some(amc) },
+        xfina: Some(XfinaMutualFundsHolding::default()),
+        ..Default::default()
+    };
 
     let header_text = buffer.join(" ");
 
@@ -683,6 +686,9 @@ fn parse_scheme_header(folio_no: String, amc: String, buffer: &[String]) -> MfHo
 fn parse_transactions(holding: &MfHolding, buffer: &[Line], columns: Option<&[ColumnBounds]>) -> Vec<MfTransaction> {
     let mut transactions: Vec<MfTransaction> = Vec::new();
     let date_re = Regex::new(r"^\d{2}-\S{3}-\d{4}").unwrap();
+    let space_fix_re1 = Regex::new(r"([a-z])([A-Z])").unwrap();
+    let space_fix_re2 = Regex::new(r"([a-zA-Z])(\()").unwrap();
+    let space_fix_re3 = Regex::new(r"([a-z])([0-9])").unwrap();
     let mut running_balance = holding.xfina.as_ref().map(|x| x.opening_balance).unwrap_or_default();
 
     for line in buffer {
@@ -755,11 +761,8 @@ fn parse_transactions(holding: &MfHolding, buffer: &[Line], columns: Option<&[Co
             if is_annotation { continue; }
             
             if !desc.is_empty() {
-                let space_fix_re1 = Regex::new(r"([a-z])([A-Z])").unwrap();
                 desc = space_fix_re1.replace_all(&desc, "$1 $2").to_string();
-                let space_fix_re2 = Regex::new(r"([a-zA-Z])(\()").unwrap();
                 desc = space_fix_re2.replace_all(&desc, "$1 $2").to_string();
-                let space_fix_re3 = Regex::new(r"([a-z])([0-9])").unwrap();
                 desc = space_fix_re3.replace_all(&desc, "$1 $2").to_string();
                 
                 if let Some(txn) = transactions.last_mut() {
@@ -777,11 +780,8 @@ fn parse_transactions(holding: &MfHolding, buffer: &[Line], columns: Option<&[Co
         
         // CAMS PDFs often omit spaces in transaction descriptions (e.g., "SystematicInvestmentNewPurchasewithSIP(1)").
         // We insert a space between lowercase and uppercase letters, or before a parenthesis/number if they are stuck together.
-        let space_fix_re1 = Regex::new(r"([a-z])([A-Z])").unwrap();
         desc = space_fix_re1.replace_all(&desc, "$1 $2").to_string();
-        let space_fix_re2 = Regex::new(r"([a-zA-Z])(\()").unwrap();
         desc = space_fix_re2.replace_all(&desc, "$1 $2").to_string();
-        let space_fix_re3 = Regex::new(r"([a-z])([0-9])").unwrap();
         desc = space_fix_re3.replace_all(&desc, "$1 $2").to_string();
 
         let parse_dec = |s: &str| -> Option<Decimal> {
@@ -806,11 +806,13 @@ fn parse_transactions(holding: &MfHolding, buffer: &[Line], columns: Option<&[Co
 
         let date_parsed = parse_indian_date(&date_str);
         
-        let mut xfina = XfinaMutualFundsTransaction::default();
-        xfina.units = units.unwrap_or_default();
-        xfina.transaction_category = Some(xfina_cat);
-        xfina.dividend_rate = div_rate;
-        xfina.folio_no = holding.folio_no.clone();
+        let xfina = XfinaMutualFundsTransaction {
+            units: units.unwrap_or_default(),
+            transaction_category: Some(xfina_cat),
+            dividend_rate: div_rate,
+            folio_no: holding.folio_no.clone(),
+            ..Default::default()
+        };
         let t = MfTransaction {
             isin: holding.isin.clone(),
             amount: amt.unwrap_or_default(),

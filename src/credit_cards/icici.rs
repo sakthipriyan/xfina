@@ -120,9 +120,11 @@ pub fn parse_icici_statement(bytes: &[u8], filename: Option<&str>) -> Result<Cre
                         }
                         "Statement Period" => {
                             if let Some((start, end)) = val.split_once(" TO ") {
-                                let mut txns = CcTransactions::default();
-                                txns.start_date = parse_date(start);
-                                txns.end_date = parse_date(end);
+                                let txns = CcTransactions {
+                                    start_date: parse_date(start),
+                                    end_date: parse_date(end),
+                                    ..Default::default()
+                                };
                                 xfina_txns.start_date_derived = Some(false);
                                 xfina_txns.end_date_derived = Some(false);
                                 stmt.transactions = Some(txns);
