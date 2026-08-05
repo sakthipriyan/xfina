@@ -103,7 +103,7 @@ graph TD
         G --> J(Terminal / Shell)
         I --> K(PyPI / Python Ecosystem)
         H --> L(NPM Package)
-        L --> M[Web App (Vue 3 + Vite)]
+        L --> M["Web App (Vue 3 + Vite)"]
     end
 ```
 
