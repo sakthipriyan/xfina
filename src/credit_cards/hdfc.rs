@@ -1,4 +1,4 @@
-use chrono::{NaiveDate, DateTime, Utc, TimeZone};
+use chrono::{NaiveDate, DateTime, Utc};
 use rust_decimal::Decimal;
 use crate::models::credit_card::{
     CreditCardAccount, CcProfile, CcHolders, CcHolder, CcCards, CcCard, CardType, TypeChoice,
@@ -7,7 +7,7 @@ use crate::models::credit_card::{
 };
 use crate::models::deposit::TransactionType;
 use std::collections::HashMap;
-use num_traits::cast::ToPrimitive;
+use rust_decimal::prelude::FromPrimitive;
 use regex::Regex;
 
 pub fn parse_hdfc_statement(content: &str, filename: Option<&str>) -> Result<CreditCardAccount, crate::error::XfinaError> {
@@ -17,8 +17,10 @@ pub fn parse_hdfc_statement(content: &str, filename: Option<&str>) -> Result<Cre
 
     let mut address_parts = Vec::new();
     let mut holder = CcHolder::default();
-    let mut xfina_account = XfinaCreditCardAccount::default();
-    xfina_account.institution_name = Some("HDFC Bank".to_string());
+    let mut xfina_account = XfinaCreditCardAccount {
+        institution_name: Some("HDFC Bank".to_string()),
+        ..Default::default()
+    };
     
     let mut date_only_paths = Vec::new();
     
@@ -104,7 +106,7 @@ pub fn parse_hdfc_statement(content: &str, filename: Option<&str>) -> Result<Cre
                         "Payment Due Date" => summary.due_date = parse_date(val),
                         "Statement Date" => {
                             let d = parse_date(val);
-                            summary.last_statement_date = d.clone();
+                            summary.last_statement_date = d;
                             if let Some(date) = d {
                                 let dt = date.and_hms_opt(0, 0, 0).unwrap();
                                 let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
@@ -162,8 +164,10 @@ pub fn parse_hdfc_statement(content: &str, filename: Option<&str>) -> Result<Cre
                     let rp_str = parts.get(6).unwrap_or(&"").replace("+", "");
                     let reward_points = rp_str.trim().parse::<i32>().ok();
                     
-                    let mut tx_xfina = CcXfinaTransaction::default();
-                    tx_xfina.owner = Some(owner);
+                    let mut tx_xfina = CcXfinaTransaction {
+                        owner: Some(owner),
+                        ..Default::default()
+                    };
                     tx_xfina.reward_points = reward_points;
 
                     transactions_list.push(CcTransaction {
@@ -265,11 +269,11 @@ pub fn parse_hdfc_statement(content: &str, filename: Option<&str>) -> Result<Cre
     xfina_summary.owner_credit_breakdown = owner_credit_breakdown;
     xfina_summary.owner_debit_breakdown = owner_debit_breakdown;
     
-    let stmt_date_opt = summary.last_statement_date.clone();
+    let stmt_date_opt = summary.last_statement_date;
     summary.xfina = Some(xfina_summary);
     stmt.summary = Some(summary);
 
-    transactions_list.sort_by(|a, b| a.txn_date.cmp(&b.txn_date));
+    transactions_list.sort_by_key(|a| a.txn_date);
 
     let mut txns = CcTransactions::default();
     

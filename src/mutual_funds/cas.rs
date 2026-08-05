@@ -249,7 +249,7 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> R
     // Parse loop over lines
     for lines in pages_lines {
         for line in lines {
-            if let Some(cols) = detect_columns(&[line.clone()]) {
+            if let Some(cols) = detect_columns(std::slice::from_ref(&line)) {
                 current_columns = Some(cols);
             }
             let text = line.text.trim();
@@ -260,7 +260,7 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> R
             if statement_start_date.is_none() && lower_text.contains(" to ") {
                 let parts: Vec<&str> = lower_text.split(" to ").collect();
                 if parts.len() == 2 && date_re.is_match(parts[0].trim()) && date_re.is_match(parts[1].trim()) {
-                    let original_parts: Vec<&str> = text.splitn(2, |c| c == 'T' || c == 't').collect();
+                    let original_parts: Vec<&str> = text.splitn(2, ['T', 't']).collect();
                     if original_parts.len() == 2 {
                         let p1 = original_parts[0].trim().to_string();
                         let p2 = original_parts[1][1..].trim().to_string();
@@ -278,11 +278,10 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> R
                 continue;
             }
             
-            if lower_text.ends_with(" mutual fund") || lower_text.ends_with(" mf") || lower_text.ends_with(" fund house") {
-                if !matches!(state, ParserState::InPortfolioSummary) {
+            if (lower_text.ends_with(" mutual fund") || lower_text.ends_with(" mf") || lower_text.ends_with(" fund house"))
+                && !matches!(state, ParserState::InPortfolioSummary) {
                     current_amc = text.to_string();
                 }
-            }
             
             if let Some(caps) = folio_re.captures(text) {
                 let folio_no = caps.get(1).unwrap().as_str().trim().to_string();
@@ -453,7 +452,7 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> R
                             }
                             state = ParserState::InSchemeHeader { folio_no, buffer: Vec::new() };
                         }
-                    } else if let Some(cols) = detect_columns(&[line.clone()]) {
+                    } else if let Some(cols) = detect_columns(std::slice::from_ref(&line)) {
                         current_columns = Some(cols);
                     } else {
                         buffer.push(line.clone());
@@ -655,7 +654,7 @@ fn parse_scheme_header(folio_no: String, amc: String, buffer: &[String]) -> MfHo
         "HDFC", "ICICI", "ICICI", "SBI", "IDBI", "IDFC", "UTI", "DSP",
         "JM", "LIC", "ITI", "NJ", "PGIM", "BOI", "HSBC",
     ];
-    let normalized: String = clean_text.trim().split_whitespace()
+    let normalized: String = clean_text.split_whitespace()
         .map(|word| {
             // Strip trailing punctuation for acronym check
             let core = word.trim_end_matches(|c: char| !c.is_alphanumeric());
@@ -741,7 +740,7 @@ fn parse_transactions(holding: &MfHolding, buffer: &[Line], columns: Option<&[Co
                 || raw_text_lower.starts_with("page ")
                 || (raw_text_lower.contains(" to ") && {
                     // Date range line: both sides of " to " look like dates
-                    let parts: Vec<&str> = line.text.splitn(2, |c| c == 'T' || c == 't').collect();
+                    let parts: Vec<&str> = line.text.splitn(2, ['T', 't']).collect();
                     parts.len() == 2 && date_re.is_match(parts[0].trim())
                 })
                 || (desc.to_lowercase().starts_with("date") && raw_text_lower.contains("transaction") && raw_text_lower.contains("amount"));

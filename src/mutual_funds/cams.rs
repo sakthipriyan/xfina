@@ -15,6 +15,12 @@ pub struct SpatialOutputDev {
     flip_ctm: Transform,
 }
 
+impl Default for SpatialOutputDev {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SpatialOutputDev {
     pub fn new() -> Self {
         Self {
