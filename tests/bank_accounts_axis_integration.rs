@@ -25,7 +25,7 @@ fn test_axis_parser() {
             if extension == "xls" || extension == "xlsx" {
                 let bytes = fs::read(&path).unwrap();
                 let file_name = path.file_stem().unwrap().to_str().unwrap();
-                let parsed = parse_axis_bank_statement(&bytes, Some(file_name)).expect("Failed to parse Axis XLS");
+                let parsed = parse_axis_bank_statement(xfina::models::request::ParseRequest::new(&bytes).with_filename(Some(file_name))).expect("Failed to parse Axis XLS");
 
                 let xfina_json = serialize_result(&parsed, parsed.data.to_xfina_json()).unwrap();
                 let rebit_json = serialize_result(&parsed, parsed.data.to_rebit_json()).unwrap();

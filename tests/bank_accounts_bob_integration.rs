@@ -24,7 +24,7 @@ fn test_bob_parser() {
             let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("");
             if extension == "xls" {
                 let bytes = fs::read(&path).unwrap();
-                let parsed = parse_bob_xls(&bytes).expect("Failed to parse BoB XLS");
+                let parsed = parse_bob_xls(xfina::models::request::ParseRequest::new(&bytes)).expect("Failed to parse BoB XLS");
                 let file_name = path.file_stem().unwrap().to_str().unwrap();
 
                 let xfina_json = serialize_result(&parsed, parsed.data.to_xfina_json()).unwrap();

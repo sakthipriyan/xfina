@@ -29,10 +29,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Code Cleanup:** Removed legacy, unused `f64`-based financial models (`Portfolio`, `Asset`, etc.) from `src/models/mod.rs`.
 - **Documentation:** Fixed an inaccuracy in `wasm/README.md` to correctly state that the default parser output format is `"xfina"`, not `"rebit"`.
 
-## [0.2.0] - 2026-08-06
-
-### Fixed
-- **Testing:** Fixed Integration Tests to use the wrapped `ParseResult` for assertions.
 
 ## [0.1.4] - 2026-08-05
 

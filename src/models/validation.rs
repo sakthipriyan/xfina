@@ -22,7 +22,10 @@ use serde::{Deserialize, Serialize};
 /// use xfina::models::validation::ValidationStatus;
 ///
 /// let bytes = std::fs::read("statement.xls").unwrap();
-/// let result = parse_hdfc_bank_statement(&bytes, None).unwrap();
+/// use xfina::models::request::ParseRequest;
+///
+/// let req = ParseRequest::new(&bytes);
+/// let result = parse_hdfc_bank_statement(req).unwrap();
 ///
 /// match result.validation.overall {
 ///     ValidationStatus::Passed  => println!("✓ All checks passed"),

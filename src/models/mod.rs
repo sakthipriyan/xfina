@@ -88,3 +88,6 @@ pub mod date_utils;
 pub mod serializer;
 pub mod validation;
 pub use validation::{ParseResult, ValidationReport, ValidationStatus, RowValidation, RowCheckFailure, SummaryValidation, SummaryCheck, SummarySource, check_row_balances};
+
+pub mod request;
+pub use request::ParseRequest;

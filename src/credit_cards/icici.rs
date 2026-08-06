@@ -13,7 +13,11 @@ use std::collections::HashMap;
 use crate::models::date_utils;
 use regex::Regex;
 
-pub fn parse_icici_statement(bytes: &[u8], filename: Option<&str>) -> Result<ParseResult<CreditCardAccount>, crate::error::XfinaError> {
+use crate::models::request::ParseRequest;
+
+pub fn parse_icici_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<CreditCardAccount>, crate::error::XfinaError> {
+    let bytes = input.content;
+    let filename = input.filename;
     let cursor = Cursor::new(bytes);
     let mut workbook: Xlsx<_> = open_workbook_from_rs(cursor)
         .map_err(|e| format!("Failed to open workbook: {}", e))?;

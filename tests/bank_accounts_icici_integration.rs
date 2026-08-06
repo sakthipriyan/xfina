@@ -1,6 +1,6 @@
 use std::fs;
 use std::path::Path;
-use xfina::bank_accounts::icici::parse_icici_xls;
+use xfina::bank_accounts::icici::parse_icici_bank_statement;
 
 #[test]
 fn test_icici_bank_accounts() {
@@ -31,7 +31,7 @@ fn test_icici_bank_accounts() {
             let file_name = path.file_stem().unwrap().to_str().unwrap();
             let bytes = fs::read(&path).expect("Failed to read file");
             
-            let parsed_statement = parse_icici_xls(&bytes, path.file_name().and_then(|n| n.to_str())).expect("Failed to parse statement");
+            let parsed_statement = parse_icici_bank_statement(xfina::models::request::ParseRequest::new(&bytes).with_filename(path.file_name().and_then(|n| n.to_str()))).expect("Failed to parse statement");
             
             let xfina_path = expected_dir.join("xfina").join(format!("{}.json", file_name));
                 let rebit_path = expected_dir.join("rebit").join(format!("{}.json", file_name));

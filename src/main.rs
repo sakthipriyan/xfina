@@ -81,62 +81,60 @@ fn main() -> Result<()> {
 
     let is_rebit = cli.format.to_lowercase() == "rebit";
 
+    let modified_timestamp = std::fs::metadata(&cli.file)
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs() as i64);
+
+    let req = xfina::models::request::ParseRequest::new(&file_bytes)
+        .with_password(cli.password.as_deref())
+        .with_filename(file_name)
+        .with_modified_timestamp(modified_timestamp);
+
     let json_output = match (cli.category, cli.institution) {
         (Category::BankAccount, Institution::Hdfc) => {
-            let res = xfina::bank_accounts::hdfc::parse_hdfc_bank_statement(&file_bytes, cli.password.as_deref())
-                ?;
+            let res = xfina::bank_accounts::hdfc::parse_hdfc_bank_statement(req.clone())?;
             let json = if is_rebit { res.data.to_rebit_json() } else { res.data.to_xfina_json() };
             serialize_result(&res, json)?
         },
         (Category::BankAccount, Institution::Icici) => {
-            let res = xfina::bank_accounts::icici::parse_icici_bank_statement(&file_bytes, file_name)
-                ?;
+            let res = xfina::bank_accounts::icici::parse_icici_bank_statement(req.clone())?;
             let json = if is_rebit { res.data.to_rebit_json() } else { res.data.to_xfina_json() };
             serialize_result(&res, json)?
         },
         (Category::BankAccount, Institution::Sbi) => {
-            let res = xfina::bank_accounts::sbi::parse_sbi_bank_statement(&file_bytes, cli.password.as_deref(), file_name)
-                ?;
+            let res = xfina::bank_accounts::sbi::parse_sbi_bank_statement(req.clone())?;
             let json = if is_rebit { res.data.to_rebit_json() } else { res.data.to_xfina_json() };
             serialize_result(&res, json)?
         },
         (Category::BankAccount, Institution::Bob) => {
-            let res = xfina::bank_accounts::bob::parse_bob_xls(&file_bytes)
-                ?;
+            let res = xfina::bank_accounts::bob::parse_bob_xls(req.clone())?;
             let json = if is_rebit { res.data.to_rebit_json() } else { res.data.to_xfina_json() };
             serialize_result(&res, json)?
         },
         (Category::BankAccount, Institution::Axis) => {
-            let res = xfina::bank_accounts::axis::parse_axis_bank_statement(&file_bytes, file_name)
-                ?;
+            let res = xfina::bank_accounts::axis::parse_axis_bank_statement(req.clone())?;
             let json = if is_rebit { res.data.to_rebit_json() } else { res.data.to_xfina_json() };
             serialize_result(&res, json)?
         },
         (Category::CreditCard, Institution::Hdfc) => {
-            let content = String::from_utf8(file_bytes.clone())
-                .context("HDFC Credit Card requires valid UTF-8 text (CSV/TXT)")?;
-            let res = xfina::credit_cards::hdfc::parse_hdfc_statement(&content, file_name)
-                ?;
+            let res = xfina::credit_cards::hdfc::parse_hdfc_statement(req.clone())?;
             let json = if is_rebit { res.data.to_rebit_json() } else { res.data.to_xfina_json() };
             serialize_result(&res, json)?
         },
         (Category::CreditCard, Institution::Icici) => {
-            let res = xfina::credit_cards::icici::parse_icici_statement(&file_bytes, file_name)
-                ?;
+            let res = xfina::credit_cards::icici::parse_icici_statement(req.clone())?;
             let json = if is_rebit { res.data.to_rebit_json() } else { res.data.to_xfina_json() };
             serialize_result(&res, json)?
         },
         (Category::MutualFund, Institution::Cams) => {
-            let res = xfina::mutual_funds::cams::parse_cams_pdf(&file_bytes, cli.password.as_deref(), file_name)
-                ?;
+            let res = xfina::mutual_funds::cams::parse_cams_pdf(req.clone())?;
             let json = if is_rebit { res.data.to_rebit_json() } else { res.data.to_xfina_json() };
             serialize_result(&res, json)?
         },
         (Category::IntlStocks, Institution::Ibkr) => {
-            let content = String::from_utf8(file_bytes.clone())
-                .context("IBKR requires valid UTF-8 text (CSV)")?;
-            let res = xfina::intl_stocks::ibkr::parse_ibkr_csv(&content)
-                ?;
+            let res = xfina::intl_stocks::ibkr::parse_ibkr_csv(req.clone())?;
             let json = if is_rebit { res.data.to_rebit_json() } else { res.data.to_xfina_json() };
             serialize_result(&res, json)?
         },

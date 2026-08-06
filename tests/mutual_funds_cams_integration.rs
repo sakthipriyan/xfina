@@ -31,7 +31,10 @@ fn test_cams_parser() {
                 let file_name_with_ext = path.file_name().unwrap().to_str().unwrap();
                 let password = passwords.get(file_name_with_ext).or_else(|| passwords.get("default")).map(|s| s.as_str());
 
-                let parsed = parse_cams_pdf(&bytes, password, Some(file_name)).expect("Failed to parse CAMS PDF");
+                let req = xfina::models::request::ParseRequest::new(&bytes)
+                    .with_password(password)
+                    .with_filename(Some(file_name));
+                let parsed = parse_cams_pdf(req).expect("Failed to parse CAMS PDF");
 
                 let xfina_json = serialize_result(&parsed, parsed.data.to_xfina_json()).unwrap();
                 let rebit_json = serialize_result(&parsed, parsed.data.to_rebit_json()).unwrap();

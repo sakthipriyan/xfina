@@ -7,7 +7,10 @@ use crate::models::mask_account_number;
 use crate::models::validation::{ParseResult, ValidationReport};
 use regex::Regex;
 
-pub fn parse_bob_xls(bytes: &[u8]) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
+use crate::models::request::ParseRequest;
+
+pub fn parse_bob_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
+    let bytes = input.content;
     let cursor = Cursor::new(bytes);
     let mut workbook = open_workbook_auto_from_rs(cursor).map_err(|e| format!("Failed to open workbook: {:?}", e))?;
     let sheet_names = workbook.sheet_names().to_owned();

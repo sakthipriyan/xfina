@@ -26,7 +26,8 @@ fn test_ibkr_parser() {
             if extension == "csv" {
                 let string_content = fs::read_to_string(&path).unwrap();
                 let file_name = path.file_stem().unwrap().to_str().unwrap();
-                let parsed = parse_ibkr_csv(&string_content).expect("Failed to parse IBKR CSV");
+                let req = xfina::models::request::ParseRequest::new(string_content.as_bytes());
+                let parsed = parse_ibkr_csv(req).expect("Failed to parse IBKR CSV");
 
                 let xfina_json = serialize_result(&parsed, parsed.data.to_xfina_json()).unwrap();
                 let rebit_json = serialize_result(&parsed, parsed.data.to_rebit_json()).unwrap();

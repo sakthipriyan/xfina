@@ -7,7 +7,11 @@ use crate::models::mask_account_number;
 use crate::models::validation::{ParseResult, ValidationReport, SummaryCheck, check_row_balances};
 use regex::Regex;
 
-pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
+use crate::models::request::ParseRequest;
+
+pub fn parse_icici_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
+    let bytes = input.content;
+    let filename = input.filename;
     let cursor = Cursor::new(bytes);
     let mut workbook = open_workbook_auto_from_rs(cursor)
         .map_err(|e| format!("Failed to open Excel workbook: {}", e))?;
@@ -237,6 +241,6 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<ParseResu
     Ok(ParseResult { data: statement, validation })
 }
 
-pub fn parse_icici_bank_statement(bytes: &[u8], filename: Option<&str>) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
-    parse_icici_xls(bytes, filename)
+pub fn parse_icici_bank_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
+    parse_icici_xls(input)
 }

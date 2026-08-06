@@ -39,6 +39,7 @@ const mfStatement = ref(null);
 const ccStatement = ref(null);
 const bankStatement = ref(null);
 const equityStatement = ref(null);
+const validationReport = ref(null);
 const isProcessing = ref(false);
 const parseTime = ref(null);
 
@@ -120,6 +121,7 @@ const setCategory = (cat) => {
     ccStatement.value = null;
     bankStatement.value = null;
     equityStatement.value = null;
+    validationReport.value = null;
     error.value = null;
     if (cat === 'Mutual Funds') selectedSource.value = 'CAMS';
     else if (cat === 'Intl Brokers') selectedSource.value = 'IBKR';
@@ -155,6 +157,7 @@ const onFileSelect = async (event) => {
     ccStatement.value = null;
     bankStatement.value = null;
     equityStatement.value = null;
+    validationReport.value = null;
     isProcessing.value = true;
     parseTime.value = null;
     
@@ -165,65 +168,56 @@ const onFileSelect = async (event) => {
         let jsonString;
         const start = performance.now();
         
+        const modTime = file.lastModified ? Math.floor(file.lastModified / 1000) : null;
+        
         if (selectedCategory.value === 'Bank Accounts') {
             const arrayBuffer = await file.arrayBuffer();
             const uint8Array = new Uint8Array(arrayBuffer);
             if (selectedSource.value === 'HDFC') {
-                jsonString = parse_hdfc_ba(uint8Array);
+                jsonString = parse_hdfc_ba(uint8Array, null, file.name, modTime, null);
             } else if (selectedSource.value === 'ICICI') {
-                jsonString = parse_icici_ba(uint8Array, file.name);
+                jsonString = parse_icici_ba(uint8Array, null, file.name, modTime, null);
             } else if (selectedSource.value === 'SBI') {
-                jsonString = parse_sbi_ba(uint8Array, password.value ? password.value : null, file.name);
+                jsonString = parse_sbi_ba(uint8Array, password.value ? password.value : null, file.name, modTime, null);
             } else if (selectedSource.value === 'BoB') {
-                jsonString = parse_bob_ba(uint8Array);
+                jsonString = parse_bob_ba(uint8Array, null, file.name, modTime, null);
             } else if (selectedSource.value === 'Axis') {
-                jsonString = parse_axis_ba(uint8Array, file.name);
+                jsonString = parse_axis_ba(uint8Array, null, file.name, modTime, null);
             }
-            bankStatement.value = JSON.parse(jsonString);
+            const parsed = JSON.parse(jsonString);
+            bankStatement.value = parsed.data;
+            validationReport.value = parsed.validation;
         } else if (selectedSource.value === 'IBKR') {
-            const text = await file.text();
-            jsonString = parse_ibkr(text);
-            equityStatement.value = JSON.parse(jsonString);
+            const arrayBuffer = await file.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+            jsonString = parse_ibkr(uint8Array, null, file.name, modTime, null);
+            const parsed = JSON.parse(jsonString);
+            equityStatement.value = parsed.data;
+            validationReport.value = parsed.validation;
         } else if (selectedSource.value === 'CAMS') {
             const arrayBuffer = await file.arrayBuffer();
             const uint8Array = new Uint8Array(arrayBuffer);
-            jsonString = parse_cams(uint8Array, password.value ? password.value : null, undefined, file.name);
-            mfStatement.value = JSON.parse(jsonString);
+            jsonString = parse_cams(uint8Array, password.value ? password.value : null, file.name, modTime, null);
+            const parsed = JSON.parse(jsonString);
+            mfStatement.value = parsed.data;
+            validationReport.value = parsed.validation;
         } else if (selectedSource.value === 'HDFC') {
-            const text = await file.text();
-            jsonString = parse_hdfc_cc(text, file.name);
-            ccStatement.value = JSON.parse(jsonString);
+            const arrayBuffer = await file.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+            jsonString = parse_hdfc_cc(uint8Array, null, file.name, modTime, null);
+            const parsed = JSON.parse(jsonString);
+            ccStatement.value = parsed.data;
+            validationReport.value = parsed.validation;
         } else if (selectedSource.value === 'ICICI') {
             const arrayBuffer = await file.arrayBuffer();
             const uint8Array = new Uint8Array(arrayBuffer);
-            jsonString = parse_icici_cc(uint8Array, file.name);
-            ccStatement.value = JSON.parse(jsonString);
+            jsonString = parse_icici_cc(uint8Array, null, file.name, modTime, null);
+            const parsed = JSON.parse(jsonString);
+            ccStatement.value = parsed.data;
+            validationReport.value = parsed.validation;
         }
         
-        if (bankStatement.value) {
-            if (!bankStatement.value.xfina) bankStatement.value.xfina = {};
-            if (!bankStatement.value.xfina.generatedDate && file.lastModified) {
-                bankStatement.value.xfina.generatedDate = Math.floor(file.lastModified / 1000);
-                bankStatement.value.xfina.generatedDateDerived = true;
-            }
-        } else if (ccStatement.value) {
-            if (!ccStatement.value.xfina) ccStatement.value.xfina = {};
-            if (!ccStatement.value.xfina.generatedDate && file.lastModified) {
-                ccStatement.value.xfina.generatedDate = Math.floor(file.lastModified / 1000);
-                ccStatement.value.xfina.generatedDateDerived = true;
-            }
-        } else if (mfStatement.value) {
-            if (!mfStatement.value.generated_date && file.lastModified) {
-                mfStatement.value.generated_date = Math.floor(file.lastModified / 1000);
-                mfStatement.value.generated_date_derived = true;
-            }
-        } else if (equityStatement.value) {
-            if (!equityStatement.value.xfina) equityStatement.value.xfina = {};
-            if (!equityStatement.value.xfina.generatedDate && file.lastModified) {
-                equityStatement.value.xfina.generatedDate = Math.floor(file.lastModified / 1000);
-                equityStatement.value.xfina.generatedDateDerived = true;
-            }
-        }
+
 
         const end = performance.now();
         parseTime.value = ((end - start) / 1000).toFixed(3);
@@ -563,6 +557,7 @@ const camsGroupedAssets = computed(() => {
         
         <!-- Standardized Header -->
         <StatementHeader 
+          :validationStatus="validationReport?.overall"
           :customerName="ccStatement.profile?.holders?.holder?.[0]?.name || 'Customer'"
           :institutionName="ccStatement.xfina?.institutionName || 'Credit Card'"
           statementType="Credit Card"

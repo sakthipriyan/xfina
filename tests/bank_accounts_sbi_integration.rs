@@ -29,7 +29,7 @@ fn test_sbi_pdf_parser() {
             let bytes = fs::read(&path).unwrap();
             let filename_str = path.file_name().and_then(|s| s.to_str());
             let password = filename_str.and_then(|name| passwords.get(name)).or_else(|| passwords.get("default")).map(|s| s.as_str());
-            let statement = parse_sbi_bank_statement(&bytes, password, filename_str).unwrap();
+            let statement = parse_sbi_bank_statement(xfina::models::request::ParseRequest::new(&bytes).with_password(password).with_filename(filename_str)).unwrap();
 
             let xfina_json = serialize_result(&statement, statement.data.to_xfina_json()).unwrap();
             let rebit_json = serialize_result(&statement, statement.data.to_rebit_json()).unwrap();

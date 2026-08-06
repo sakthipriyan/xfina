@@ -1,7 +1,7 @@
 <script setup>
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Download, FileJson } from 'lucide-vue-next';
+import { Download, FileJson, CheckCircle2, AlertTriangle, XCircle } from 'lucide-vue-next';
 
 const props = defineProps({
   // Customer Card
@@ -34,6 +34,10 @@ const props = defineProps({
   statementDetails: {
     type: Array,
     default: () => []
+  },
+  validationStatus: {
+    type: String,
+    default: null
   }
 });
 </script>
@@ -47,6 +51,20 @@ const props = defineProps({
           <span v-if="statementType">{{ statementType }}</span>
           <span v-if="institutionName && statementType" class="text-muted-foreground/50">|</span>
           <span v-if="institutionName">{{ institutionName }}</span>
+        </div>
+
+        <div v-if="validationStatus" class="mt-2 text-xs font-semibold flex items-center gap-1.5"
+             :class="{
+               'text-emerald-500': validationStatus === 'Passed',
+               'text-amber-500': validationStatus === 'DerivedDiscrepancy',
+               'text-destructive': validationStatus === 'DeclaredDiscrepancy'
+             }">
+          <CheckCircle2 v-if="validationStatus === 'Passed'" class="w-4 h-4" />
+          <AlertTriangle v-if="validationStatus === 'DerivedDiscrepancy'" class="w-4 h-4" />
+          <XCircle v-if="validationStatus === 'DeclaredDiscrepancy'" class="w-4 h-4" />
+          <span v-if="validationStatus === 'Passed'">Validation Passed</span>
+          <span v-else-if="validationStatus === 'DerivedDiscrepancy'">Warning: Validation Discrepancy</span>
+          <span v-else-if="validationStatus === 'DeclaredDiscrepancy'">Error: Validation Failed</span>
         </div>
       </CardHeader>
       <CardContent class="mt-1 flex-1">

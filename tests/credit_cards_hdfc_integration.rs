@@ -39,7 +39,7 @@ fn test_hdfc_credit_cards() {
                 }
             };
             
-            let parsed_result = parse_hdfc_statement(&content, Some(file_name));
+            let parsed_result = parse_hdfc_statement(xfina::models::request::ParseRequest::new(content.as_bytes()).with_filename(Some(file_name)));
             
             if let Ok(parsed_statement) = parsed_result {
                 let xfina_path = expected_dir.join("xfina").join(format!("{}.json", file_name));

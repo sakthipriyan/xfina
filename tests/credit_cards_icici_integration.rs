@@ -32,7 +32,7 @@ fn test_icici_credit_cards() {
             let file_name = path.file_stem().unwrap().to_str().unwrap();
             let bytes = fs::read(&path).expect("Failed to read file");
             
-            let parsed_result = parse_icici_statement(&bytes, Some(file_name));
+            let parsed_result = parse_icici_statement(xfina::models::request::ParseRequest::new(&bytes).with_filename(Some(file_name)));
             
             if let Ok(parsed_statement) = parsed_result {
                 let xfina_path = expected_dir.join("xfina").join(format!("{}.json", file_name));

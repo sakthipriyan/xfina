@@ -1,6 +1,6 @@
 use std::fs;
 use std::path::Path;
-use xfina::bank_accounts::hdfc::parse_hdfc_xls;
+use xfina::bank_accounts::hdfc::parse_hdfc_bank_statement;
 
 #[test]
 fn test_hdfc_bank_accounts() {
@@ -31,7 +31,7 @@ fn test_hdfc_bank_accounts() {
             let file_name = path.file_stem().unwrap().to_str().unwrap();
             let bytes = fs::read(&path).expect("Failed to read file");
             
-            let parsed_statement = parse_hdfc_xls(&bytes).expect("Failed to parse statement");
+            let parsed_statement = parse_hdfc_bank_statement(xfina::models::request::ParseRequest::new(&bytes)).expect("Failed to parse statement");
             
             let xfina_path = expected_dir.join("xfina").join(format!("{}.json", file_name));
                 let rebit_path = expected_dir.join("rebit").join(format!("{}.json", file_name));

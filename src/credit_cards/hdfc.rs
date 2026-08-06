@@ -11,7 +11,12 @@ use crate::models::validation::{ParseResult, ValidationReport, SummaryCheck};
 use std::collections::HashMap;
 use regex::Regex;
 
-pub fn parse_hdfc_statement(content: &str, filename: Option<&str>) -> Result<ParseResult<CreditCardAccount>, crate::error::XfinaError> {
+use crate::models::request::ParseRequest;
+
+pub fn parse_hdfc_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<CreditCardAccount>, crate::error::XfinaError> {
+    let content = std::str::from_utf8(input.content)
+        .map_err(|e| crate::error::XfinaError::ParseError(format!("Invalid UTF-8: {}", e)))?;
+    let filename = input.filename;
     let mut stmt = CreditCardAccount {
         r#type: "credit_card".to_string(),
         ..Default::default()

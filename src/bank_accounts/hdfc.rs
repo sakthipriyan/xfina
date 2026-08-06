@@ -7,7 +7,10 @@ use crate::models::mask_account_number;
 use crate::models::validation::{ParseResult, ValidationReport, SummaryCheck, check_row_balances};
 use regex::Regex;
 
-pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
+use crate::models::request::ParseRequest;
+
+pub fn parse_hdfc_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
+    let bytes = input.content;
     let cursor = Cursor::new(bytes);
     let mut workbook = open_workbook_auto_from_rs(cursor)
         .map_err(|e| format!("Failed to open workbook: {}", e))?;
@@ -380,6 +383,6 @@ fn parse_date(date_str: &str) -> NaiveDate {
     NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()
 }
 
-pub fn parse_hdfc_bank_statement(bytes: &[u8], _password: Option<&str>) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
-    parse_hdfc_xls(bytes)
+pub fn parse_hdfc_bank_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
+    parse_hdfc_xls(input)
 }

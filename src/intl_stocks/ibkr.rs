@@ -49,7 +49,11 @@ fn parse_datetime(date_str: &str) -> Option<chrono::DateTime<Utc>> {
 
 use crate::models::validation::{ParseResult, ValidationReport};
 
-pub fn parse_ibkr_csv(csv_content: &str) -> Result<ParseResult<EquityAccount>, crate::error::XfinaError> {
+use crate::models::request::ParseRequest;
+
+pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityAccount>, crate::error::XfinaError> {
+    let csv_content = std::str::from_utf8(input.content)
+        .map_err(|e| crate::error::XfinaError::ParseError(format!("Invalid UTF-8: {}", e)))?;
     let mut rdr = ReaderBuilder::new()
         .has_headers(false)
         .flexible(true)
