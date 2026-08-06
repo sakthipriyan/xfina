@@ -8,11 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Validation Engine:** Added a comprehensive two-level validation engine (`src/models/validation.rs`) to detect parsing discrepancies.
+  - Row-level validation checks `opening balance + transaction amount = current balance`.
+  - Summary-level validation checks `computed_closing = declared_closing` and verifies total credits/debits against declared summaries in PDFs/XLS files.
 - **CI/CD:** Added GitHub Actions test pipeline (`.github/workflows/test.yml`) to automatically run `cargo test` and compile the WASM build on pushes and pull requests to `main`.
 - **Documentation:** Created a comprehensive `CONTRIBUTING.md` guide for adding new parsers and managing snapshots.
 - **Documentation:** Added an architectural diagram to the main `README.md` and added rich metadata (keywords, categories, readme) to `Cargo.toml`.
 
 ### Changed
+- **Breaking API Change:** All parsers across all crates (`bank_accounts`, `credit_cards`, `mutual_funds`, `intl_stocks`) now return a wrapped `ParseResult<T>` struct containing the parsed `data: T` alongside a `validation: ValidationReport` object, instead of returning the raw account `T` directly.
+- **WASM / Python / CLI Output:** The output JSON schema is now wrapped in `{ "data": { ... }, "validation": { ... } }`.
 - **Error Handling:** Completely re-architected error handling across all parsers using the `thiserror` crate. Parsers now return a strongly-typed `XfinaError` enum instead of stringly-typed errors, enabling programmatic error matching.
 - **Bindings:** Updated FFI boundaries in `xfina-wasm` (JS) and `xfina-py` (Python) to properly propagate `XfinaError` types.
 - **Web App:** Updated the website header to explicitly link to `sakthipriyan.com/building-wealth` instead of linking generically to GitHub.
@@ -23,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Testing:** Replaced `HashMap` with `BTreeMap` and `HashSet` with `BTreeSet` in the IBKR parser to ensure deterministic serialization order for consistent snapshot tests.
 - **Code Cleanup:** Removed legacy, unused `f64`-based financial models (`Portfolio`, `Asset`, etc.) from `src/models/mod.rs`.
 - **Documentation:** Fixed an inaccuracy in `wasm/README.md` to correctly state that the default parser output format is `"xfina"`, not `"rebit"`.
+
+## [0.2.0] - 2026-08-06
+
+### Fixed
+- **Testing:** Fixed Integration Tests to use the wrapped `ParseResult` for assertions.
 
 ## [0.1.4] - 2026-08-05
 

@@ -27,8 +27,8 @@ fn test_bob_parser() {
                 let parsed = parse_bob_xls(&bytes).expect("Failed to parse BoB XLS");
                 let file_name = path.file_stem().unwrap().to_str().unwrap();
 
-                let xfina_json = serde_json::to_string_pretty(&parsed.to_xfina_json()).unwrap();
-                let rebit_json = serde_json::to_string_pretty(&parsed.to_rebit_json()).unwrap();
+                let xfina_json = serialize_result(&parsed, parsed.data.to_xfina_json()).unwrap();
+                let rebit_json = serialize_result(&parsed, parsed.data.to_rebit_json()).unwrap();
 
                 let expected_xfina_path = format!("{}/{}.json", xfina_dir, file_name);
                 let expected_rebit_path = format!("{}/{}.json", rebit_dir, file_name);
@@ -46,4 +46,15 @@ fn test_bob_parser() {
             }
         }
     }
+}
+
+fn serialize_result<T: serde::Serialize>(
+    stmt: &xfina::models::validation::ParseResult<T>,
+    data_json: serde_json::Value,
+) -> Result<String, serde_json::Error> {
+    let mut root = serde_json::to_value(stmt)?;
+    if let Some(obj) = root.as_object_mut() {
+        obj.insert("data".to_string(), data_json);
+    }
+    serde_json::to_string_pretty(&root)
 }

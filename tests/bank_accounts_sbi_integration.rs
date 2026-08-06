@@ -31,24 +31,35 @@ fn test_sbi_pdf_parser() {
             let password = filename_str.and_then(|name| passwords.get(name)).or_else(|| passwords.get("default")).map(|s| s.as_str());
             let statement = parse_sbi_bank_statement(&bytes, password, filename_str).unwrap();
 
-            let xfina_json = serde_json::to_string_pretty(&statement.to_xfina_json()).unwrap();
-            let rebit_json = serde_json::to_string_pretty(&statement.to_rebit_json()).unwrap();
+            let xfina_json = serialize_result(&statement, statement.data.to_xfina_json()).unwrap();
+            let rebit_json = serialize_result(&statement, statement.data.to_rebit_json()).unwrap();
 
             let xfina_path = xfina_dir.join(path.with_extension("json").file_name().unwrap());
             let rebit_path = rebit_dir.join(path.with_extension("json").file_name().unwrap());
             
-            if xfina_path.exists() {
+            let update_expected = std::env::var("UPDATE_EXPECTED").unwrap_or_else(|_| "0".to_string());
+            if update_expected == "1" {
+                fs::write(&xfina_path, &xfina_json).unwrap();
+                fs::write(&rebit_path, &rebit_json).unwrap();
+            } else if xfina_path.exists() {
                 let expected_xfina = fs::read_to_string(&xfina_path).unwrap();
                 let expected_rebit = fs::read_to_string(&rebit_path).unwrap();
                 assert_eq!(xfina_json, expected_xfina, "Mismatch for {:?}", path.file_name().unwrap());
                 assert_eq!(rebit_json, expected_rebit, "Mismatch for {:?}", path.file_name().unwrap());
             } else {
-                let update_expected = std::env::var("UPDATE_EXPECTED").unwrap_or_else(|_| "0".to_string());
-                if update_expected == "1" {
-                    fs::write(xfina_path, xfina_json).unwrap();
-                    fs::write(rebit_path, rebit_json).unwrap();
-                }
+                panic!("Snapshot not found. Run with UPDATE_EXPECTED=1");
             }
         }
     }
+}
+
+fn serialize_result<T: serde::Serialize>(
+    stmt: &xfina::models::validation::ParseResult<T>,
+    data_json: serde_json::Value,
+) -> Result<String, serde_json::Error> {
+    let mut root = serde_json::to_value(stmt)?;
+    if let Some(obj) = root.as_object_mut() {
+        obj.insert("data".to_string(), data_json);
+    }
+    serde_json::to_string_pretty(&root)
 }

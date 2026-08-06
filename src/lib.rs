@@ -14,7 +14,7 @@
 //! let account = parse_hdfc_bank_statement(&bytes, None)?;
 //!
 //! // Example: Accessing parsed data (this will compile if you load an actual account)
-//! if let Some(profile) = account.profile {
+//! if let Some(profile) = account.data.profile {
 //!     println!("Account Name: {}", profile.holders.holder[0].name);
 //! }
 //! # Ok(())

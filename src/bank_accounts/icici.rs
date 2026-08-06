@@ -4,9 +4,10 @@ use std::io::Cursor;
 use rust_decimal::Decimal;
 use crate::models::deposit::{DepositAccount, Transaction, XfinaDepositAccount, XfinaSummary, Profile, Holders, Holder, Summary, Transactions, HoldersType, TransactionType, TransactionMode, FiType};
 use crate::models::mask_account_number;
+use crate::models::validation::{ParseResult, ValidationReport, SummaryCheck, check_row_balances};
 use regex::Regex;
 
-pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAccount, crate::error::XfinaError> {
+pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
     let cursor = Cursor::new(bytes);
     let mut workbook = open_workbook_auto_from_rs(cursor)
         .map_err(|e| format!("Failed to open Excel workbook: {}", e))?;
@@ -198,6 +199,33 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAc
         }
     };
     
+    let mut validation = ValidationReport::empty();
+
+    if let Some(ob) = summary.xfina.as_ref().and_then(|x| x.opening_balance) {
+        let row_tuples: Vec<(bool, Decimal, Decimal, String)> = transactions_obj
+            .transaction
+            .iter()
+            .map(|t| (t.r#type == TransactionType::Credit, t.amount, t.current_balance, t.narration.clone()))
+            .collect();
+        validation.row_level = check_row_balances(ob, &row_tuples);
+    }
+    
+    // Derived check: opening + credits - debits = closing
+    if let (Some(ob), cb) = (summary.xfina.as_ref().and_then(|x| x.opening_balance), summary.current_balance) {
+        let credits: Decimal = transactions_obj.transaction.iter().filter(|t| t.r#type == TransactionType::Credit).map(|t| t.amount).sum();
+        let debits: Decimal = transactions_obj.transaction.iter().filter(|t| t.r#type == TransactionType::Debit).map(|t| t.amount).sum();
+        
+        validation.summary_level.checks.push(SummaryCheck::derived(
+            "computed_closing_balance",
+            cb,
+            ob + credits - debits,
+            None
+        ));
+    }
+
+    validation.summary_level.passed = validation.summary_level.checks.iter().all(|c| c.passed);
+    validation.finalize();
+    
     statement.profile = Some(profile);
     statement.summary = Some(summary);
     statement.transactions = Some(transactions_obj);
@@ -206,9 +234,9 @@ pub fn parse_icici_xls(bytes: &[u8], filename: Option<&str>) -> Result<DepositAc
     }
     statement.xfina = Some(xfina_account);
 
-    Ok(statement)
+    Ok(ParseResult { data: statement, validation })
 }
 
-pub fn parse_icici_bank_statement(bytes: &[u8], filename: Option<&str>) -> Result<DepositAccount, crate::error::XfinaError> {
+pub fn parse_icici_bank_statement(bytes: &[u8], filename: Option<&str>) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
     parse_icici_xls(bytes, filename)
 }

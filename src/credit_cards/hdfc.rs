@@ -1,15 +1,17 @@
 use chrono::{NaiveDate, DateTime, Utc};
 use rust_decimal::Decimal;
+use rust_decimal::prelude::ToPrimitive;
 use crate::models::credit_card::{
     CreditCardAccount, CcProfile, CcHolders, CcHolder, CcCards, CcCard, CardType, TypeChoice,
     CcSummary, PastDues, RewardPointsSummary, RewardProgram,
     CcTransactions, CcTransaction, XfinaCreditCardAccount, CcXfinaSummary, CcXfinaTransactions, CcXfinaTransaction,
 };
 use crate::models::deposit::TransactionType;
+use crate::models::validation::{ParseResult, ValidationReport, SummaryCheck};
 use std::collections::HashMap;
 use regex::Regex;
 
-pub fn parse_hdfc_statement(content: &str, filename: Option<&str>) -> Result<CreditCardAccount, crate::error::XfinaError> {
+pub fn parse_hdfc_statement(content: &str, filename: Option<&str>) -> Result<ParseResult<CreditCardAccount>, crate::error::XfinaError> {
     let mut stmt = CreditCardAccount {
         r#type: "credit_card".to_string(),
         ..Default::default()
@@ -303,8 +305,92 @@ pub fn parse_hdfc_statement(content: &str, filename: Option<&str>) -> Result<Cre
         xfina_account.date_only_paths = Some(date_only_paths);
     }
     stmt.xfina = Some(xfina_account);
+
+    let mut validation = ValidationReport::empty();
     
-    Ok(stmt)
+    // Level 2 - Summary Checks
+    
+    // 1. closing_balance_match: total_due == opening_balance + purchases_debits - payment_credit
+    if let (Some(total_due), Some(ob), Some(pd), Some(pc)) = (
+        stmt.summary.as_ref().and_then(|s| s.total_due_amount),
+        stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.opening_balance),
+        stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.purchases_debits),
+        stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.payment_credit)
+    ) {
+        validation.summary_level.checks.push(SummaryCheck::declared(
+            "closing_balance_match",
+            total_due,
+            ob + pd - pc,
+            None
+        ));
+    }
+
+    // 2. txn_credits_match: payment_credit == sum(txn.amount where type == Credit)
+    if let Some(pc) = stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.payment_credit) {
+        use rust_decimal::prelude::FromPrimitive;
+        let sum_credits: Decimal = Decimal::from_f64(
+            stmt.transactions.as_ref().unwrap().transaction.iter()
+                .filter(|t| t.txn_type == TransactionType::Credit)
+                .map(|t| t.amount.to_f64().unwrap_or(0.0))
+                .sum()
+        ).unwrap_or(Decimal::from(0));
+        validation.summary_level.checks.push(SummaryCheck::declared(
+            "txn_credits_match",
+            pc,
+            sum_credits,
+            None
+        ));
+    }
+
+    // 3. txn_debits_match: purchases_debits == sum(txn.amount where type == Debit)
+    if let Some(pd) = stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.purchases_debits) {
+        use rust_decimal::prelude::FromPrimitive;
+        let sum_debits: Decimal = Decimal::from_f64(
+            stmt.transactions.as_ref().unwrap().transaction.iter()
+                .filter(|t| t.txn_type == TransactionType::Debit)
+                .map(|t| t.amount.to_f64().unwrap_or(0.0))
+                .sum()
+        ).unwrap_or(Decimal::from(0));
+        validation.summary_level.checks.push(SummaryCheck::declared(
+            "txn_debits_match",
+            pd,
+            sum_debits,
+            None
+        ));
+    }
+
+    // 4. owner_credits_match: payment_credit == sum(owner_credit_breakdown.values())
+    if let Some(pc) = stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.payment_credit) {
+        use rust_decimal::prelude::FromPrimitive;
+        if let Some(owner_credits) = stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).map(|x| &x.owner_credit_breakdown) {
+            let sum_owner_credits = Decimal::from_f64(owner_credits.values().sum()).unwrap_or(Decimal::from(0));
+            validation.summary_level.checks.push(SummaryCheck::declared(
+                "owner_credits_match",
+                pc,
+                sum_owner_credits,
+                None
+            ));
+        }
+    }
+
+    // 5. owner_debits_match: purchases_debits == sum(owner_debit_breakdown.values())
+    if let Some(pd) = stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.purchases_debits) {
+        use rust_decimal::prelude::FromPrimitive;
+        if let Some(owner_debits) = stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).map(|x| &x.owner_debit_breakdown) {
+            let sum_owner_debits = Decimal::from_f64(owner_debits.values().sum()).unwrap_or(Decimal::from(0));
+            validation.summary_level.checks.push(SummaryCheck::declared(
+                "owner_debits_match",
+                pd,
+                sum_owner_debits,
+                None
+            ));
+        }
+    }
+
+    validation.summary_level.passed = validation.summary_level.checks.iter().all(|c| c.passed);
+    validation.finalize();
+    
+    Ok(ParseResult { data: stmt, validation })
 }
 
 fn parse_decimal(val: &str) -> Option<Decimal> {

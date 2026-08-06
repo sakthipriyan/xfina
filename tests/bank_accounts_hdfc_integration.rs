@@ -36,8 +36,8 @@ fn test_hdfc_bank_accounts() {
             let xfina_path = expected_dir.join("xfina").join(format!("{}.json", file_name));
                 let rebit_path = expected_dir.join("rebit").join(format!("{}.json", file_name));
                 
-                let xfina_json = serde_json::to_string_pretty(&parsed_statement.to_xfina_json()).unwrap();
-                let rebit_json = serde_json::to_string_pretty(&parsed_statement.to_rebit_json()).unwrap();
+                let xfina_json = serialize_result(&parsed_statement, parsed_statement.data.to_xfina_json()).unwrap();
+                let rebit_json = serialize_result(&parsed_statement, parsed_statement.data.to_rebit_json()).unwrap();
                 
                 let update_expected = std::env::var("UPDATE_EXPECTED").unwrap_or_else(|_| "0".to_string());
                 if update_expected == "1" {
@@ -52,4 +52,15 @@ fn test_hdfc_bank_accounts() {
                 assert_eq!(rebit_json, expected_rebit, "Mismatch for rebit file: {}", file_name);
         }
     }
+}
+
+fn serialize_result<T: serde::Serialize>(
+    stmt: &xfina::models::validation::ParseResult<T>,
+    data_json: serde_json::Value,
+) -> Result<String, serde_json::Error> {
+    let mut root = serde_json::to_value(stmt)?;
+    if let Some(obj) = root.as_object_mut() {
+        obj.insert("data".to_string(), data_json);
+    }
+    serde_json::to_string_pretty(&root)
 }

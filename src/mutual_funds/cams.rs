@@ -79,7 +79,9 @@ pub fn extract_spatial_pages(bytes: &[u8], password: Option<&str>) -> Result<Vec
     Ok(out.pages)
 }
 
-pub fn parse_cams_pdf(bytes: &[u8], password: Option<&str>, filename: Option<&str>) -> Result<crate::models::MutualFundsAccount, crate::error::XfinaError> {
+use crate::models::validation::ParseResult;
+
+pub fn parse_cams_pdf(bytes: &[u8], password: Option<&str>, filename: Option<&str>) -> Result<ParseResult<crate::models::MutualFundsAccount>, crate::error::XfinaError> {
     let pages = extract_spatial_pages(bytes, password)?;
     
     let mut all_pages_lines = Vec::new();

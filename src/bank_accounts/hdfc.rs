@@ -4,9 +4,10 @@ use std::io::Cursor;
 use rust_decimal::Decimal;
 use crate::models::deposit::{DepositAccount, Transaction, XfinaDepositAccount, XfinaSummary, Profile, Holders, Holder, Summary, Transactions, HoldersType, TransactionType, TransactionMode, FiType, HoldingNominee};
 use crate::models::mask_account_number;
+use crate::models::validation::{ParseResult, ValidationReport, SummaryCheck, check_row_balances};
 use regex::Regex;
 
-pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<DepositAccount, crate::error::XfinaError> {
+pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
     let cursor = Cursor::new(bytes);
     let mut workbook = open_workbook_auto_from_rs(cursor)
         .map_err(|e| format!("Failed to open workbook: {}", e))?;
@@ -273,15 +274,24 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<DepositAccount, crate::error::Xfin
     let calc_debits: Decimal = parsed_transactions.iter().filter(|t| t.r#type == TransactionType::Debit).map(|t| t.amount).sum();
     let calc_credits: Decimal = parsed_transactions.iter().filter(|t| t.r#type == TransactionType::Credit).map(|t| t.amount).sum();
     
+    let mut validation = ValidationReport::empty();
+
+    // Level 2 — Summary checks
     if let Some(sd) = parsed_summary_debits {
-        if calc_debits != sd {
-            return Err(crate::error::XfinaError::from(format!("Total debits mismatch: expected {}, got {}", sd, calc_debits)));
-        }
+        validation.summary_level.checks.push(SummaryCheck::declared(
+            "total_debits_match",
+            sd,
+            calc_debits,
+            None,
+        ));
     }
     if let Some(sc) = parsed_summary_credits {
-        if calc_credits != sc {
-            return Err(crate::error::XfinaError::from(format!("Total credits mismatch: expected {}, got {}", sc, calc_credits)));
-        }
+        validation.summary_level.checks.push(SummaryCheck::declared(
+            "total_credits_match",
+            sc,
+            calc_credits,
+            None,
+        ));
     }
     
     let mut account_product: Option<String> = None;
@@ -312,16 +322,32 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<DepositAccount, crate::error::Xfin
     if let Some(cb) = parsed_summary_closing {
         summary.current_balance = cb;
         if let Some(last) = parsed_transactions.last() {
-            if summary.current_balance != last.current_balance {
-                return Err(crate::error::XfinaError::from(format!("Closing balance mismatch: expected {}, got {}", summary.current_balance, last.current_balance)));
-            }
+            validation.summary_level.checks.push(SummaryCheck::declared(
+                "closing_balance_match",
+                cb,
+                last.current_balance,
+                None,
+            ));
         }
     } else if let Some(last) = parsed_transactions.last() {
         summary.current_balance = last.current_balance;
     }
     
     transactions_obj.transaction = parsed_transactions;
-    
+
+    // Level 1 — Row-by-row running balance check
+    if let Some(ob) = stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.opening_balance) {
+        let row_tuples: Vec<(bool, Decimal, Decimal, String)> = transactions_obj
+            .transaction
+            .iter()
+            .map(|t| (t.r#type == TransactionType::Credit, t.amount, t.current_balance, t.narration.clone()))
+            .collect();
+        validation.row_level = check_row_balances(ob, &row_tuples);
+    }
+    // Summary level pass/fail rollup
+    validation.summary_level.passed = validation.summary_level.checks.iter().all(|c| c.passed);
+    validation.finalize();
+
     let holders_list = vec![holder];
     let mut profile = Profile::default();
     let mut holders = Holders {
@@ -329,19 +355,19 @@ pub fn parse_hdfc_xls(bytes: &[u8]) -> Result<DepositAccount, crate::error::Xfin
         ..Default::default()
     };
     holders.holder = holders_list;
-    
+
     profile.holders = holders;
-    
+
     stmt.profile = Some(profile);
     stmt.summary = Some(summary);
     stmt.transactions = Some(transactions_obj);
-    
+
     if !date_only_paths.is_empty() {
         xfina_account.date_only_paths = Some(date_only_paths);
     }
     stmt.xfina = Some(xfina_account);
 
-    Ok(stmt)
+    Ok(ParseResult { data: stmt, validation })
 }
 
 fn parse_date(date_str: &str) -> NaiveDate {
@@ -354,6 +380,6 @@ fn parse_date(date_str: &str) -> NaiveDate {
     NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()
 }
 
-pub fn parse_hdfc_bank_statement(bytes: &[u8], _password: Option<&str>) -> Result<DepositAccount, crate::error::XfinaError> {
+pub fn parse_hdfc_bank_statement(bytes: &[u8], _password: Option<&str>) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
     parse_hdfc_xls(bytes)
 }

@@ -47,7 +47,9 @@ fn parse_datetime(date_str: &str) -> Option<chrono::DateTime<Utc>> {
     chrono::DateTime::parse_from_rfc3339(&iso).map(|d| d.with_timezone(&Utc)).ok()
 }
 
-pub fn parse_ibkr_csv(csv_content: &str) -> Result<EquityAccount, crate::error::XfinaError> {
+use crate::models::validation::{ParseResult, ValidationReport};
+
+pub fn parse_ibkr_csv(csv_content: &str) -> Result<ParseResult<EquityAccount>, crate::error::XfinaError> {
     let mut rdr = ReaderBuilder::new()
         .has_headers(false)
         .flexible(true)
@@ -342,7 +344,7 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<EquityAccount, crate::error::
         date_only_paths: None,
     };
 
-    Ok(EquityAccount { 
+    let account = EquityAccount { 
         r#type: EquityFiType::Equities,
         masked_acc_number: account_no,
         version: 1.1,
@@ -351,5 +353,7 @@ pub fn parse_ibkr_csv(csv_content: &str) -> Result<EquityAccount, crate::error::
         summary: Some(summary),
         transactions: Some(transactions),
         xfina: Some(xfina_ext),
-    })
+    };
+
+    Ok(ParseResult { data: account, validation: ValidationReport::empty() })
 }
