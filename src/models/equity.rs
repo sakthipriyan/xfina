@@ -1,6 +1,6 @@
-use chrono::{DateTime, Utc, NaiveDate};
-use serde::{Deserialize, Serialize};
+use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
+use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
 // -----------------------------------------------------------------------------
@@ -99,7 +99,7 @@ pub struct EquityAccount {
     pub profile: Option<EquityProfile>,
     pub summary: Option<EquitySummary>,
     pub transactions: Option<EquityTransactions>,
-    
+
     // Xfina Extension
     pub xfina: Option<XfinaEquityAccount>,
 }
@@ -113,7 +113,9 @@ impl EquityAccount {
 
     pub fn to_rebit_json(&self) -> serde_json::Value {
         let mut val = serde_json::to_value(self).unwrap();
-        let paths = self.xfina.as_ref()
+        let paths = self
+            .xfina
+            .as_ref()
             .and_then(|x| x.date_only_paths.clone())
             .unwrap_or_default();
         crate::models::serializer::transform_to_rebit(&mut val, &paths, "".to_string());
@@ -149,7 +151,7 @@ pub struct EquityHolder {
     pub email: Option<String>,
     pub pan: Option<String>,
     pub ckyc_compliance: Option<bool>,
-    
+
     // Xfina Extension
     pub xfina: Option<XfinaEquityHolder>,
 }
@@ -163,7 +165,7 @@ pub struct EquitySummary {
     pub investment_value: Decimal,
     #[serde(with = "rust_decimal::serde::float")]
     pub current_value: Decimal,
-    
+
     // Xfina Extension
     pub xfina: Option<XfinaEquitySummary>,
 }
@@ -198,7 +200,7 @@ pub struct EquityHolding {
     #[serde(with = "rust_decimal::serde::float_option", default)]
     pub last_traded_price: Option<Decimal>,
     pub description: Option<String>,
-    
+
     // Xfina Extension
     pub xfina: Option<XfinaEquityHolding>,
 }
@@ -210,7 +212,7 @@ pub struct EquityTransactions {
     pub start_date: Option<NaiveDate>,
     pub end_date: Option<NaiveDate>,
     pub transaction: Vec<EquityTransaction>,
-    
+
     // Xfina Extension
     pub xfina: Option<XfinaEquityTransactions>,
 }
@@ -275,8 +277,7 @@ pub struct XfinaEquityHolding {
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct XfinaEquityHolder {
-}
+pub struct XfinaEquityHolder {}
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -290,14 +291,12 @@ pub struct XfinaEquityAccount {
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct XfinaEquitySummary {
-}
+pub struct XfinaEquitySummary {}
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct XfinaEquityTransactions {
-}
+pub struct XfinaEquityTransactions {}
 
 // -----------------------------------------------------------------------------
 // Implementations

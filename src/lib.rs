@@ -34,8 +34,6 @@
 //! - [`mutual_funds`]: Parsers for mutual fund statements (CAMS CAS)
 //! - [`intl_stocks`]: Parsers for international broker statements (IBKR)
 
-
-
 pub mod mutual_funds {
     #[cfg(feature = "mf-cams")]
     pub mod cams;
@@ -58,22 +56,22 @@ pub mod credit_cards {
 }
 
 pub mod bank_accounts {
+    #[cfg(feature = "ba-axis")]
+    pub mod axis;
+    #[cfg(feature = "ba-bob")]
+    pub mod bob;
     #[cfg(feature = "ba-hdfc")]
     pub mod hdfc;
     #[cfg(feature = "ba-icici")]
     pub mod icici;
     #[cfg(feature = "ba-sbi")]
     pub mod sbi;
-    #[cfg(feature = "ba-bob")]
-    pub mod bob;
-    #[cfg(feature = "ba-axis")]
-    pub mod axis;
-    
+
     #[cfg(feature = "ba-sbi")]
     pub(crate) mod layout;
     #[cfg(feature = "ba-sbi")]
     pub(crate) mod pdf_parser;
 }
 
-pub mod models;
 pub mod error;
+pub mod models;

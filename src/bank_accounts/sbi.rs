@@ -1,25 +1,32 @@
-use rust_decimal::Decimal;
-use crate::models::deposit::{DepositAccount, Transaction, XfinaDepositAccount, XfinaSummary, Profile, Holders, Holder, Summary, Transactions, HoldersType, TransactionType, TransactionMode, FiType, HoldingNominee};
+use super::{layout, pdf_parser};
+use crate::models::deposit::{
+    DepositAccount, FiType, Holder, Holders, HoldersType, HoldingNominee, Profile, Summary,
+    Transaction, TransactionMode, TransactionType, Transactions, XfinaDepositAccount, XfinaSummary,
+};
 use crate::models::mask_account_number;
-use super::{pdf_parser, layout};
-use regex::Regex;
+use crate::models::validation::{
+    check_row_balances, ParseResult, SummaryCheck, SummarySource, ValidationReport,
+};
 use chrono::{NaiveDate, TimeZone, Utc};
-use crate::models::validation::{ParseResult, ValidationReport, check_row_balances, SummaryCheck, SummarySource};
+use regex::Regex;
+use rust_decimal::Decimal;
 
 use crate::models::request::ParseRequest;
 
-pub fn parse_sbi_bank_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
+pub fn parse_sbi_bank_statement<'a>(
+    input: ParseRequest<'a>,
+) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
     let bytes = input.content;
     let password = input.password;
     let filename = input.filename;
     let pages = pdf_parser::extract_spatial_pages(bytes, password)?;
-    
+
     let mut statement = DepositAccount {
         r#type: FiType::Deposit,
         version: 1.1,
         ..Default::default()
     };
-    
+
     let mut xfina_account = XfinaDepositAccount {
         institution_name: Some("State Bank of India".to_string()),
         ..Default::default()
@@ -37,7 +44,7 @@ pub fn parse_sbi_bank_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResu
     let mut opening_date: Option<NaiveDate> = None;
     let mut address_lines: Vec<String> = Vec::new();
     let mut in_address = false;
-    
+
     let mut date_only_paths = Vec::new();
 
     if let Some(fname) = filename {
@@ -53,18 +60,26 @@ pub fn parse_sbi_bank_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResu
             if let Some(d) = NaiveDate::from_ymd_opt(year, month, day) {
                 let dt = d.and_hms_opt(0, 0, 0).unwrap();
                 let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
-                xfina_account.generated_date = chrono::TimeZone::from_local_datetime(&ist_offset, &dt).single().map(|dt| dt.with_timezone(&Utc));
+                xfina_account.generated_date =
+                    chrono::TimeZone::from_local_datetime(&ist_offset, &dt)
+                        .single()
+                        .map(|dt| dt.with_timezone(&Utc));
                 if !date_only_paths.contains(&"xfina.generatedDate".to_string()) {
                     date_only_paths.push("xfina.generatedDate".to_string());
                 }
             }
         }
     }
-    
+
     let date_re = Regex::new(r"^(\d{2}/\d{2}/\d{4})\s+(\d{2}/\d{2}/\d{4})").unwrap();
     let gen_date_re = Regex::new(r"Date of Statement\s*:\s*(\d{2}-\d{2}-\d{4})").unwrap();
-    let stmt_from_re = Regex::new(r"(?i)Statement From\s*:\s*(\d{2}-\d{2}-\d{4})\s*to\s*(\d{2}-\d{2}-\d{4})").unwrap();
-    let summary_re = Regex::new(r"^([\d,.]+C?R?D?R?)\s+(\d+)\s+(\d+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+C?R?D?R?)$").unwrap();
+    let stmt_from_re =
+        Regex::new(r"(?i)Statement From\s*:\s*(\d{2}-\d{2}-\d{4})\s*to\s*(\d{2}-\d{2}-\d{4})")
+            .unwrap();
+    let summary_re = Regex::new(
+        r"^([\d,.]+C?R?D?R?)\s+(\d+)\s+(\d+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+C?R?D?R?)$",
+    )
+    .unwrap();
 
     let mut inside_table = false;
     let mut parsed_transactions = Vec::new();
@@ -75,19 +90,28 @@ pub fn parse_sbi_bank_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResu
     let mut declared_dr_count: Option<usize> = None;
     let mut declared_cr_count: Option<usize> = None;
     let mut declared_opening_balance = None;
-    
+
     let parse_amount = |s: &str| -> Option<Decimal> {
-        s.replace(",", "").replace("CR", "").replace("DR", "").parse().ok()
+        s.replace(",", "")
+            .replace("CR", "")
+            .replace("DR", "")
+            .parse()
+            .ok()
     };
     let parse_balance = |s: &str| -> Option<Decimal> {
-        let val = s.replace(",", "").replace("CR", "").replace("DR", "").parse::<Decimal>().ok()?;
+        let val = s
+            .replace(",", "")
+            .replace("CR", "")
+            .replace("DR", "")
+            .parse::<Decimal>()
+            .ok()?;
         if s.ends_with("DR") {
             Some(-val)
         } else {
             Some(val)
         }
     };
-    
+
     struct DescPart {
         y: f64,
         text: String,
@@ -95,20 +119,19 @@ pub fn parse_sbi_bank_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResu
 
     for page in pages {
         let lines = layout::group_into_lines(&page, 2.0);
-        
+
         // First, group lines into vertical blocks based on a y-gap threshold
         let mut blocks: Vec<Vec<&layout::Line>> = Vec::new();
         let mut current_block = Vec::new();
         let mut last_y: Option<f64> = None;
-        
+
         for line in &lines {
             let y = line.chars.first().map(|c| c.y0).unwrap_or(0.0);
             if let Some(ly) = last_y {
-                if (y - ly).abs() > 11.5
-                    && !current_block.is_empty() {
-                        blocks.push(current_block);
-                        current_block = Vec::new();
-                    }
+                if (y - ly).abs() > 11.5 && !current_block.is_empty() {
+                    blocks.push(current_block);
+                    current_block = Vec::new();
+                }
             }
             current_block.push(line);
             last_y = Some(y);
@@ -116,43 +139,56 @@ pub fn parse_sbi_bank_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResu
         if !current_block.is_empty() {
             blocks.push(current_block);
         }
-        
+
         for block in blocks {
             let mut is_header_or_footer = false;
-            
+
             // Check for Account Number / Name in the block
             for line in &block {
                 let text = line.text.trim();
-                
+
                 if let Some(caps) = gen_date_re.captures(text) {
                     if xfina_account.generated_date.is_none() {
-                        if let Ok(parsed) = NaiveDate::parse_from_str(caps.get(1).unwrap().as_str(), "%d-%m-%Y") {
+                        if let Ok(parsed) =
+                            NaiveDate::parse_from_str(caps.get(1).unwrap().as_str(), "%d-%m-%Y")
+                        {
                             let dt = parsed.and_hms_opt(0, 0, 0).unwrap();
-                            let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
-                            xfina_account.generated_date = chrono::TimeZone::from_local_datetime(&ist_offset, &dt).single().map(|dt| dt.with_timezone(&Utc));
+                            let ist_offset =
+                                chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
+                            xfina_account.generated_date =
+                                chrono::TimeZone::from_local_datetime(&ist_offset, &dt)
+                                    .single()
+                                    .map(|dt| dt.with_timezone(&Utc));
                             if !date_only_paths.contains(&"xfina.generatedDate".to_string()) {
-                    date_only_paths.push("xfina.generatedDate".to_string());
-                }
+                                date_only_paths.push("xfina.generatedDate".to_string());
+                            }
                         }
                     }
                 }
                 if let Some(caps) = stmt_from_re.captures(text) {
-                    if let Ok(parsed) = NaiveDate::parse_from_str(caps.get(1).unwrap().as_str(), "%d-%m-%Y") {
+                    if let Ok(parsed) =
+                        NaiveDate::parse_from_str(caps.get(1).unwrap().as_str(), "%d-%m-%Y")
+                    {
                         transactions_obj.start_date = Some(parsed);
                     }
-                    if let Ok(parsed) = NaiveDate::parse_from_str(caps.get(2).unwrap().as_str(), "%d-%m-%Y") {
+                    if let Ok(parsed) =
+                        NaiveDate::parse_from_str(caps.get(2).unwrap().as_str(), "%d-%m-%Y")
+                    {
                         transactions_obj.end_date = Some(parsed);
                     }
                 }
-                
+
                 if text.contains("Brought Forward") && text.contains("Total Debits") {
                     // Header line, the next block might contain the values or this block does
                 }
-                
+
                 if text.len() > 30 && (text.contains("CR") || text.contains("DR")) {
                     if let Some(caps) = summary_re.captures(text) {
                         if let Some(ob) = parse_balance(caps.get(1).unwrap().as_str()) {
-                            summary.xfina = Some(XfinaSummary { opening_balance: Some(ob), ..Default::default() });
+                            summary.xfina = Some(XfinaSummary {
+                                opening_balance: Some(ob),
+                                ..Default::default()
+                            });
                             declared_opening_balance = Some(ob);
                         }
                         if let Ok(dc) = caps.get(2).unwrap().as_str().parse::<usize>() {
@@ -183,9 +219,9 @@ pub fn parse_sbi_bank_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResu
                     }
                     is_header_or_footer = true;
                 }
-                
+
                 let x0 = line.chars.first().map(|c| c.x0).unwrap_or(0.0);
-                
+
                 if text.starts_with("Branch Name :") {
                     branch_name = text.split(':').nth(1).unwrap_or("").trim().to_string();
                 } else if text.starts_with("CIF Number :") || text.contains("CIF Number :") {
@@ -204,7 +240,9 @@ pub fn parse_sbi_bank_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResu
                     }
                 } else if text.starts_with("Nominee Name :") {
                     nominee = text.split(':').nth(1).unwrap_or("").trim().to_string();
-                } else if text.starts_with("Account open Date :") || text.contains("Account open Date :") {
+                } else if text.starts_with("Account open Date :")
+                    || text.contains("Account open Date :")
+                {
                     if let Some(idx) = text.find("Account open Date :") {
                         let d_str = text[idx + 19..].trim();
                         if let Ok(parsed) = NaiveDate::parse_from_str(d_str, "%d/%m/%Y") {
@@ -212,21 +250,27 @@ pub fn parse_sbi_bank_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResu
                         }
                     }
                 }
-                
-                if text.starts_with("Date of Statement") || text.starts_with("Clear Balance") || text.starts_with("Branch Code :") {
+
+                if text.starts_with("Date of Statement")
+                    || text.starts_with("Clear Balance")
+                    || text.starts_with("Branch Code :")
+                {
                     in_address = false;
                 }
-                
+
                 if text.starts_with("Mr.") || text.starts_with("Mrs.") {
                     if account_name.is_empty() && x0 < 300.0 {
                         account_name = text.to_string();
                         // Assume customer address follows name on the left side
                         in_address = true;
                     }
-                } else if in_address && x0 < 300.0 && !text.starts_with("Not Available")
-                    && !text.is_empty() {
-                        address_lines.push(text.to_string());
-                    }
+                } else if in_address
+                    && x0 < 300.0
+                    && !text.starts_with("Not Available")
+                    && !text.is_empty()
+                {
+                    address_lines.push(text.to_string());
+                }
                 if text.contains("Balance") && text.len() < 10 {
                     inside_table = true;
                     is_header_or_footer = true;
@@ -239,60 +283,79 @@ pub fn parse_sbi_bank_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResu
                     is_header_or_footer = true;
                 }
             }
-            
+
             if is_header_or_footer || !inside_table {
                 continue;
             }
-            
+
             let mut desc_parts = Vec::new();
             let mut date_str = String::new();
             let mut val_date_str = String::new();
             let mut debit = None;
             let mut credit = None;
             let mut balance = None;
-            
+
             let _parse_amt = |s: &str| -> Option<Decimal> {
-                if s == "-" { return None; }
-                s.replace(",", "").replace("CR", "").replace("DR", "").parse().ok()
+                if s == "-" {
+                    return None;
+                }
+                s.replace(",", "")
+                    .replace("CR", "")
+                    .replace("DR", "")
+                    .parse()
+                    .ok()
             };
-            
+
             for line in &block {
                 let text = line.text.trim();
-                if text.is_empty() { continue; }
+                if text.is_empty() {
+                    continue;
+                }
                 let min_x = line.chars.first().map(|c| c.x0).unwrap_or(0.0);
                 let min_y = line.chars.first().map(|c| c.y0).unwrap_or(0.0);
-                
+
                 if let Some(caps) = date_re.captures(text) {
                     date_str = caps.get(1).unwrap().as_str().to_string();
                     val_date_str = caps.get(2).unwrap().as_str().to_string();
-                    
+
                     let parts: Vec<&str> = text.split_whitespace().collect();
                     if parts.len() >= 6 {
                         let len = parts.len();
                         balance = parse_amount(parts[len - 1]);
                         credit = parse_amount(parts[len - 2]);
                         debit = parse_amount(parts[len - 3]);
-                        
+
                         let middle = parts[2..len - 3].join(" ");
                         if middle != "-" && !middle.is_empty() {
                             let clean_middle = middle.trim_end_matches('-').trim().to_string();
                             if !clean_middle.is_empty() {
-                                desc_parts.push(DescPart { y: min_y, text: clean_middle });
+                                desc_parts.push(DescPart {
+                                    y: min_y,
+                                    text: clean_middle,
+                                });
                             }
                         }
                     }
                 } else if min_x > 120.0 && min_x < 150.0 {
-                    desc_parts.push(DescPart { y: min_y, text: text.to_string() });
+                    desc_parts.push(DescPart {
+                        y: min_y,
+                        text: text.to_string(),
+                    });
                 }
             }
-            
+
             if !date_str.is_empty() {
-                desc_parts.sort_by(|a, b| a.y.partial_cmp(&b.y).unwrap_or(std::cmp::Ordering::Equal));
-                let narration = desc_parts.into_iter().map(|d| d.text).collect::<Vec<_>>().join(" ");
-                
+                desc_parts
+                    .sort_by(|a, b| a.y.partial_cmp(&b.y).unwrap_or(std::cmp::Ordering::Equal));
+                let narration = desc_parts
+                    .into_iter()
+                    .map(|d| d.text)
+                    .collect::<Vec<_>>()
+                    .join(" ");
+
                 let mut tx_type = TransactionType::Debit;
                 let mut amount = Decimal::from(0);
-                
+
                 if let Some(c) = credit {
                     tx_type = TransactionType::Credit;
                     amount = c;
@@ -300,11 +363,15 @@ pub fn parse_sbi_bank_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResu
                     tx_type = TransactionType::Debit;
                     amount = d;
                 }
-                
-                let date = NaiveDate::parse_from_str(&date_str, "%d/%m/%Y").unwrap_or_else(|_| NaiveDate::from_ymd_opt(1970, 1, 1).unwrap());
+
+                let date = NaiveDate::parse_from_str(&date_str, "%d/%m/%Y")
+                    .unwrap_or_else(|_| NaiveDate::from_ymd_opt(1970, 1, 1).unwrap());
                 let value_date = NaiveDate::parse_from_str(&val_date_str, "%d/%m/%Y").ok();
-                
-                let mode = if narration.starts_with("UPI/") || narration.starts_with("TRANSFER TO UPI/") || narration.starts_with("TRANSFER FROM UPI/") {
+
+                let mode = if narration.starts_with("UPI/")
+                    || narration.starts_with("TRANSFER TO UPI/")
+                    || narration.starts_with("TRANSFER FROM UPI/")
+                {
                     Some(TransactionMode::Upi)
                 } else if narration.contains("NEFT") || narration.contains("IMPS") {
                     Some(TransactionMode::Ft)
@@ -316,7 +383,9 @@ pub fn parse_sbi_bank_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResu
 
                 let tx = Transaction {
                     txn_id: None,
-                    transaction_timestamp: Some(Utc.from_utc_datetime(&date.and_hms_opt(0, 0, 0).unwrap())),
+                    transaction_timestamp: Some(
+                        Utc.from_utc_datetime(&date.and_hms_opt(0, 0, 0).unwrap()),
+                    ),
                     value_date,
                     narration,
                     reference: None,
@@ -326,27 +395,42 @@ pub fn parse_sbi_bank_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResu
                     mode,
                 };
                 parsed_transactions.push(tx);
-                
-                if !date_only_paths.contains(&"transactions.transaction.transactionTimestamp".to_string()) {
-                    date_only_paths.push("transactions.transaction.transactionTimestamp".to_string());
+
+                if !date_only_paths
+                    .contains(&"transactions.transaction.transactionTimestamp".to_string())
+                {
+                    date_only_paths
+                        .push("transactions.transaction.transactionTimestamp".to_string());
                 }
             }
         }
     }
-    
+
     if let Some(first) = parsed_transactions.first() {
-        let ob = if first.r#type == TransactionType::Credit { first.current_balance - first.amount } else { first.current_balance + first.amount };
-        if summary.xfina.as_ref().and_then(|x| x.opening_balance).is_none() {
-            summary.xfina = Some(XfinaSummary { opening_balance: Some(ob), ..Default::default() });
+        let ob = if first.r#type == TransactionType::Credit {
+            first.current_balance - first.amount
+        } else {
+            first.current_balance + first.amount
+        };
+        if summary
+            .xfina
+            .as_ref()
+            .and_then(|x| x.opening_balance)
+            .is_none()
+        {
+            summary.xfina = Some(XfinaSummary {
+                opening_balance: Some(ob),
+                ..Default::default()
+            });
         }
     }
     if let Some(last) = parsed_transactions.last() {
         summary.current_balance = last.current_balance;
     }
-if !account_number.is_empty() {
+    if !account_number.is_empty() {
         statement.masked_acc_number = mask_account_number(&account_number);
     }
-    
+
     if !branch_name.is_empty() {
         summary.branch = Some(branch_name);
     }
@@ -384,24 +468,23 @@ if !account_number.is_empty() {
     if !nominee.is_empty() && nominee != "Not Available" {
         holder.nominee = Some(HoldingNominee::Registered); // Usually XXXXX implies registered
     }
-    
+
     use crate::models::deposit::XfinaHolder;
     let mut xfina_holder = XfinaHolder::default();
     if !customer_id.is_empty() {
         xfina_holder.customer_id = Some(customer_id);
     }
     holder.xfina = Some(xfina_holder);
-    
+
     let profile = Profile {
         holders: Holders {
             r#type: HoldersType::Single, // Adjust as necessary
             holder: vec![holder],
-        }
+        },
     };
 
     transactions_obj.transaction = parsed_transactions;
 
-    
     statement.profile = Some(profile);
     statement.summary = Some(summary);
     statement.transactions = Some(transactions_obj);
@@ -411,7 +494,7 @@ if !account_number.is_empty() {
     statement.xfina = Some(xfina_account);
 
     let mut validation = ValidationReport::empty();
-    
+
     let mut computed_debits = rust_decimal::Decimal::ZERO;
     let mut computed_credits = rust_decimal::Decimal::ZERO;
     let mut computed_dr_count = 0;
@@ -425,17 +508,39 @@ if !account_number.is_empty() {
             computed_dr_count += 1;
         }
     }
-    
-    if let Some(ob) = statement.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.opening_balance) {
-        let row_tuples: Vec<(bool, rust_decimal::Decimal, rust_decimal::Decimal, String)> = statement.transactions.as_ref().unwrap().transaction
-            .iter()
-            .map(|t| (t.r#type == crate::models::deposit::TransactionType::Credit, t.amount, t.current_balance, t.narration.clone()))
-            .collect();
+
+    if let Some(ob) = statement
+        .summary
+        .as_ref()
+        .and_then(|s| s.xfina.as_ref())
+        .and_then(|x| x.opening_balance)
+    {
+        let row_tuples: Vec<(bool, rust_decimal::Decimal, rust_decimal::Decimal, String)> =
+            statement
+                .transactions
+                .as_ref()
+                .unwrap()
+                .transaction
+                .iter()
+                .map(|t| {
+                    (
+                        t.r#type == crate::models::deposit::TransactionType::Credit,
+                        t.amount,
+                        t.current_balance,
+                        t.narration.clone(),
+                    )
+                })
+                .collect();
         validation.row_level = check_row_balances(ob, &row_tuples);
-        
+
         if let Some(decl_ob) = declared_opening_balance {
             if let Some(first) = statement.transactions.as_ref().unwrap().transaction.first() {
-                let derived_ob = if first.r#type == crate::models::deposit::TransactionType::Credit { first.current_balance - first.amount } else { first.current_balance + first.amount };
+                let derived_ob = if first.r#type == crate::models::deposit::TransactionType::Credit
+                {
+                    first.current_balance - first.amount
+                } else {
+                    first.current_balance + first.amount
+                };
                 validation.summary_level.checks.push(SummaryCheck {
                     name: "opening_balance_match".to_string(),
                     passed: (decl_ob - derived_ob).abs() <= rust_decimal::Decimal::from(1),
@@ -448,8 +553,11 @@ if !account_number.is_empty() {
             }
         }
 
-        
-        let cb = statement.summary.as_ref().map(|s| s.current_balance).unwrap_or(rust_decimal::Decimal::ZERO);
+        let cb = statement
+            .summary
+            .as_ref()
+            .map(|s| s.current_balance)
+            .unwrap_or(rust_decimal::Decimal::ZERO);
         let expected_cb = ob + computed_credits - computed_debits;
         validation.summary_level.checks.push(SummaryCheck {
             name: "closing_balance_match".to_string(),
@@ -460,7 +568,7 @@ if !account_number.is_empty() {
             delta: Some(cb - expected_cb),
             note: None,
         });
-        
+
         if let Some(dd) = declared_total_debits {
             validation.summary_level.checks.push(SummaryCheck {
                 name: "txn_debits_match".to_string(),
@@ -484,7 +592,7 @@ if !account_number.is_empty() {
                 note: None,
             });
         }
-        
+
         if let Some(dc_cnt) = declared_dr_count {
             validation.summary_level.checks.push(SummaryCheck {
                 name: "txn_debits_count_match".to_string(),
@@ -492,7 +600,9 @@ if !account_number.is_empty() {
                 source: SummarySource::Declared,
                 declared: Some(rust_decimal::Decimal::from(dc_cnt)),
                 computed: rust_decimal::Decimal::from(computed_dr_count),
-                delta: Some(rust_decimal::Decimal::from(dc_cnt as i64 - computed_dr_count as i64)),
+                delta: Some(rust_decimal::Decimal::from(
+                    dc_cnt as i64 - computed_dr_count as i64,
+                )),
                 note: None,
             });
         }
@@ -504,14 +614,19 @@ if !account_number.is_empty() {
                 source: SummarySource::Declared,
                 declared: Some(rust_decimal::Decimal::from(cc_cnt)),
                 computed: rust_decimal::Decimal::from(computed_cr_count),
-                delta: Some(rust_decimal::Decimal::from(cc_cnt as i64 - computed_cr_count as i64)),
+                delta: Some(rust_decimal::Decimal::from(
+                    cc_cnt as i64 - computed_cr_count as i64,
+                )),
                 note: None,
             });
         }
     }
-    
+
     validation.summary_level.passed = validation.summary_level.checks.iter().all(|c| c.passed);
     validation.finalize();
 
-    Ok(ParseResult { data: statement, validation })
+    Ok(ParseResult {
+        data: statement,
+        validation,
+    })
 }

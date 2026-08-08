@@ -1,15 +1,20 @@
-use chrono::{NaiveDate, TimeZone, Utc};
-use calamine::{Reader, open_workbook_auto_from_rs};
-use std::io::Cursor;
-use rust_decimal::Decimal;
-use crate::models::deposit::{DepositAccount, Transaction, XfinaDepositAccount, XfinaSummary, Profile, Holders, Holder, Summary, Transactions, HoldersType, TransactionType, TransactionMode, FiType};
+use crate::models::deposit::{
+    DepositAccount, FiType, Holder, Holders, HoldersType, Profile, Summary, Transaction,
+    TransactionMode, TransactionType, Transactions, XfinaDepositAccount, XfinaSummary,
+};
 use crate::models::mask_account_number;
-use crate::models::validation::{ParseResult, ValidationReport, SummaryCheck, check_row_balances};
+use crate::models::validation::{check_row_balances, ParseResult, SummaryCheck, ValidationReport};
+use calamine::{open_workbook_auto_from_rs, Reader};
+use chrono::{NaiveDate, TimeZone, Utc};
 use regex::Regex;
+use rust_decimal::Decimal;
+use std::io::Cursor;
 
 use crate::models::request::ParseRequest;
 
-pub fn parse_icici_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
+pub fn parse_icici_xls<'a>(
+    input: ParseRequest<'a>,
+) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
     let bytes = input.content;
     let filename = input.filename;
     let cursor = Cursor::new(bytes);
@@ -26,7 +31,7 @@ pub fn parse_icici_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposi
         version: 1.1,
         ..Default::default()
     };
-    
+
     let mut xfina_account = XfinaDepositAccount {
         institution_name: Some("ICICI Bank".to_string()),
         ..Default::default()
@@ -42,7 +47,10 @@ pub fn parse_icici_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposi
                 if let Ok(d) = NaiveDate::parse_from_str(m.as_str(), "%d-%m-%Y") {
                     let dt = d.and_hms_opt(0, 0, 0).unwrap();
                     let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
-                    xfina_account.generated_date = chrono::TimeZone::from_local_datetime(&ist_offset, &dt).single().map(|dt| dt.with_timezone(&Utc));
+                    xfina_account.generated_date =
+                        chrono::TimeZone::from_local_datetime(&ist_offset, &dt)
+                            .single()
+                            .map(|dt| dt.with_timezone(&Utc));
                     date_only_paths.push("xfina.generatedDate".to_string());
                 }
             }
@@ -54,7 +62,10 @@ pub fn parse_icici_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposi
     let mut holders = Vec::new();
 
     for row in range.rows() {
-        let row_vec: Vec<String> = row.iter().map(|c| c.to_string().trim().to_string()).collect();
+        let row_vec: Vec<String> = row
+            .iter()
+            .map(|c| c.to_string().trim().to_string())
+            .collect();
         if row_vec.is_empty() {
             continue;
         }
@@ -67,7 +78,7 @@ pub fn parse_icici_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposi
                 let left_part = parts.0;
                 let acc_no = left_part.split(' ').next().unwrap_or(left_part);
                 statement.masked_acc_number = mask_account_number(acc_no.trim());
-                
+
                 let holder = Holder {
                     name: parts.1.trim().to_string(),
                     ..Default::default()
@@ -85,13 +96,13 @@ pub fn parse_icici_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposi
             if row_vec[0].starts_with("Legends Used in Account Statement") {
                 break;
             }
-            
+
             if row_vec[0].is_empty() {
                 let has_data = row_vec.iter().any(|c| !c.is_empty());
                 if !has_data {
                     continue;
                 }
-                
+
                 // Handle multi-line narration
                 if row_vec.len() >= 5 && !row_vec[4].is_empty() {
                     if let Some(last_tx) = parsed_transactions.last_mut() {
@@ -107,7 +118,7 @@ pub fn parse_icici_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposi
                 if row_vec[1].is_empty() {
                     continue;
                 }
-                
+
                 let _value_date_str = &row_vec[1];
                 let date_str = &row_vec[2];
                 let ref_num = &row_vec[3];
@@ -115,7 +126,7 @@ pub fn parse_icici_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposi
                 let withdrawal_str = row_vec[5].replace(",", "");
                 let deposit_str = row_vec[6].replace(",", "");
                 let balance_str = row_vec[7].replace(",", "");
-                
+
                 if date_str.is_empty() && desc.is_empty() {
                     continue; // Skip empty rows
                 }
@@ -124,7 +135,7 @@ pub fn parse_icici_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposi
                 let iso_date = crate::models::parse_indian_date(date_str);
                 let parsed_date = NaiveDate::parse_from_str(&iso_date, "%Y-%m-%d")
                     .unwrap_or_else(|_| NaiveDate::from_ymd_opt(1970, 1, 1).unwrap());
-                    
+
                 let withdrawal: Decimal = withdrawal_str.parse().unwrap_or(Decimal::from(0));
                 let deposit: Decimal = deposit_str.parse().unwrap_or(Decimal::from(0));
                 let balance: Decimal = balance_str.parse().unwrap_or(Decimal::from(0));
@@ -149,43 +160,58 @@ pub fn parse_icici_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposi
                 };
 
                 parsed_transactions.push(Transaction {
-                    transaction_timestamp: Some(Utc.from_utc_datetime(&parsed_date.and_hms_opt(0, 0, 0).unwrap())),
+                    transaction_timestamp: Some(
+                        Utc.from_utc_datetime(&parsed_date.and_hms_opt(0, 0, 0).unwrap()),
+                    ),
                     value_date: Some(parsed_date),
                     narration: desc.to_string(),
-                    reference: if ref_num.is_empty() { None } else { Some(ref_num.to_string()) },
+                    reference: if ref_num.is_empty() {
+                        None
+                    } else {
+                        Some(ref_num.to_string())
+                    },
                     r#type: tx_type,
                     amount,
                     mode,
                     current_balance: balance,
                     txn_id: None,
                 });
-                
-                if !date_only_paths.contains(&"transactions.transaction.transactionTimestamp".to_string()) {
-                    date_only_paths.push("transactions.transaction.transactionTimestamp".to_string());
+
+                if !date_only_paths
+                    .contains(&"transactions.transaction.transactionTimestamp".to_string())
+                {
+                    date_only_paths
+                        .push("transactions.transaction.transactionTimestamp".to_string());
                 }
             }
         }
     }
-    
+
     let mut summary = Summary::default();
 
     // Set opening and closing balance
     if let Some(first) = parsed_transactions.first() {
         if first.r#type == TransactionType::Credit {
             let ob = first.current_balance - first.amount;
-            summary.xfina = Some(XfinaSummary { opening_balance: Some(ob), ..Default::default() });
+            summary.xfina = Some(XfinaSummary {
+                opening_balance: Some(ob),
+                ..Default::default()
+            });
         } else {
             let ob = first.current_balance + first.amount;
-            summary.xfina = Some(XfinaSummary { opening_balance: Some(ob), ..Default::default() });
+            summary.xfina = Some(XfinaSummary {
+                opening_balance: Some(ob),
+                ..Default::default()
+            });
         }
     }
-    
+
     if let Some(last) = parsed_transactions.last() {
         summary.current_balance = last.current_balance;
     }
-    
+
     let mut transactions_obj = Transactions::default();
-    
+
     // Set statement period from transactions if available
     if let Some(first) = parsed_transactions.first() {
         transactions_obj.start_date = first.value_date;
@@ -193,43 +219,67 @@ pub fn parse_icici_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposi
     if let Some(last) = parsed_transactions.last() {
         transactions_obj.end_date = last.value_date;
     }
-    
+
     transactions_obj.transaction = parsed_transactions;
 
     let profile = Profile {
         holders: Holders {
-            r#type: if holders.len() > 1 { HoldersType::Joint } else { HoldersType::Single },
+            r#type: if holders.len() > 1 {
+                HoldersType::Joint
+            } else {
+                HoldersType::Single
+            },
             holder: holders,
-        }
+        },
     };
-    
+
     let mut validation = ValidationReport::empty();
 
     if let Some(ob) = summary.xfina.as_ref().and_then(|x| x.opening_balance) {
         let row_tuples: Vec<(bool, Decimal, Decimal, String)> = transactions_obj
             .transaction
             .iter()
-            .map(|t| (t.r#type == TransactionType::Credit, t.amount, t.current_balance, t.narration.clone()))
+            .map(|t| {
+                (
+                    t.r#type == TransactionType::Credit,
+                    t.amount,
+                    t.current_balance,
+                    t.narration.clone(),
+                )
+            })
             .collect();
         validation.row_level = check_row_balances(ob, &row_tuples);
     }
-    
+
     // Derived check: opening + credits - debits = closing
-    if let (Some(ob), cb) = (summary.xfina.as_ref().and_then(|x| x.opening_balance), summary.current_balance) {
-        let credits: Decimal = transactions_obj.transaction.iter().filter(|t| t.r#type == TransactionType::Credit).map(|t| t.amount).sum();
-        let debits: Decimal = transactions_obj.transaction.iter().filter(|t| t.r#type == TransactionType::Debit).map(|t| t.amount).sum();
-        
+    if let (Some(ob), cb) = (
+        summary.xfina.as_ref().and_then(|x| x.opening_balance),
+        summary.current_balance,
+    ) {
+        let credits: Decimal = transactions_obj
+            .transaction
+            .iter()
+            .filter(|t| t.r#type == TransactionType::Credit)
+            .map(|t| t.amount)
+            .sum();
+        let debits: Decimal = transactions_obj
+            .transaction
+            .iter()
+            .filter(|t| t.r#type == TransactionType::Debit)
+            .map(|t| t.amount)
+            .sum();
+
         validation.summary_level.checks.push(SummaryCheck::derived(
             "computed_closing_balance",
             cb,
             ob + credits - debits,
-            None
+            None,
         ));
     }
 
     validation.summary_level.passed = validation.summary_level.checks.iter().all(|c| c.passed);
     validation.finalize();
-    
+
     statement.profile = Some(profile);
     statement.summary = Some(summary);
     statement.transactions = Some(transactions_obj);
@@ -238,9 +288,14 @@ pub fn parse_icici_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposi
     }
     statement.xfina = Some(xfina_account);
 
-    Ok(ParseResult { data: statement, validation })
+    Ok(ParseResult {
+        data: statement,
+        validation,
+    })
 }
 
-pub fn parse_icici_bank_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
+pub fn parse_icici_bank_statement<'a>(
+    input: ParseRequest<'a>,
+) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
     parse_icici_xls(input)
 }

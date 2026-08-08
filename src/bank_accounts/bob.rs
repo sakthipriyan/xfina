@@ -1,21 +1,30 @@
-use calamine::{Reader, open_workbook_auto_from_rs};
-use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc, FixedOffset};
-use std::io::Cursor;
-use rust_decimal::Decimal;
-use crate::models::deposit::{DepositAccount, Transaction, XfinaDepositAccount, XfinaSummary, Profile, Holders, Holder, Summary, Transactions, HoldersType, TransactionType, TransactionMode, FiType, HoldingNominee, XfinaHolder};
+use crate::models::deposit::{
+    DepositAccount, FiType, Holder, Holders, HoldersType, HoldingNominee, Profile, Summary,
+    Transaction, TransactionMode, TransactionType, Transactions, XfinaDepositAccount, XfinaHolder,
+    XfinaSummary,
+};
 use crate::models::mask_account_number;
-use crate::models::validation::{ParseResult, ValidationReport, check_row_balances};
+use crate::models::validation::{check_row_balances, ParseResult, ValidationReport};
+use calamine::{open_workbook_auto_from_rs, Reader};
+use chrono::{FixedOffset, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use regex::Regex;
+use rust_decimal::Decimal;
+use std::io::Cursor;
 
 use crate::models::request::ParseRequest;
 
-pub fn parse_bob_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
+pub fn parse_bob_xls<'a>(
+    input: ParseRequest<'a>,
+) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
     let bytes = input.content;
     let cursor = Cursor::new(bytes);
-    let mut workbook = open_workbook_auto_from_rs(cursor).map_err(|e| format!("Failed to open workbook: {:?}", e))?;
+    let mut workbook = open_workbook_auto_from_rs(cursor)
+        .map_err(|e| format!("Failed to open workbook: {:?}", e))?;
     let sheet_names = workbook.sheet_names().to_owned();
     let sheet_name = sheet_names.first().ok_or("No sheets found in workbook")?;
-    let sheet = workbook.worksheet_range(sheet_name).map_err(|e| format!("Failed to read sheet: {:?}", e))?;
+    let sheet = workbook
+        .worksheet_range(sheet_name)
+        .map_err(|e| format!("Failed to read sheet: {:?}", e))?;
 
     let mut statement = DepositAccount {
         r#type: FiType::Deposit,
@@ -27,7 +36,7 @@ pub fn parse_bob_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositA
         institution_name: Some("Bank of Baroda".to_string()),
         ..Default::default()
     };
-    
+
     let mut account_number = String::new();
     let mut ifsc_code = String::new();
     let mut micr_code = String::new();
@@ -37,30 +46,33 @@ pub fn parse_bob_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositA
     let mut customer_id = String::new();
     let mut nominee = String::new();
     let mut account_product = String::new();
-    
+
     let re_prod = Regex::new(r"Statement of transactions in\s+(.*?)\s+\d+").unwrap();
-    
+
     let mut start_date: Option<NaiveDate> = None;
     let mut end_date: Option<NaiveDate> = None;
     let mut generated_date: Option<NaiveDate> = None;
     let mut generated_date_time: Option<NaiveDateTime> = None;
-    
+
     let mut parsed_transactions = Vec::new();
     let _transactions_obj = Transactions::default();
     let mut xfina_summary = XfinaSummary::default();
-    
+
     let mut date_only_paths = Vec::new();
 
     let mut in_transactions = false;
 
     for (row_idx, row) in sheet.rows().enumerate() {
-        let row_vec: Vec<String> = row.iter().map(|c| c.to_string().replace("\u{0}", "").trim().to_string()).collect();
+        let row_vec: Vec<String> = row
+            .iter()
+            .map(|c| c.to_string().replace("\u{0}", "").trim().to_string())
+            .collect();
         if row_vec.is_empty() {
             continue;
         }
-        
+
         let first_col = row_vec[0].trim();
-        
+
         // Extract Metadata
         if first_col.starts_with("Customer Id:") {
             if row_vec.len() > 4 {
@@ -86,9 +98,12 @@ pub fn parse_bob_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositA
             }
             if row_vec.len() > 20 {
                 let nom_str = row_vec[20].trim();
-                if nom_str.eq_ignore_ascii_case("Yes") || nom_str.eq_ignore_ascii_case("Registered") {
+                if nom_str.eq_ignore_ascii_case("Yes") || nom_str.eq_ignore_ascii_case("Registered")
+                {
                     nominee = "REGISTERED".to_string();
-                } else if nom_str.eq_ignore_ascii_case("No") || nom_str.eq_ignore_ascii_case("Not Registered") {
+                } else if nom_str.eq_ignore_ascii_case("No")
+                    || nom_str.eq_ignore_ascii_case("Not Registered")
+                {
                     nominee = "NOT_REGISTERED".to_string();
                 }
             }
@@ -101,7 +116,10 @@ pub fn parse_bob_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositA
             if parts.len() > 1 {
                 generated_date = NaiveDate::parse_from_str(parts[1].trim(), "%d/%m/%Y").ok();
             }
-            if let Some(idx) = row_vec.iter().position(|s| s.starts_with("Statement Period from")) {
+            if let Some(idx) = row_vec
+                .iter()
+                .position(|s| s.starts_with("Statement Period from"))
+            {
                 let period_str = &row_vec[idx];
                 let p_parts: Vec<&str> = period_str.split("from").collect();
                 if p_parts.len() > 1 {
@@ -120,28 +138,28 @@ pub fn parse_bob_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositA
                 let base_date = NaiveDate::from_ymd_opt(1899, 12, 30).unwrap();
                 if let Some(date) = base_date.checked_add_signed(chrono::Duration::days(days)) {
                     if let Some(dt) = date.and_hms_opt(0, 0, 0) {
-                        if let Some(dt_with_time) = dt.checked_add_signed(chrono::Duration::seconds(seconds)) {
+                        if let Some(dt_with_time) =
+                            dt.checked_add_signed(chrono::Duration::seconds(seconds))
+                        {
                             generated_date_time = Some(dt_with_time);
                         }
                     }
                 }
             }
         }
-        
+
         // Sometimes Name is at row 12 or 1
-        if row_idx == 0 && row_vec.len() > 13
-             && row_vec[1].contains("Holder Name") {
-                 let parts: Vec<&str> = row_vec[1].split(':').collect();
-                 if parts.len() > 1 {
-                     name = parts[1].trim().to_string();
-                 }
-             }
-        if row_idx == 1 && row_vec.len() > 13
-            && !row_vec[13].is_empty() {
-                address = row_vec[13].replace('\n', ", ").trim().to_string();
+        if row_idx == 0 && row_vec.len() > 13 && row_vec[1].contains("Holder Name") {
+            let parts: Vec<&str> = row_vec[1].split(':').collect();
+            if parts.len() > 1 {
+                name = parts[1].trim().to_string();
             }
+        }
+        if row_idx == 1 && row_vec.len() > 13 && !row_vec[13].is_empty() {
+            address = row_vec[13].replace('\n', ", ").trim().to_string();
+        }
         if row_idx == 9 && first_col.len() > 5 {
-             name = first_col.to_string();
+            name = first_col.to_string();
         }
 
         // Transaction block marker
@@ -154,30 +172,50 @@ pub fn parse_bob_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositA
             if first_col.is_empty() {
                 continue;
             }
-            
+
             // Check for end of transactions (e.g. "This is computer-generated statement")
             if first_col.contains("This is computer-generated") || first_col.contains("Page") {
                 continue;
             }
-            
+
             // ReBIT date format: DD/MM/YYYY to ISO (YYYY-MM-DD)
             let date_str = first_col;
             let date_parts: Vec<&str> = date_str.split(' ').collect();
             let date_only = date_parts[0];
-            
+
             let date = NaiveDate::parse_from_str(date_only, "%d/%m/%Y").ok();
-            
-            let val_date_str = if row_vec.len() > 2 { row_vec[2].trim() } else { "" };
+
+            let val_date_str = if row_vec.len() > 2 {
+                row_vec[2].trim()
+            } else {
+                ""
+            };
             let value_date = NaiveDate::parse_from_str(val_date_str, "%d/%m/%Y").ok();
-            
-            let narration = if row_vec.len() > 5 { row_vec[5].trim().to_string() } else { String::new() };
+
+            let narration = if row_vec.len() > 5 {
+                row_vec[5].trim().to_string()
+            } else {
+                String::new()
+            };
             if narration.is_empty() && date.is_none() {
                 continue; // Skip footer noise
             }
 
-            let debit_str = if row_vec.len() > 11 { row_vec[11].trim() } else { "" };
-            let credit_str = if row_vec.len() > 17 { row_vec[17].trim() } else { "" };
-            let balance_str = if row_vec.len() > 24 { row_vec[24].trim() } else { "" };
+            let debit_str = if row_vec.len() > 11 {
+                row_vec[11].trim()
+            } else {
+                ""
+            };
+            let credit_str = if row_vec.len() > 17 {
+                row_vec[17].trim()
+            } else {
+                ""
+            };
+            let balance_str = if row_vec.len() > 24 {
+                row_vec[24].trim()
+            } else {
+                ""
+            };
 
             let parse_amt = |s: &str| -> Option<Decimal> {
                 let clean = s.replace(",", "").replace("Cr", "").replace("Dr", "");
@@ -191,7 +229,7 @@ pub fn parse_bob_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositA
             } else {
                 continue; // If both empty, maybe a continuation row, but BoB usually fits in one row.
             };
-            
+
             let desc_upper = narration.to_uppercase();
             let mode = if desc_upper.contains("UPI") {
                 Some(TransactionMode::Upi)
@@ -202,7 +240,7 @@ pub fn parse_bob_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositA
             } else {
                 None
             };
-            
+
             let mut current_balance = Decimal::from(0);
             if let Some(bal) = parse_amt(balance_str) {
                 current_balance = bal;
@@ -211,8 +249,11 @@ pub fn parse_bob_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositA
             if let Some(dt) = date {
                 let ist_offset = FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
                 let txn_dt = dt.and_hms_opt(0, 0, 0).unwrap();
-                let txn_timestamp = ist_offset.from_local_datetime(&txn_dt).single().map(|d| d.with_timezone(&Utc));
-                
+                let txn_timestamp = ist_offset
+                    .from_local_datetime(&txn_dt)
+                    .single()
+                    .map(|d| d.with_timezone(&Utc));
+
                 let tx = Transaction {
                     txn_id: None,
                     transaction_timestamp: txn_timestamp,
@@ -225,9 +266,12 @@ pub fn parse_bob_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositA
                     mode,
                 };
                 parsed_transactions.push(tx);
-                
-                if !date_only_paths.contains(&"transactions.transaction.transactionTimestamp".to_string()) {
-                    date_only_paths.push("transactions.transaction.transactionTimestamp".to_string());
+
+                if !date_only_paths
+                    .contains(&"transactions.transaction.transactionTimestamp".to_string())
+                {
+                    date_only_paths
+                        .push("transactions.transaction.transactionTimestamp".to_string());
                 }
             }
         }
@@ -237,13 +281,17 @@ pub fn parse_bob_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositA
 
     let mut summary = Summary::default();
     if let Some(first) = parsed_transactions.first() {
-        let ob = if first.r#type == TransactionType::Credit { first.current_balance - first.amount } else { first.current_balance + first.amount };
+        let ob = if first.r#type == TransactionType::Credit {
+            first.current_balance - first.amount
+        } else {
+            first.current_balance + first.amount
+        };
         xfina_summary.opening_balance = Some(ob);
     }
     if let Some(last) = parsed_transactions.last() {
         summary.current_balance = last.current_balance;
     }
-    
+
     if !branch_name.is_empty() {
         summary.branch = Some(branch_name);
     }
@@ -257,11 +305,11 @@ pub fn parse_bob_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositA
     if !account_number.is_empty() {
         statement.masked_acc_number = mask_account_number(&account_number);
     }
-    
+
     if !account_product.is_empty() {
         xfina_summary.account_product = Some(account_product);
     }
-    
+
     // Always assign xfina_summary back to summary.xfina as it contains at least defaults/opening balance
     summary.xfina = Some(xfina_summary);
     let transactions_obj = Transactions {
@@ -273,15 +321,21 @@ pub fn parse_bob_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositA
 
     let ist_offset = FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
     if let Some(dt) = generated_date_time {
-        xfina_account.generated_date = ist_offset.from_local_datetime(&dt).single().map(|d| d.with_timezone(&Utc));
+        xfina_account.generated_date = ist_offset
+            .from_local_datetime(&dt)
+            .single()
+            .map(|d| d.with_timezone(&Utc));
     } else if let Some(d) = generated_date {
         let dt = d.and_hms_opt(0, 0, 0).unwrap();
-        xfina_account.generated_date = ist_offset.from_local_datetime(&dt).single().map(|d| d.with_timezone(&Utc));
+        xfina_account.generated_date = ist_offset
+            .from_local_datetime(&dt)
+            .single()
+            .map(|d| d.with_timezone(&Utc));
         if !date_only_paths.contains(&"xfina.generatedDate".to_string()) {
             date_only_paths.push("xfina.generatedDate".to_string());
         }
     }
-    
+
     let mut holder = Holder {
         name,
         ..Default::default()
@@ -294,56 +348,106 @@ pub fn parse_bob_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositA
     } else if nominee == "NOT_REGISTERED" {
         holder.nominee = Some(HoldingNominee::NotRegistered);
     }
-    
+
     let mut xfina_holder = XfinaHolder::default();
     if !customer_id.is_empty() {
         xfina_holder.customer_id = Some(customer_id);
     }
     holder.xfina = Some(xfina_holder);
-    
+
     let holders = vec![holder];
-    
+
     let profile = Profile {
         holders: Holders {
             r#type: HoldersType::Single,
             holder: holders,
-        }
+        },
     };
 
     statement.profile = Some(profile);
     statement.summary = Some(summary);
     statement.transactions = Some(transactions_obj);
-    
+
     if !date_only_paths.is_empty() {
         xfina_account.date_only_paths = Some(date_only_paths);
     }
     statement.xfina = Some(xfina_account);
 
     let mut validation = ValidationReport::empty();
-    
-    if let Some(ob) = statement.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.opening_balance) {
-        let row_tuples: Vec<(bool, rust_decimal::Decimal, rust_decimal::Decimal, String)> = statement.transactions.as_ref().unwrap().transaction
-            .iter()
-            .map(|t| (t.r#type == crate::models::deposit::TransactionType::Credit, t.amount, t.current_balance, t.narration.clone()))
-            .collect();
+
+    if let Some(ob) = statement
+        .summary
+        .as_ref()
+        .and_then(|s| s.xfina.as_ref())
+        .and_then(|x| x.opening_balance)
+    {
+        let row_tuples: Vec<(bool, rust_decimal::Decimal, rust_decimal::Decimal, String)> =
+            statement
+                .transactions
+                .as_ref()
+                .unwrap()
+                .transaction
+                .iter()
+                .map(|t| {
+                    (
+                        t.r#type == crate::models::deposit::TransactionType::Credit,
+                        t.amount,
+                        t.current_balance,
+                        t.narration.clone(),
+                    )
+                })
+                .collect();
         validation.row_level = check_row_balances(ob, &row_tuples);
     }
-    
+
     // Derived check: opening + credits - debits = closing
-    if let (Some(ob), cb) = (statement.summary.as_ref().and_then(|x| x.xfina.as_ref()).and_then(|x| x.opening_balance), statement.summary.as_ref().map(|s| s.current_balance).unwrap_or(rust_decimal::Decimal::ZERO)) {
-        let credits: rust_decimal::Decimal = statement.transactions.as_ref().unwrap().transaction.iter().filter(|t| t.r#type == crate::models::deposit::TransactionType::Credit).map(|t| t.amount).sum();
-        let debits: rust_decimal::Decimal = statement.transactions.as_ref().unwrap().transaction.iter().filter(|t| t.r#type == crate::models::deposit::TransactionType::Debit).map(|t| t.amount).sum();
-        
-        validation.summary_level.checks.push(crate::models::validation::SummaryCheck::derived(
-            "computed_closing_balance",
-            cb,
-            ob + credits - debits,
-            None
-        ));
+    if let (Some(ob), cb) = (
+        statement
+            .summary
+            .as_ref()
+            .and_then(|x| x.xfina.as_ref())
+            .and_then(|x| x.opening_balance),
+        statement
+            .summary
+            .as_ref()
+            .map(|s| s.current_balance)
+            .unwrap_or(rust_decimal::Decimal::ZERO),
+    ) {
+        let credits: rust_decimal::Decimal = statement
+            .transactions
+            .as_ref()
+            .unwrap()
+            .transaction
+            .iter()
+            .filter(|t| t.r#type == crate::models::deposit::TransactionType::Credit)
+            .map(|t| t.amount)
+            .sum();
+        let debits: rust_decimal::Decimal = statement
+            .transactions
+            .as_ref()
+            .unwrap()
+            .transaction
+            .iter()
+            .filter(|t| t.r#type == crate::models::deposit::TransactionType::Debit)
+            .map(|t| t.amount)
+            .sum();
+
+        validation
+            .summary_level
+            .checks
+            .push(crate::models::validation::SummaryCheck::derived(
+                "computed_closing_balance",
+                cb,
+                ob + credits - debits,
+                None,
+            ));
     }
-    
+
     validation.summary_level.passed = validation.summary_level.checks.iter().all(|c| c.passed);
     validation.finalize();
 
-    Ok(ParseResult { data: statement, validation })
+    Ok(ParseResult {
+        data: statement,
+        validation,
+    })
 }

@@ -1,6 +1,6 @@
-use chrono::{DateTime, Utc, NaiveDate};
-use serde::{Deserialize, Serialize};
+use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
+use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
 // -----------------------------------------------------------------------------
@@ -86,7 +86,7 @@ pub struct DepositAccount {
     pub profile: Option<Profile>,
     pub summary: Option<Summary>,
     pub transactions: Option<Transactions>,
-    
+
     // Xfina Extension
     pub xfina: Option<XfinaDepositAccount>,
 }
@@ -100,7 +100,9 @@ impl DepositAccount {
 
     pub fn to_rebit_json(&self) -> serde_json::Value {
         let mut val = serde_json::to_value(self).unwrap();
-        let paths = self.xfina.as_ref()
+        let paths = self
+            .xfina
+            .as_ref()
             .and_then(|x| x.date_only_paths.clone())
             .unwrap_or_default();
         crate::models::serializer::transform_to_rebit(&mut val, &paths, "".to_string());
@@ -139,7 +141,7 @@ pub struct Summary {
     #[serde(with = "rust_decimal::serde::float_option", default)]
     pub drawing_limit: Option<Decimal>,
     pub status: Option<StatusTypes>,
-    
+
     // Xfina Extension
     pub xfina: Option<XfinaSummary>,
 }
@@ -175,7 +177,7 @@ pub struct Holder {
     pub email: Option<String>,
     pub pan: Option<String>,
     pub ckyc_compliance: Option<bool>,
-    
+
     // Xfina Extension
     pub xfina: Option<XfinaHolder>,
 }
@@ -187,7 +189,7 @@ pub struct Transactions {
     pub start_date: Option<NaiveDate>,
     pub end_date: Option<NaiveDate>,
     pub transaction: Vec<Transaction>,
-    
+
     // Xfina Extension
     pub xfina: Option<XfinaTransactions>,
 }
@@ -230,7 +232,6 @@ pub struct XfinaDepositAccount {
     pub date_only_paths: Option<Vec<String>>,
 }
 
-
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -243,8 +244,7 @@ pub struct XfinaSummary {
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct XfinaTransactions {
-}
+pub struct XfinaTransactions {}
 
 // -----------------------------------------------------------------------------
 // Implementations
@@ -291,12 +291,19 @@ impl DepositAccount {
             })
             .unwrap_or_else(|| Decimal::from(0))
     }
-    
+
     pub fn verify_running_balance(&self) -> Result<(), crate::error::XfinaError> {
         let summary = self.summary.as_ref().ok_or("No summary available")?;
-        let transactions = self.transactions.as_ref().ok_or("No transactions available")?;
-        let mut expected_balance = summary.xfina.as_ref().and_then(|x| x.opening_balance).unwrap_or(Decimal::from(0));
-        
+        let transactions = self
+            .transactions
+            .as_ref()
+            .ok_or("No transactions available")?;
+        let mut expected_balance = summary
+            .xfina
+            .as_ref()
+            .and_then(|x| x.opening_balance)
+            .unwrap_or(Decimal::from(0));
+
         for txn in &transactions.transaction {
             if txn.r#type == TransactionType::Credit {
                 expected_balance += txn.amount;
@@ -304,14 +311,20 @@ impl DepositAccount {
                 expected_balance -= txn.amount;
             }
             if expected_balance != txn.current_balance {
-                return Err(crate::error::XfinaError::from(format!("Balance mismatch after txn {}: expected {}, got {}", txn.narration, expected_balance, txn.current_balance)));
+                return Err(crate::error::XfinaError::from(format!(
+                    "Balance mismatch after txn {}: expected {}, got {}",
+                    txn.narration, expected_balance, txn.current_balance
+                )));
             }
         }
-        
+
         if expected_balance != summary.current_balance {
-            return Err(crate::error::XfinaError::from(format!("Final balance mismatch: expected {}, got {}", expected_balance, summary.current_balance)));
+            return Err(crate::error::XfinaError::from(format!(
+                "Final balance mismatch: expected {}, got {}",
+                expected_balance, summary.current_balance
+            )));
         }
-        
+
         Ok(())
     }
 }

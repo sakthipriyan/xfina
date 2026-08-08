@@ -144,11 +144,11 @@ pub struct MutualFundsAccount {
     pub masked_acc_number: String,
     pub version: String,
     pub linked_acc_ref: String,
-    
+
     pub profile: Option<MfProfile>,
     pub summary: Option<MfSummary>,
     pub transactions: Option<MfTransactions>,
-    
+
     // Xfina Extension
     pub xfina: Option<XfinaMutualFundsAccount>,
 }
@@ -162,7 +162,9 @@ impl MutualFundsAccount {
 
     pub fn to_rebit_json(&self) -> serde_json::Value {
         let mut val = serde_json::to_value(self).unwrap();
-        let paths = self.xfina.as_ref()
+        let paths = self
+            .xfina
+            .as_ref()
             .and_then(|x| x.date_only_paths.clone())
             .unwrap_or_default();
         crate::models::serializer::transform_to_rebit(&mut val, &paths, "".to_string());
@@ -209,7 +211,7 @@ pub struct MfSummary {
     pub investment_value: Decimal,
     #[serde(with = "rust_decimal::serde::float")]
     pub current_value: Decimal,
-    
+
     pub investment: MfInvestment,
 }
 
@@ -241,7 +243,7 @@ pub struct MfHolding {
     pub dividend_type: Option<String>,
     pub fatca_status: Option<String>,
     pub mode: Option<MfHoldingMode>,
-    
+
     #[serde(with = "rust_decimal::serde::float")]
     pub units: Decimal,
     #[serde(with = "rust_decimal::serde::float")]
@@ -284,7 +286,7 @@ pub struct MfTransaction {
     pub scheme_types: Option<SchemeTypes>,
     pub scheme_category: Option<SchemeCategory>,
     pub ucc: Option<String>,
-    
+
     #[serde(with = "rust_decimal::serde::float")]
     pub amount: Decimal,
     #[serde(with = "rust_decimal::serde::float")]
@@ -293,25 +295,24 @@ pub struct MfTransaction {
     pub lien_units: Decimal,
     #[serde(with = "rust_decimal::serde::float")]
     pub nav: Decimal,
-    
+
     pub nav_date: Option<NaiveDate>,
-    
+
     #[serde(rename = "type")]
     pub r#type: Option<MfTransactionType>,
-    
+
     pub order_date: Option<NaiveDate>,
     pub execution_date: Option<NaiveDate>,
-    
+
     pub lock_in_flag: Option<String>,
     pub lock_in_days: Option<String>,
-    
+
     pub mode: Option<MfHoldingMode>,
     pub narration: Option<String>,
 
     // Xfina Extension
     pub xfina: Option<XfinaMutualFundsTransaction>,
 }
-
 
 // -----------------------------------------------------------------------------
 // Xfina Custom Structs
@@ -361,18 +362,18 @@ pub struct XfinaMutualFundsHolding {
     pub current_value: Decimal,
     #[serde(with = "rust_decimal::serde::float")]
     pub unrealized_pl: Decimal,
-    
+
     #[serde(with = "rust_decimal::serde::float")]
     pub period_buy_units: Decimal,
     #[serde(with = "rust_decimal::serde::float")]
     pub period_sell_units: Decimal,
-    
+
     pub period_buy_count: u32,
     pub period_sell_count: u32,
-    
+
     #[serde(with = "rust_decimal::serde::float")]
     pub opening_balance: Decimal,
-    
+
     pub nav_date: Option<NaiveDate>,
 
     pub nominees: Option<Vec<String>>,
@@ -387,16 +388,16 @@ pub struct XfinaMutualFundsHolding {
 pub struct XfinaMutualFundsTransaction {
     #[serde(with = "rust_decimal::serde::float")]
     pub units: Decimal,
-    
+
     #[serde(with = "rust_decimal::serde::float")]
     pub fees: Decimal,
-    
+
     pub transaction_date_time: Option<DateTime<Utc>>,
 
     pub transaction_category: Option<XfinaTransactionCategory>,
-    
+
     #[serde(with = "rust_decimal::serde::float_option", default)]
     pub dividend_rate: Option<Decimal>,
-    
+
     pub folio_no: Option<String>,
 }
