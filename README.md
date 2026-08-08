@@ -181,16 +181,23 @@ xfina = "0.1"
 
 ```rust
 use xfina::bank_accounts::hdfc::parse_hdfc_bank_statement;
+use xfina::models::request::ParseRequest;
 
 fn main() {
     let bytes = std::fs::read("hdfc_statement.xls").unwrap();
     
+    // Create a ParseRequest
+    let req = ParseRequest::new(&bytes);
+
     // Parse the statement
-    let statement = parse_hdfc_bank_statement(&bytes, None).unwrap();
+    let result = parse_hdfc_bank_statement(req).unwrap();
     
-    // Convert to JSON (choose either strict ReBIT or extended Xfina format)
-    let json = statement.to_xfina_json();
-    println!("{}", serde_json::to_string_pretty(&json).unwrap());
+    // The result contains both the validation report and the financial data
+    println!("Validation status: {:?}", result.validation.overall);
+
+    // Convert the data to JSON (choose either strict ReBIT or extended Xfina format)
+    let json_data = result.data.to_xfina_json();
+    println!("{}", serde_json::to_string_pretty(&json_data).unwrap());
 }
 ```
 

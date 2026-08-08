@@ -30,9 +30,11 @@ with open("hdfc_statement.xls", "rb") as f:
 # Parse it! 
 # The second argument is an optional password (None for Excel)
 # The format parameter defaults to "xfina" if omitted, but can be "rebit"
-account_data = xfina.parse_hdfc_ba(file_bytes, password=None, format="xfina")
+result = xfina.parse_hdfc_ba(file_bytes, password=None, format="xfina")
 
-print(f"Account Name: {account_data['profile']['holders']['holder'][0]['name']}")
+# The returned dictionary contains both the validation report and the financial data
+print(f"Validation Status: {result['validation']['overall']}")
+print(f"Account Name: {result['data']['profile']['holders']['holder'][0]['name']}")
 ```
 
 ### Parsing a CAMS Mutual Fund Statement (PDF)
