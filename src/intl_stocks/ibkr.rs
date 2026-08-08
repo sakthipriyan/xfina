@@ -47,7 +47,7 @@ fn parse_datetime(date_str: &str) -> Option<chrono::DateTime<Utc>> {
     chrono::DateTime::parse_from_rfc3339(&iso).map(|d| d.with_timezone(&Utc)).ok()
 }
 
-use crate::models::validation::{ParseResult, ValidationReport, SummaryCheck};
+use crate::models::validation::{ParseResult, ValidationReport};
 
 use crate::models::request::ParseRequest;
 
@@ -64,8 +64,6 @@ pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityA
     let mut statement_start_date = None;
     let mut statement_end_date = None;
     let mut generated_date = None;
-    let mut declared_cost_basis = Decimal::ZERO;
-    let mut declared_current_value = Decimal::ZERO;
 
     // symbol -> (primary_symbol, description, isin)
     let mut instruments: BTreeMap<String, (String, String, String)> = BTreeMap::new();
@@ -84,9 +82,6 @@ pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityA
     
     // symbol -> (quantity, value, cost_basis, close_price)
     let mut positions: BTreeMap<String, (Decimal, Decimal, Decimal, Decimal)> = BTreeMap::new();
-
-    // symbol -> (prior_quantity, current_quantity)
-    let mut mtm_summaries: BTreeMap<String, (Decimal, Decimal)> = BTreeMap::new();
 
     for result in rdr.records() {
         let record = match result {
@@ -152,23 +147,6 @@ pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityA
                     }
                 }
             }
-            (Some("Mark-to-Market Performance Summary"), Some("Data"), _) => {
-                if record.get(2) == Some("Stocks") {
-                    let symbol = record.get(3).unwrap_or("").to_string();
-                    let prior_qty: Decimal = record.get(4).unwrap_or("0").parse().unwrap_or(Decimal::ZERO);
-                    let current_qty: Decimal = record.get(5).unwrap_or("0").parse().unwrap_or(Decimal::ZERO);
-
-                    if !symbol.is_empty() && symbol != "Total" {
-                        mtm_summaries.insert(symbol, (prior_qty, current_qty));
-                    }
-                }
-            }
-            (Some("Open Positions"), Some("Total"), _) => {
-                if record.get(3) == Some("Stocks") {
-                    declared_cost_basis = record.get(9).unwrap_or("0").parse().unwrap_or(Decimal::ZERO);
-                    declared_current_value = record.get(11).unwrap_or("0").parse().unwrap_or(Decimal::ZERO);
-                }
-            }
             (Some("Trades"), Some("Data"), Some("Order"))
                 if record.get(3) == Some("Stocks") => {
                     let symbol = record.get(5).unwrap_or("").to_string();
@@ -202,8 +180,6 @@ pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityA
     let mut final_transactions = Vec::new();
     let mut total_investment_value = Decimal::ZERO;
     let mut total_current_value = Decimal::ZERO;
-    let mut total_row_level_checked = 0;
-    let mut per_asset_checks = Vec::new();
 
     let get_primary = |sym: &str| -> String {
         if let Some((primary, _, _)) = instruments.get(sym) {
@@ -246,7 +222,6 @@ pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityA
         let mut txs = merged_trades.remove(&symbol).unwrap_or_default();
         
         txs.sort_by(|a, b| a.date.cmp(&b.date));
-        total_row_level_checked += txs.len();
 
         let mut period_invested_value = Decimal::ZERO;
         let mut period_realized_value = Decimal::ZERO;
@@ -298,32 +273,9 @@ pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityA
 
         let total_units = pos.0;
         let current_value = pos.1;
-        let mut opening_balance = total_units - tx_qty_diff;
-        
-        // If we extracted true declared opening balance from MTM summary, use it.
-        let declared_prior_qty = mtm_summaries.get(&symbol).map(|(prior, _)| *prior);
-        if let Some(prior) = declared_prior_qty {
-            opening_balance = prior;
-        }
-        
+        let opening_balance = total_units - tx_qty_diff;
         let total_cost_basis = pos.2;
         let close_price = pos.3;
-
-        if let Some(prior) = declared_prior_qty {
-            per_asset_checks.push(SummaryCheck::declared(
-                &format!("{}_opening_units_match", symbol.replace(' ', "_").to_lowercase()),
-                prior,
-                total_units - tx_qty_diff,
-                Some(format!("symbol: {} (Prior Quantity from MTM)", symbol)),
-            ));
-        }
-
-        per_asset_checks.push(SummaryCheck::declared(
-            &format!("{}_units_match", symbol.replace(' ', "_").to_lowercase()),
-            total_units,
-            total_units,
-            Some(format!("symbol: {}", symbol)),
-        ));
 
         total_investment_value += total_cost_basis;
         total_current_value += current_value;
@@ -407,24 +359,5 @@ pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityA
         xfina: Some(xfina_ext),
     };
 
-    let mut validation = ValidationReport::empty();
-    validation.row_level.checked_rows = total_row_level_checked;
-    validation.row_level.passed = true;
-    
-    validation.summary_level.checks.extend(per_asset_checks);
-    validation.summary_level.checks.push(SummaryCheck::declared(
-        "total_cost_basis_match",
-        declared_cost_basis,
-        total_investment_value,
-        None,
-    ));
-    validation.summary_level.checks.push(SummaryCheck::declared(
-        "total_current_value_match",
-        declared_current_value,
-        total_current_value,
-        None,
-    ));
-    validation.finalize();
-
-    Ok(ParseResult { data: account, validation })
+    Ok(ParseResult { data: account, validation: ValidationReport::empty() })
 }

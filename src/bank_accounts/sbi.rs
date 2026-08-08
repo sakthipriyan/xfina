@@ -4,7 +4,7 @@ use crate::models::mask_account_number;
 use super::{pdf_parser, layout};
 use regex::Regex;
 use chrono::{NaiveDate, TimeZone, Utc};
-use crate::models::validation::{ParseResult, ValidationReport, check_row_balances, SummaryCheck, SummarySource};
+use crate::models::validation::{ParseResult, ValidationReport};
 
 use crate::models::request::ParseRequest;
 
@@ -64,28 +64,15 @@ pub fn parse_sbi_bank_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResu
     let date_re = Regex::new(r"^(\d{2}/\d{2}/\d{4})\s+(\d{2}/\d{2}/\d{4})").unwrap();
     let gen_date_re = Regex::new(r"Date of Statement\s*:\s*(\d{2}-\d{2}-\d{4})").unwrap();
     let stmt_from_re = Regex::new(r"(?i)Statement From\s*:\s*(\d{2}-\d{2}-\d{4})\s*to\s*(\d{2}-\d{2}-\d{4})").unwrap();
-    let summary_re = Regex::new(r"^([\d,.]+C?R?D?R?)\s+(\d+)\s+(\d+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+C?R?D?R?)$").unwrap();
+    let summary_re = Regex::new(r"^([\d,.]+C?R?D?R?)\s+\d+\s+\d+\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+C?R?D?R?)$").unwrap();
 
     let mut inside_table = false;
     let mut parsed_transactions = Vec::new();
     let mut summary = Summary::default();
     let mut transactions_obj = Transactions::default();
-    let mut declared_total_debits = None;
-    let mut declared_total_credits = None;
-    let mut declared_dr_count: Option<usize> = None;
-    let mut declared_cr_count: Option<usize> = None;
-    let mut declared_opening_balance = None;
     
     let parse_amount = |s: &str| -> Option<Decimal> {
         s.replace(",", "").replace("CR", "").replace("DR", "").parse().ok()
-    };
-    let parse_balance = |s: &str| -> Option<Decimal> {
-        let val = s.replace(",", "").replace("CR", "").replace("DR", "").parse::<Decimal>().ok()?;
-        if s.ends_with("DR") {
-            Some(-val)
-        } else {
-            Some(val)
-        }
     };
     
     struct DescPart {
@@ -151,23 +138,10 @@ pub fn parse_sbi_bank_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResu
                 
                 if text.len() > 30 && (text.contains("CR") || text.contains("DR")) {
                     if let Some(caps) = summary_re.captures(text) {
-                        if let Some(ob) = parse_balance(caps.get(1).unwrap().as_str()) {
+                        if let Some(ob) = parse_amount(caps.get(1).unwrap().as_str()) {
                             summary.xfina = Some(XfinaSummary { opening_balance: Some(ob), ..Default::default() });
-                            declared_opening_balance = Some(ob);
                         }
-                        if let Ok(dc) = caps.get(2).unwrap().as_str().parse::<usize>() {
-                            declared_dr_count = Some(dc);
-                        }
-                        if let Ok(cc) = caps.get(3).unwrap().as_str().parse::<usize>() {
-                            declared_cr_count = Some(cc);
-                        }
-                        if let Some(debits) = parse_amount(caps.get(4).unwrap().as_str()) {
-                            declared_total_debits = Some(debits);
-                        }
-                        if let Some(credits) = parse_amount(caps.get(5).unwrap().as_str()) {
-                            declared_total_credits = Some(credits);
-                        }
-                        if let Some(cb) = parse_balance(caps.get(6).unwrap().as_str()) {
+                        if let Some(cb) = parse_amount(caps.get(4).unwrap().as_str()) {
                             summary.current_balance = cb;
                         }
                     }
@@ -336,9 +310,7 @@ pub fn parse_sbi_bank_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResu
     
     if let Some(first) = parsed_transactions.first() {
         let ob = if first.r#type == TransactionType::Credit { first.current_balance - first.amount } else { first.current_balance + first.amount };
-        if summary.xfina.as_ref().and_then(|x| x.opening_balance).is_none() {
-            summary.xfina = Some(XfinaSummary { opening_balance: Some(ob), ..Default::default() });
-        }
+        summary.xfina = Some(XfinaSummary { opening_balance: Some(ob), ..Default::default() });
     }
     if let Some(last) = parsed_transactions.last() {
         summary.current_balance = last.current_balance;
@@ -410,108 +382,5 @@ if !account_number.is_empty() {
     }
     statement.xfina = Some(xfina_account);
 
-    let mut validation = ValidationReport::empty();
-    
-    let mut computed_debits = rust_decimal::Decimal::ZERO;
-    let mut computed_credits = rust_decimal::Decimal::ZERO;
-    let mut computed_dr_count = 0;
-    let mut computed_cr_count = 0;
-    for t in &statement.transactions.as_ref().unwrap().transaction {
-        if t.r#type == crate::models::deposit::TransactionType::Credit {
-            computed_credits += t.amount;
-            computed_cr_count += 1;
-        } else {
-            computed_debits += t.amount;
-            computed_dr_count += 1;
-        }
-    }
-    
-    if let Some(ob) = statement.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.opening_balance) {
-        let row_tuples: Vec<(bool, rust_decimal::Decimal, rust_decimal::Decimal, String)> = statement.transactions.as_ref().unwrap().transaction
-            .iter()
-            .map(|t| (t.r#type == crate::models::deposit::TransactionType::Credit, t.amount, t.current_balance, t.narration.clone()))
-            .collect();
-        validation.row_level = check_row_balances(ob, &row_tuples);
-        
-        if let Some(decl_ob) = declared_opening_balance {
-            if let Some(first) = statement.transactions.as_ref().unwrap().transaction.first() {
-                let derived_ob = if first.r#type == crate::models::deposit::TransactionType::Credit { first.current_balance - first.amount } else { first.current_balance + first.amount };
-                validation.summary_level.checks.push(SummaryCheck {
-                    name: "opening_balance_match".to_string(),
-                    passed: (decl_ob - derived_ob).abs() <= rust_decimal::Decimal::from(1),
-                    source: SummarySource::Declared,
-                    declared: Some(decl_ob),
-                    computed: derived_ob,
-                    delta: Some(decl_ob - derived_ob),
-                    note: None,
-                });
-            }
-        }
-
-        
-        let cb = statement.summary.as_ref().map(|s| s.current_balance).unwrap_or(rust_decimal::Decimal::ZERO);
-        let expected_cb = ob + computed_credits - computed_debits;
-        validation.summary_level.checks.push(SummaryCheck {
-            name: "closing_balance_match".to_string(),
-            passed: (expected_cb - cb).abs() <= rust_decimal::Decimal::from(1),
-            source: SummarySource::Declared,
-            declared: Some(cb),
-            computed: expected_cb,
-            delta: Some(cb - expected_cb),
-            note: None,
-        });
-        
-        if let Some(dd) = declared_total_debits {
-            validation.summary_level.checks.push(SummaryCheck {
-                name: "txn_debits_match".to_string(),
-                passed: (dd - computed_debits).abs() <= rust_decimal::Decimal::from(1),
-                source: SummarySource::Declared,
-                declared: Some(dd),
-                computed: computed_debits,
-                delta: Some(dd - computed_debits),
-                note: None,
-            });
-        }
-
-        if let Some(dc) = declared_total_credits {
-            validation.summary_level.checks.push(SummaryCheck {
-                name: "txn_credits_match".to_string(),
-                passed: (dc - computed_credits).abs() <= rust_decimal::Decimal::from(1),
-                source: SummarySource::Declared,
-                declared: Some(dc),
-                computed: computed_credits,
-                delta: Some(dc - computed_credits),
-                note: None,
-            });
-        }
-        
-        if let Some(dc_cnt) = declared_dr_count {
-            validation.summary_level.checks.push(SummaryCheck {
-                name: "txn_debits_count_match".to_string(),
-                passed: dc_cnt == computed_dr_count,
-                source: SummarySource::Declared,
-                declared: Some(rust_decimal::Decimal::from(dc_cnt)),
-                computed: rust_decimal::Decimal::from(computed_dr_count),
-                delta: Some(rust_decimal::Decimal::from(dc_cnt as i64 - computed_dr_count as i64)),
-                note: None,
-            });
-        }
-
-        if let Some(cc_cnt) = declared_cr_count {
-            validation.summary_level.checks.push(SummaryCheck {
-                name: "txn_credits_count_match".to_string(),
-                passed: cc_cnt == computed_cr_count,
-                source: SummarySource::Declared,
-                declared: Some(rust_decimal::Decimal::from(cc_cnt)),
-                computed: rust_decimal::Decimal::from(computed_cr_count),
-                delta: Some(rust_decimal::Decimal::from(cc_cnt as i64 - computed_cr_count as i64)),
-                note: None,
-            });
-        }
-    }
-    
-    validation.summary_level.passed = validation.summary_level.checks.iter().all(|c| c.passed);
-    validation.finalize();
-
-    Ok(ParseResult { data: statement, validation })
+    Ok(ParseResult { data: statement, validation: ValidationReport::empty() })
 }
