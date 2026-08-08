@@ -32,38 +32,21 @@ By building Xfina in **Rust**, we achieve:
 
 ## Supported Parsers & Status
 
-### 🏦 Bank Accounts
+| Crate | Category | Institution / Provider | Format | Status | Notes |
+|---|---|---|---|---|---|
+| `xfina-ba-axis` | 🏦 Bank Account | Axis Bank | Excel (`.xls`) | **Production Ready** | Full support |
+| `xfina-ba-bob` | 🏦 Bank Account | Bank of Baroda | Excel (`.xls`/`.xlsx`) | **Production Ready** | Full support |
+| `xfina-ba-hdfc` | 🏦 Bank Account | HDFC Bank | Excel (`.xls`/`.xlsx`) | **Production Ready** | Full support |
+| `xfina-ba-icici` | 🏦 Bank Account | ICICI Bank | Excel (`.xls`/`.xlsx`) | **Production Ready** | Full support |
+| `xfina-ba-sbi` | 🏦 Bank Account | State Bank of India | PDF (password protected) | **Production Ready** | Full support |
+| `xfina-cc-axis` | 💳 Credit Card | Axis Bank | TBA | **TODO** | |
+| `xfina-cc-hdfc` | 💳 Credit Card | HDFC Bank | CSV | **Production Ready** | Full support incl. add-on cardholders, reward points |
+| `xfina-cc-icici` | 💳 Credit Card | ICICI Bank | Excel (`.xls`/`.xlsx`) | **Production Ready** | Tested card without any add-on cards |
+| `xfina-mf-cams` | 📈 Mutual Funds | CAMS | PDF (password protected) | **Production Ready** | Combined Account Statement (CAS) |
+| `xfina-mf-kfintech` | 📈 Mutual Funds | KFinTech | PDF (password protected) | **TODO** | Combined Account Statement (CAS) |
+| `xfina-intl-stocks-ibkr` | 🌍 Intl Brokers | Interactive Brokers (IBKR) | CSV | **WIP** | Activity statements |
 
-| Crate | Institution | Format | Status | Notes |
-|---|---|---|---|---|
-| `xfina-ba-axis` | Axis Bank | Excel (`.xls`) | **Production Ready** | Full support |
-| `xfina-ba-hdfc` | HDFC Bank | Excel (`.xls`/`.xlsx`) | **Production Ready** | Full support |
-| `xfina-ba-icici` | ICICI Bank | Excel (`.xls`/`.xlsx`) | **Production Ready** | Full support |
-| `xfina-ba-sbi` | State Bank of India | PDF (password protected) | **Production Ready** | Full support |
-| `xfina-ba-bob` | Bank of Baroda | Excel (`.xls`/`.xlsx`) | **Production Ready** | Full support |
-
-*Note: Parsers have not been tested with Joint Accounts.*
-
-### 💳 Credit Cards
-
-| Crate | Institution | Format | Status | Notes |
-|---|---|---|---|---|
-| `xfina-cc-axis` | Axis Bank | TBA | **TODO** | |
-| `xfina-cc-hdfc` | HDFC Bank | CSV | **Production Ready** | Full support incl. add-on cardholders, reward points |
-| `xfina-cc-icici` | ICICI Bank | Excel (`.xls`/`.xlsx`) | **Production Ready** | Tested card without any add-on cards |
-
-### 📈 Mutual Funds
-
-| Crate | Provider | Format | Status | Notes |
-|---|---|---|---|---|
-| `xfina-mf-cams` | CAMS | PDF (password protected) | **Production Ready** | Combined Account Statement (CAS) |
-| `xfina-mf-kfintech` | KFinTech | PDF (password protected) | **TODO** | Combined Account Statement (CAS) |
-
-### 🌍 International Brokers
-
-| Crate | Broker | Format | Status | Notes |
-|---|---|---|---|---|
-| `xfina-intl-stocks-ibkr` | Interactive Brokers (IBKR) | CSV | **WIP** | Activity statements |
+*Note: Bank Account parsers have not been tested with Joint Accounts.*
 
 ---
 
@@ -263,9 +246,9 @@ Tagged releases (`v0.1.3`) → Deploys a permanent, versioned snapshot (`/0.1/`)
 | State Bank of India | ✅ | | | |
 
 ### Status
-- [ ] Axis Credit Card parser
-- [ ] KFinTech combined statement parser
 - [ ] CSV / JSON export in the web app
+- [ ] KFinTech combined statement parser
+- [ ] Axis Credit Card parser
 
 ## License
 
