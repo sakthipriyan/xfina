@@ -16,7 +16,8 @@ jobs:
         with:
           fetch-depth: 0
       
-      - name: Check Changelog Update
+      - name: Check Changes and Changelog
+        id: check_changes
         if: github.event_name == 'pull_request'
         run: |
           git fetch origin ${{ github.base_ref }}
@@ -35,16 +36,20 @@ jobs:
               exit 1
             fi
             echo "Success: CHANGELOG.md was updated!"
+            echo "run_tests=true" >> "$GITHUB_OUTPUT"
           else
             echo "No core files modified. Changelog update not strictly required."
+            echo "run_tests=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Install Rust
+        if: steps.check_changes.outputs.run_tests == 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
 
       - name: Cache cargo registry and build
+        if: steps.check_changes.outputs.run_tests == 'true'
         uses: actions/cache@v4
         with:
           path: |
@@ -56,10 +61,13 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Check for warnings
+        if: steps.check_changes.outputs.run_tests == 'true'
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
       - name: Run tests
+        if: steps.check_changes.outputs.run_tests == 'true'
         run: cargo test --workspace
         
       - name: Build WASM
+        if: steps.check_changes.outputs.run_tests == 'true'
         run: cargo build --target wasm32-unknown-unknown -p xfina-wasm
