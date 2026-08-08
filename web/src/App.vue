@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
 import init, { parse_ibkr, parse_cams, parse_hdfc_cc, parse_icici_cc, parse_hdfc_ba, parse_icici_ba, parse_sbi_ba, parse_bob_ba, parse_axis_ba } from 'xfina-wasm';
-import { Sun, Moon, Github, HelpCircle, ChevronDown, Loader2, ArrowUp, ArrowDown, GitCommit, CheckCircle2, AlertTriangle, XCircle } from 'lucide-vue-next';
+import { Sun, Moon, Github, HelpCircle, ChevronDown, Loader2, ArrowUp, ArrowDown, GitCommit, CheckCircle2, AlertTriangle, XCircle, MinusCircle } from 'lucide-vue-next';
 
 // Shadcn components
 import { Button } from '@/components/ui/button';
@@ -41,6 +41,18 @@ const bankStatement = ref(null);
 const equityStatement = ref(null);
 const validationReport = ref(null);
 const isProcessing = ref(false);
+const totalTxns = computed(() => {
+    if (selectedCategory.value === 'Bank Accounts' && bankStatement.value) {
+        return bankStatement.value.transactions?.transaction?.length || 0;
+    } else if (selectedCategory.value === 'Credit Cards' && ccStatement.value) {
+        return ccStatement.value.transactions?.transaction?.length || 0;
+    } else if (selectedCategory.value === 'Mutual Funds' && mfStatement.value) {
+        return mfStatement.value.transactions?.transaction?.length || 0;
+    } else if (selectedCategory.value === 'Intl Brokers' && equityStatement.value) {
+        return equityStatement.value.transactions?.transaction?.length || 0;
+    }
+    return 0;
+});
 const parseTime = ref(null);
 const uploadedFile = ref(null);
 
@@ -584,19 +596,67 @@ const camsGroupedAssets = computed(() => {
         <Card class="bg-card text-card-foreground shadow-sm border flex items-center justify-between p-3 px-4">
           <div class="flex flex-col">
             <span class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">Validation Status</span>
-            <div v-if="validationReport?.overall" class="font-semibold flex items-center gap-1.5 text-sm"
-                 :class="{
-                   'text-emerald-500': validationReport.overall === 'passed',
-                   'text-amber-500': validationReport.overall === 'warning',
-                   'text-destructive': validationReport.overall === 'failed'
-                 }">
-              <CheckCircle2 v-if="validationReport.overall === 'passed'" class="w-4 h-4" />
-              <AlertTriangle v-if="validationReport.overall === 'warning'" class="w-4 h-4" />
-              <XCircle v-if="validationReport.overall === 'failed'" class="w-4 h-4" />
-              <span v-if="validationReport.overall === 'passed'">Passed</span>
-              <span v-else-if="validationReport.overall === 'warning'">Warning</span>
-              <span v-else-if="validationReport.overall === 'failed'">Failed</span>
+            
+            <div v-if="validationReport?.overall" class="flex items-center gap-3">
+              <!-- Summary Badge -->
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger class="cursor-help flex items-center gap-1.5 font-semibold text-sm w-fit"
+                       :class="{
+                         'text-emerald-500': validationReport.summary_level?.passed,
+                         'text-destructive': !validationReport.summary_level?.passed
+                       }">
+                    <CheckCircle2 v-if="validationReport.summary_level?.passed" class="w-4 h-4" />
+                    <XCircle v-else class="w-4 h-4" />
+                    <span>Summary</span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" class="p-3 max-w-sm">
+                    <div class="space-y-3 text-sm">
+                      <div v-if="validationReport.summary_level?.declared?.checks?.length > 0">
+                        <div class="font-semibold text-foreground mb-0.5">Declared Validations</div>
+                        <div class="text-muted-foreground">{{ validationReport.summary_level.declared.checks.filter(c => c.passed).length }} / {{ validationReport.summary_level.declared.checks.length }} checks passed</div>
+                      </div>
+                      <div v-if="validationReport.summary_level?.derived?.checks?.length > 0">
+                        <div class="font-semibold text-foreground mb-0.5">Derived Validations</div>
+                        <div class="text-muted-foreground">{{ validationReport.summary_level.derived.checks.filter(c => c.passed).length }} / {{ validationReport.summary_level.derived.checks.length }} checks passed</div>
+                      </div>
+                      <div v-if="!validationReport.summary_level?.declared?.checks?.length && !validationReport.summary_level?.derived?.checks?.length" class="text-muted-foreground">
+                        No summary checks available.
+                      </div>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              <!-- Transaction Badge -->
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger class="cursor-help flex items-center gap-1.5 font-semibold text-sm w-fit"
+                       :class="{
+                         'text-muted-foreground': !validationReport.row_level?.checked_rows,
+                         'text-emerald-500': validationReport.row_level?.checked_rows > 0 && validationReport.row_level?.passed,
+                         'text-destructive': validationReport.row_level?.checked_rows > 0 && !validationReport.row_level?.passed
+                       }">
+                    <CheckCircle2 v-if="validationReport.row_level?.passed && validationReport.row_level?.checked_rows > 0" class="w-4 h-4" />
+                    <XCircle v-else-if="!validationReport.row_level?.passed" class="w-4 h-4" />
+                    <MinusCircle v-else class="w-4 h-4 opacity-70" />
+                    <span>Transactions</span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" class="p-3 max-w-sm">
+                    <div class="space-y-1 text-sm">
+                      <div class="font-semibold text-foreground mb-0.5">Running Transactions</div>
+                      <div class="text-muted-foreground" v-if="validationReport.row_level?.checked_rows > 0">
+                        {{ (validationReport.row_level?.checked_rows || 0) - (validationReport.row_level?.failed_rows?.length || 0) }} / {{ validationReport.row_level?.checked_rows || 0 }} txns passed
+                      </div>
+                      <div class="text-muted-foreground" v-else>
+                        Balances not printed ({{ totalTxns }} txns extracted)
+                      </div>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
+
             <div v-else class="text-sm font-medium text-muted-foreground">-</div>
           </div>
           <div class="flex flex-col text-right">
@@ -1210,12 +1270,15 @@ const camsGroupedAssets = computed(() => {
                <div class="px-4 py-4 flex flex-col items-start w-full pr-0 gap-3 border-b border-transparent transition-colors group-data-[state=open]/item:border-border group-data-[state=open]/item:border-b">
                  <div class="flex flex-col items-start w-full pr-0 gap-3">
                    <!-- Top Row: Chevron, Name, Tags, Txn Pill -->
-                   <div class="flex items-center gap-2.5 flex-wrap w-full">
-                     <span class="text-xs font-medium font-mono bg-muted/30 border border-primary/20 rounded px-2 py-0.5 text-primary shadow-sm" v-if="holding.isin">{{ holding.isin }}</span>
-                     <span class="font-medium text-foreground text-lg">{{ holding.issuerName || holding.description }}</span>
-                     <span class="text-xs font-medium font-mono bg-muted/30 border border-primary/20 rounded px-2 py-0.5 text-primary shadow-sm">{{ holding.description || holding.issuerName }}</span>
+                   <div class="grid grid-cols-[auto_1fr_auto] items-start gap-4 w-full">
+                     <span class="text-xs font-medium font-mono bg-muted/30 border border-primary/20 rounded px-2 py-0.5 text-primary shadow-sm shrink-0" v-if="holding.isin">{{ holding.isin }}</span>
                      
-                     <AccordionTrigger class="py-1.5 flex-none font-mono text-xs font-normal hover:no-underline justify-end gap-1.5 bg-primary/10 text-primary hover:bg-primary/20 transition-colors pl-2.5 pr-2 rounded ml-auto shrink-0 group w-auto" :disabled="!getAssetTransactions(holding).length">
+                     <div class="flex flex-wrap items-center gap-2 min-w-0">
+                       <span class="font-medium text-foreground text-left text-base lg:text-lg leading-tight break-words">{{ holding.issuerName || holding.description }}</span>
+                       <span class="text-xs font-medium font-mono bg-muted/30 border border-primary/20 rounded px-2 py-0.5 text-primary shadow-sm shrink-0">{{ holding.description || holding.issuerName }}</span>
+                     </div>
+                     
+                     <AccordionTrigger class="py-1.5 flex-none font-mono text-xs font-normal hover:no-underline justify-end gap-1.5 bg-primary/10 text-primary hover:bg-primary/20 transition-colors pl-2.5 pr-2 rounded shrink-0 group w-auto" :disabled="!getAssetTransactions(holding).length">
                        <span>{{ getAssetTransactions(holding).length }} {{ getAssetTransactions(holding).length === 1 ? 'Txn' : 'Txns' }}</span>
                        <ChevronDown v-if="getAssetTransactions(holding).length" class="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
                        <template #icon><span class="hidden"></span></template>
