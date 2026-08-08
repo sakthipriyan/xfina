@@ -1,9 +1,9 @@
+use crate::models::deposit::{HoldingNominee, TransactionType};
 use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::HashMap;
-use crate::models::deposit::{HoldingNominee, TransactionType};
 
 // -----------------------------------------------------------------------------
 // AA Standard Enums
@@ -51,12 +51,12 @@ pub struct CcXfinaSummary {
     pub payment_credit: Option<Decimal>,
     #[serde(with = "rust_decimal::serde::float_option", default)]
     pub purchases_debits: Option<Decimal>,
-    
+
     #[serde(default)]
     pub owner_credit_breakdown: HashMap<String, f64>,
     #[serde(default)]
     pub owner_debit_breakdown: HashMap<String, f64>,
-    
+
     pub past_dues: Option<PastDues>,
     pub reward_points_summary: Option<RewardPointsSummary>,
     #[serde(default)]
@@ -125,11 +125,11 @@ pub struct CreditCardAccount {
     pub version: f32, // typically 1.1
     pub masked_acc_number: String,
     pub linked_acc_ref: Option<String>,
-    
+
     pub profile: Option<CcProfile>,
     pub summary: Option<CcSummary>,
     pub transactions: Option<CcTransactions>,
-    
+
     // Xfina Extension
     pub xfina: Option<XfinaCreditCardAccount>,
 }
@@ -143,7 +143,9 @@ impl CreditCardAccount {
 
     pub fn to_rebit_json(&self) -> serde_json::Value {
         let mut val = serde_json::to_value(self).unwrap();
-        let paths = self.xfina.as_ref()
+        let paths = self
+            .xfina
+            .as_ref()
             .and_then(|x| x.date_only_paths.clone())
             .unwrap_or_default();
         crate::models::serializer::transform_to_rebit(&mut val, &paths, "".to_string());
@@ -178,7 +180,7 @@ pub struct CcHolder {
     pub email: Option<String>,
     pub pan: Option<String>,
     pub ckyc_compliance: Option<bool>,
-    
+
     pub cards: Option<CcCards>,
 }
 
@@ -222,7 +224,7 @@ pub struct CcSummary {
     pub loyalty_points: Option<i32>,
     #[serde(with = "rust_decimal::serde::float_option", default)]
     pub finance_charges: Option<Decimal>,
-    
+
     // Xfina Extension
     pub xfina: Option<CcXfinaSummary>,
 }
@@ -234,7 +236,7 @@ pub struct CcTransactions {
     pub start_date: Option<NaiveDate>,
     pub end_date: Option<NaiveDate>,
     pub transaction: Vec<CcTransaction>,
-    
+
     // Xfina Extension
     pub xfina: Option<CcXfinaTransactions>,
 }
@@ -253,7 +255,7 @@ pub struct CcTransaction {
     pub statement_date: Option<NaiveDate>,
     pub mcc: Option<String>,
     pub masked_card_number: Option<String>,
-    
+
     // Xfina Extension
     pub xfina: Option<CcXfinaTransaction>,
 }

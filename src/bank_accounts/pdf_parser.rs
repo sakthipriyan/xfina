@@ -1,4 +1,4 @@
-use pdf_extract::{OutputDev, OutputError, Transform, Document, MediaBox};
+use pdf_extract::{Document, MediaBox, OutputDev, OutputError, Transform};
 
 #[derive(Debug, Clone)]
 pub struct CharItem {
@@ -26,7 +26,12 @@ impl SpatialOutputDev {
 }
 
 impl OutputDev for SpatialOutputDev {
-    fn begin_page(&mut self, _page_num: u32, media_box: &MediaBox, _: Option<(f64, f64, f64, f64)>) -> Result<(), OutputError> {
+    fn begin_page(
+        &mut self,
+        _page_num: u32,
+        media_box: &MediaBox,
+        _: Option<(f64, f64, f64, f64)>,
+    ) -> Result<(), OutputError> {
         self.current_page.clear();
         self.flip_ctm = Transform::row_major(1., 0., 0., -1., 0., media_box.ury - media_box.lly);
         Ok(())
@@ -37,12 +42,19 @@ impl OutputDev for SpatialOutputDev {
         Ok(())
     }
 
-    fn output_character(&mut self, trm: &Transform, width: f64, _spacing: f64, font_size: f64, char: &str) -> Result<(), OutputError> {
+    fn output_character(
+        &mut self,
+        trm: &Transform,
+        width: f64,
+        _spacing: f64,
+        font_size: f64,
+        char: &str,
+    ) -> Result<(), OutputError> {
         let position = trm.post_transform(&self.flip_ctm);
         let x = position.m31;
         let y = position.m32;
-        
-        let scaled_w = trm.m11 * width * font_size; 
+
+        let scaled_w = trm.m11 * width * font_size;
         let scaled_h = trm.m22 * font_size;
 
         self.current_page.push(CharItem {
@@ -55,19 +67,31 @@ impl OutputDev for SpatialOutputDev {
         Ok(())
     }
 
-    fn begin_word(&mut self) -> Result<(), OutputError> { Ok(()) }
-    fn end_word(&mut self) -> Result<(), OutputError> { Ok(()) }
-    fn end_line(&mut self) -> Result<(), OutputError> { Ok(()) }
+    fn begin_word(&mut self) -> Result<(), OutputError> {
+        Ok(())
+    }
+    fn end_word(&mut self) -> Result<(), OutputError> {
+        Ok(())
+    }
+    fn end_line(&mut self) -> Result<(), OutputError> {
+        Ok(())
+    }
 }
 
-pub fn extract_spatial_pages(bytes: &[u8], password: Option<&str>) -> Result<Vec<Vec<CharItem>>, crate::error::XfinaError> {
+pub fn extract_spatial_pages(
+    bytes: &[u8],
+    password: Option<&str>,
+) -> Result<Vec<Vec<CharItem>>, crate::error::XfinaError> {
     let mut doc = Document::load_mem(bytes).map_err(|e| format!("Failed to load PDF: {:?}", e))?;
     if let Some(pw) = password {
-        doc.decrypt(pw).map_err(|e| format!("Failed to decrypt: {:?}", e))?;
+        doc.decrypt(pw)
+            .map_err(|e| format!("Failed to decrypt: {:?}", e))?;
     } else if doc.is_encrypted() {
-        return Err(crate::error::XfinaError::from("PDF is encrypted, password required".to_string()));
+        return Err(crate::error::XfinaError::from(
+            "PDF is encrypted, password required".to_string(),
+        ));
     }
-    
+
     let mut out = SpatialOutputDev::new();
     pdf_extract::output_doc(&doc, &mut out).map_err(|e| format!("Extraction failed: {:?}", e))?;
     Ok(out.pages)

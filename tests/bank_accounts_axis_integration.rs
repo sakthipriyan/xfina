@@ -9,7 +9,7 @@ fn test_axis_parser() {
     }
 
     let axis_dir = "../xfina-test-data/bank-accounts/axis";
-    
+
     let expected_dir = format!("{}/expected", axis_dir);
     let xfina_dir = format!("{}/xfina", expected_dir);
     let rebit_dir = format!("{}/rebit", expected_dir);
@@ -26,7 +26,11 @@ fn test_axis_parser() {
             if extension == "xls" || extension == "xlsx" {
                 let bytes = fs::read(&path).unwrap();
                 let file_name = path.file_stem().unwrap().to_str().unwrap();
-                let parsed = parse_axis_bank_statement(xfina::models::request::ParseRequest::new(&bytes).with_filename(Some(file_name))).expect("Failed to parse Axis XLS");
+                let parsed = parse_axis_bank_statement(
+                    xfina::models::request::ParseRequest::new(&bytes)
+                        .with_filename(Some(file_name)),
+                )
+                .expect("Failed to parse Axis XLS");
 
                 let xfina_json = serialize_result(&parsed, parsed.data.to_xfina_json()).unwrap();
                 let rebit_json = serialize_result(&parsed, parsed.data.to_rebit_json()).unwrap();
@@ -34,13 +38,18 @@ fn test_axis_parser() {
                 let expected_xfina_path = format!("{}/{}.json", xfina_dir, file_name);
                 let expected_rebit_path = format!("{}/{}.json", rebit_dir, file_name);
 
-                let update_expected = std::env::var("UPDATE_EXPECTED").unwrap_or_else(|_| "0".to_string());
+                let update_expected =
+                    std::env::var("UPDATE_EXPECTED").unwrap_or_else(|_| "0".to_string());
                 if update_expected == "1" {
                     fs::write(&expected_xfina_path, &xfina_json).unwrap();
                     fs::write(&expected_rebit_path, &rebit_json).unwrap();
                 } else {
                     let expected_xfina = fs::read_to_string(&expected_xfina_path).unwrap();
-                    assert_eq!(expected_xfina, xfina_json, "Xfina JSON mismatch for {}", file_name);
+                    assert_eq!(
+                        expected_xfina, xfina_json,
+                        "Xfina JSON mismatch for {}",
+                        file_name
+                    );
                 }
             }
         }

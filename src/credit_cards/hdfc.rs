@@ -1,19 +1,21 @@
-use chrono::{NaiveDate, DateTime, Utc};
-use rust_decimal::Decimal;
-use rust_decimal::prelude::ToPrimitive;
 use crate::models::credit_card::{
-    CreditCardAccount, CcProfile, CcHolders, CcHolder, CcCards, CcCard, CardType, TypeChoice,
-    CcSummary, PastDues, RewardPointsSummary, RewardProgram,
-    CcTransactions, CcTransaction, XfinaCreditCardAccount, CcXfinaSummary, CcXfinaTransactions, CcXfinaTransaction,
+    CardType, CcCard, CcCards, CcHolder, CcHolders, CcProfile, CcSummary, CcTransaction,
+    CcTransactions, CcXfinaSummary, CcXfinaTransaction, CcXfinaTransactions, CreditCardAccount,
+    PastDues, RewardPointsSummary, RewardProgram, TypeChoice, XfinaCreditCardAccount,
 };
 use crate::models::deposit::TransactionType;
-use crate::models::validation::{ParseResult, ValidationReport, SummaryCheck};
-use std::collections::HashMap;
+use crate::models::validation::{ParseResult, SummaryCheck, ValidationReport};
+use chrono::{DateTime, NaiveDate, Utc};
 use regex::Regex;
+use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::Decimal;
+use std::collections::HashMap;
 
 use crate::models::request::ParseRequest;
 
-pub fn parse_hdfc_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<CreditCardAccount>, crate::error::XfinaError> {
+pub fn parse_hdfc_statement<'a>(
+    input: ParseRequest<'a>,
+) -> Result<ParseResult<CreditCardAccount>, crate::error::XfinaError> {
     let content = std::str::from_utf8(input.content)
         .map_err(|e| crate::error::XfinaError::ParseError(format!("Invalid UTF-8: {}", e)))?;
     let filename = input.filename;
@@ -29,9 +31,9 @@ pub fn parse_hdfc_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<C
         institution_name: Some("HDFC Bank".to_string()),
         ..Default::default()
     };
-    
+
     let mut date_only_paths = Vec::new();
-    
+
     if let Some(fname) = filename {
         let re = Regex::new(r"(\d{2}-\d{2}-\d{4})").unwrap();
         if let Some(caps) = re.captures(fname) {
@@ -39,7 +41,10 @@ pub fn parse_hdfc_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<C
                 if let Ok(d) = NaiveDate::parse_from_str(m.as_str(), "%d-%m-%Y") {
                     let dt = d.and_hms_opt(0, 0, 0).unwrap();
                     let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
-                    xfina_account.generated_date = chrono::TimeZone::from_local_datetime(&ist_offset, &dt).single().map(|dt| dt.with_timezone(&Utc));
+                    xfina_account.generated_date =
+                        chrono::TimeZone::from_local_datetime(&ist_offset, &dt)
+                            .single()
+                            .map(|dt| dt.with_timezone(&Utc));
                     date_only_paths.push("xfina.generatedDate".to_string());
                 }
             }
@@ -47,15 +52,19 @@ pub fn parse_hdfc_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<C
     }
     let mut summary = CcSummary::default();
     let mut xfina_summary = CcXfinaSummary::default();
-    
+
     let mut transactions_list = Vec::new();
     let mut xfina_txns = CcXfinaTransactions::default();
-    
+
     let mut card_no = String::new();
 
-    let lines: Vec<&str> = content.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
+    let lines: Vec<&str> = content
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .collect();
     let mut idx = 0;
-    
+
     enum Section {
         Top,
         AccountCcSummary,
@@ -63,7 +72,7 @@ pub fn parse_hdfc_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<C
         CcTransactions,
         RewardCcSummary,
         RewardProgram,
-        None
+        None,
     }
     let mut current_section = Section::Top;
 
@@ -117,8 +126,12 @@ pub fn parse_hdfc_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<C
                             summary.last_statement_date = d;
                             if let Some(date) = d {
                                 let dt = date.and_hms_opt(0, 0, 0).unwrap();
-                                let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
-                                xfina_account.generated_date = chrono::TimeZone::from_local_datetime(&ist_offset, &dt).single().map(|dt| dt.with_timezone(&Utc));
+                                let ist_offset =
+                                    chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
+                                xfina_account.generated_date =
+                                    chrono::TimeZone::from_local_datetime(&ist_offset, &dt)
+                                        .single()
+                                        .map(|dt| dt.with_timezone(&Utc));
                                 if !date_only_paths.contains(&"xfina.generatedDate".to_string()) {
                                     date_only_paths.push("xfina.generatedDate".to_string());
                                 }
@@ -135,7 +148,8 @@ pub fn parse_hdfc_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<C
             }
             Section::AccountCcSummary => {
                 if parts[0] == "Opening Bal" && idx + 1 < lines.len() {
-                    let val_parts: Vec<&str> = lines[idx + 1].split("~|~").map(|p| p.trim()).collect();
+                    let val_parts: Vec<&str> =
+                        lines[idx + 1].split("~|~").map(|p| p.trim()).collect();
                     if val_parts.len() >= 9 {
                         xfina_summary.opening_balance = parse_decimal(val_parts[0]);
                         xfina_summary.payment_credit = parse_decimal(val_parts[2]);
@@ -147,7 +161,8 @@ pub fn parse_hdfc_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<C
             }
             Section::PastDues => {
                 if parts[0] == "Overlimit" && idx + 1 < lines.len() {
-                    let val_parts: Vec<&str> = lines[idx + 1].split("~|~").map(|p| p.trim()).collect();
+                    let val_parts: Vec<&str> =
+                        lines[idx + 1].split("~|~").map(|p| p.trim()).collect();
                     if val_parts.len() >= 6 {
                         xfina_summary.past_dues = Some(PastDues {
                             overlimit: parse_decimal(val_parts[0]).unwrap_or_default(),
@@ -166,12 +181,18 @@ pub fn parse_hdfc_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<C
                     let txn_dt = parse_datetime(parts.get(2).unwrap_or(&""));
                     let txn_date_naive = txn_dt.map(|dt| dt.with_timezone(&Utc).date_naive());
                     let desc = parts.get(3).unwrap_or(&"").to_string();
-                    let amount = parse_decimal(parts.get(4).unwrap_or(&"")).unwrap_or_default().abs();
+                    let amount = parse_decimal(parts.get(4).unwrap_or(&""))
+                        .unwrap_or_default()
+                        .abs();
                     let ty = parts.get(5).unwrap_or(&"");
-                    let txn_type = if *ty == "Cr" { TransactionType::Credit } else { TransactionType::Debit };
+                    let txn_type = if *ty == "Cr" {
+                        TransactionType::Credit
+                    } else {
+                        TransactionType::Debit
+                    };
                     let rp_str = parts.get(6).unwrap_or(&"").replace("+", "");
                     let reward_points = rp_str.trim().parse::<i32>().ok();
-                    
+
                     let mut tx_xfina = CcXfinaTransaction {
                         owner: Some(owner),
                         ..Default::default()
@@ -194,7 +215,8 @@ pub fn parse_hdfc_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<C
             }
             Section::RewardCcSummary => {
                 if parts[0] == "Opening Balance" && idx + 1 < lines.len() {
-                    let val_parts: Vec<&str> = lines[idx + 1].split("~|~").map(|p| p.trim()).collect();
+                    let val_parts: Vec<&str> =
+                        lines[idx + 1].split("~|~").map(|p| p.trim()).collect();
                     if val_parts.len() >= 5 {
                         xfina_summary.reward_points_summary = Some(RewardPointsSummary {
                             opening_balance: parse_i32(val_parts[0]).unwrap_or(0),
@@ -222,11 +244,11 @@ pub fn parse_hdfc_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<C
         }
         idx += 1;
     }
-    
+
     if !address_parts.is_empty() {
         holder.address = Some(address_parts.join(", "));
     }
-    
+
     if !card_no.is_empty() {
         holder.cards = Some(CcCards {
             card: vec![CcCard {
@@ -241,9 +263,9 @@ pub fn parse_hdfc_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<C
     stmt.profile = Some(CcProfile {
         holders: CcHolders {
             holder: vec![holder],
-        }
+        },
     });
-    
+
     // Compute aggregations
     let mut default_rewards = 0;
     let mut owner_credit_breakdown = HashMap::new();
@@ -255,14 +277,18 @@ pub fn parse_hdfc_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<C
                 default_rewards += pts;
             }
             let owner = if let Some(o) = &xfina.owner {
-                if o.is_empty() { "Unknown".to_string() } else { o.clone() }
+                if o.is_empty() {
+                    "Unknown".to_string()
+                } else {
+                    o.clone()
+                }
             } else {
                 "Unknown".to_string()
             };
-            
+
             use rust_decimal::prelude::ToPrimitive;
             let amt = txn.amount.to_f64().unwrap_or(0.0);
-            
+
             if txn.txn_type == TransactionType::Credit {
                 *owner_credit_breakdown.entry(owner).or_insert(0.0) += amt;
             } else {
@@ -276,7 +302,7 @@ pub fn parse_hdfc_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<C
     }
     xfina_summary.owner_credit_breakdown = owner_credit_breakdown;
     xfina_summary.owner_debit_breakdown = owner_debit_breakdown;
-    
+
     let stmt_date_opt = summary.last_statement_date;
     summary.xfina = Some(xfina_summary);
     stmt.summary = Some(summary);
@@ -284,7 +310,7 @@ pub fn parse_hdfc_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<C
     transactions_list.sort_by_key(|a| a.txn_date);
 
     let mut txns = CcTransactions::default();
-    
+
     if let Some(stmt_date) = stmt_date_opt {
         let (start, end) = crate::models::date_utils::derive_statement_period(stmt_date);
         txns.start_date = Some(start);
@@ -303,99 +329,153 @@ pub fn parse_hdfc_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<C
     }
     txns.transaction = transactions_list;
     txns.xfina = Some(xfina_txns);
-    
+
     stmt.transactions = Some(txns);
-    
+
     if !date_only_paths.is_empty() {
         xfina_account.date_only_paths = Some(date_only_paths);
     }
     stmt.xfina = Some(xfina_account);
 
     let mut validation = ValidationReport::empty();
-    
+
     // Level 2 - Summary Checks
-    
+
     // 1. closing_balance_match: total_due == opening_balance + purchases_debits - payment_credit
     if let (Some(total_due), Some(ob), Some(pd), Some(pc)) = (
         stmt.summary.as_ref().and_then(|s| s.total_due_amount),
-        stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.opening_balance),
-        stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.purchases_debits),
-        stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.payment_credit)
+        stmt.summary
+            .as_ref()
+            .and_then(|s| s.xfina.as_ref())
+            .and_then(|x| x.opening_balance),
+        stmt.summary
+            .as_ref()
+            .and_then(|s| s.xfina.as_ref())
+            .and_then(|x| x.purchases_debits),
+        stmt.summary
+            .as_ref()
+            .and_then(|s| s.xfina.as_ref())
+            .and_then(|x| x.payment_credit),
     ) {
         validation.summary_level.checks.push(SummaryCheck::declared(
             "closing_balance_match",
             total_due,
             ob + pd - pc,
-            None
+            None,
         ));
     }
 
     // 2. txn_credits_match: payment_credit == sum(txn.amount where type == Credit)
-    if let Some(pc) = stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.payment_credit) {
+    if let Some(pc) = stmt
+        .summary
+        .as_ref()
+        .and_then(|s| s.xfina.as_ref())
+        .and_then(|x| x.payment_credit)
+    {
         use rust_decimal::prelude::FromPrimitive;
         let sum_credits: Decimal = Decimal::from_f64(
-            stmt.transactions.as_ref().unwrap().transaction.iter()
+            stmt.transactions
+                .as_ref()
+                .unwrap()
+                .transaction
+                .iter()
                 .filter(|t| t.txn_type == TransactionType::Credit)
                 .map(|t| t.amount.to_f64().unwrap_or(0.0))
-                .sum()
-        ).unwrap_or(Decimal::from(0));
+                .sum(),
+        )
+        .unwrap_or(Decimal::from(0));
         validation.summary_level.checks.push(SummaryCheck::declared(
             "txn_credits_match",
             pc,
             sum_credits,
-            None
+            None,
         ));
     }
 
     // 3. txn_debits_match: purchases_debits == sum(txn.amount where type == Debit)
-    if let Some(pd) = stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.purchases_debits) {
+    if let Some(pd) = stmt
+        .summary
+        .as_ref()
+        .and_then(|s| s.xfina.as_ref())
+        .and_then(|x| x.purchases_debits)
+    {
         use rust_decimal::prelude::FromPrimitive;
         let sum_debits: Decimal = Decimal::from_f64(
-            stmt.transactions.as_ref().unwrap().transaction.iter()
+            stmt.transactions
+                .as_ref()
+                .unwrap()
+                .transaction
+                .iter()
                 .filter(|t| t.txn_type == TransactionType::Debit)
                 .map(|t| t.amount.to_f64().unwrap_or(0.0))
-                .sum()
-        ).unwrap_or(Decimal::from(0));
+                .sum(),
+        )
+        .unwrap_or(Decimal::from(0));
         validation.summary_level.checks.push(SummaryCheck::declared(
             "txn_debits_match",
             pd,
             sum_debits,
-            None
+            None,
         ));
     }
 
     // 4. owner_credits_match: payment_credit == sum(owner_credit_breakdown.values())
-    if let Some(pc) = stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.payment_credit) {
+    if let Some(pc) = stmt
+        .summary
+        .as_ref()
+        .and_then(|s| s.xfina.as_ref())
+        .and_then(|x| x.payment_credit)
+    {
         use rust_decimal::prelude::FromPrimitive;
-        if let Some(owner_credits) = stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).map(|x| &x.owner_credit_breakdown) {
-            let sum_owner_credits = Decimal::from_f64(owner_credits.values().sum()).unwrap_or(Decimal::from(0));
+        if let Some(owner_credits) = stmt
+            .summary
+            .as_ref()
+            .and_then(|s| s.xfina.as_ref())
+            .map(|x| &x.owner_credit_breakdown)
+        {
+            let sum_owner_credits =
+                Decimal::from_f64(owner_credits.values().sum()).unwrap_or(Decimal::from(0));
             validation.summary_level.checks.push(SummaryCheck::declared(
                 "owner_credits_match",
                 pc,
                 sum_owner_credits,
-                None
+                None,
             ));
         }
     }
 
     // 5. owner_debits_match: purchases_debits == sum(owner_debit_breakdown.values())
-    if let Some(pd) = stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.purchases_debits) {
+    if let Some(pd) = stmt
+        .summary
+        .as_ref()
+        .and_then(|s| s.xfina.as_ref())
+        .and_then(|x| x.purchases_debits)
+    {
         use rust_decimal::prelude::FromPrimitive;
-        if let Some(owner_debits) = stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).map(|x| &x.owner_debit_breakdown) {
-            let sum_owner_debits = Decimal::from_f64(owner_debits.values().sum()).unwrap_or(Decimal::from(0));
+        if let Some(owner_debits) = stmt
+            .summary
+            .as_ref()
+            .and_then(|s| s.xfina.as_ref())
+            .map(|x| &x.owner_debit_breakdown)
+        {
+            let sum_owner_debits =
+                Decimal::from_f64(owner_debits.values().sum()).unwrap_or(Decimal::from(0));
             validation.summary_level.checks.push(SummaryCheck::declared(
                 "owner_debits_match",
                 pd,
                 sum_owner_debits,
-                None
+                None,
             ));
         }
     }
 
     validation.summary_level.passed = validation.summary_level.checks.iter().all(|c| c.passed);
     validation.finalize();
-    
-    Ok(ParseResult { data: stmt, validation })
+
+    Ok(ParseResult {
+        data: stmt,
+        validation,
+    })
 }
 
 fn parse_decimal(val: &str) -> Option<Decimal> {

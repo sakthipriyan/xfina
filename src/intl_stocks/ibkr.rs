@@ -1,18 +1,18 @@
-use std::collections::BTreeMap;
 use crate::models::{
-    EquityAccount, EquityProfile, EquityHolders, EquityHolder, EquitySummary, EquityInvestment,
-    EquityHoldings, EquityHolding, EquityTransactions, EquityTransaction, XfinaEquityAccount,
-    EquityFiType, ShareHolderEquityType, EquityTransactionType, TransactionsSymbol, 
-    EquityCategory,
+    EquityAccount, EquityCategory, EquityFiType, EquityHolder, EquityHolders, EquityHolding,
+    EquityHoldings, EquityInvestment, EquityProfile, EquitySummary, EquityTransaction,
+    EquityTransactionType, EquityTransactions, ShareHolderEquityType, TransactionsSymbol,
+    XfinaEquityAccount,
 };
-use csv::ReaderBuilder;
-use chrono::{NaiveDate, NaiveDateTime, TimeZone, LocalResult, Utc};
+use chrono::{LocalResult, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use chrono_tz::America::New_York;
+use csv::ReaderBuilder;
 use rust_decimal::Decimal;
+use std::collections::BTreeMap;
 
 fn format_date_iso(date_str: &str) -> String {
     let clean_str = date_str.replace(" EDT", "").replace(" EST", "");
-    
+
     if let Ok(dt) = NaiveDateTime::parse_from_str(&clean_str, "%Y-%m-%d, %H:%M:%S") {
         let ny_dt = match New_York.from_local_datetime(&dt) {
             LocalResult::None => return date_str.to_string(),
@@ -21,7 +21,7 @@ fn format_date_iso(date_str: &str) -> String {
         };
         return ny_dt.with_timezone(&Utc).to_rfc3339();
     }
-    
+
     if let Ok(d) = NaiveDate::parse_from_str(&clean_str, "%B %d, %Y") {
         return d.format("%Y-%m-%d").to_string();
     }
@@ -29,7 +29,7 @@ fn format_date_iso(date_str: &str) -> String {
     if let Ok(d) = NaiveDate::parse_from_str(&clean_str, "%Y-%m-%d") {
         return d.format("%Y-%m-%d").to_string();
     }
-    
+
     date_str.to_string()
 }
 
@@ -44,14 +44,18 @@ fn parse_date(date_str: &str) -> Option<NaiveDate> {
 
 fn parse_datetime(date_str: &str) -> Option<chrono::DateTime<Utc>> {
     let iso = format_date_iso(date_str);
-    chrono::DateTime::parse_from_rfc3339(&iso).map(|d| d.with_timezone(&Utc)).ok()
+    chrono::DateTime::parse_from_rfc3339(&iso)
+        .map(|d| d.with_timezone(&Utc))
+        .ok()
 }
 
-use crate::models::validation::{ParseResult, ValidationReport, SummaryCheck};
+use crate::models::validation::{ParseResult, SummaryCheck, ValidationReport};
 
 use crate::models::request::ParseRequest;
 
-pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityAccount>, crate::error::XfinaError> {
+pub fn parse_ibkr_csv<'a>(
+    input: ParseRequest<'a>,
+) -> Result<ParseResult<EquityAccount>, crate::error::XfinaError> {
     let csv_content = std::str::from_utf8(input.content)
         .map_err(|e| crate::error::XfinaError::ParseError(format!("Invalid UTF-8: {}", e)))?;
     let mut rdr = ReaderBuilder::new()
@@ -69,7 +73,7 @@ pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityA
 
     // symbol -> (primary_symbol, description, isin)
     let mut instruments: BTreeMap<String, (String, String, String)> = BTreeMap::new();
-    
+
     // Interim trades representation since EquityTransaction expects Decimal
     struct InterimTrade {
         date: String,
@@ -81,7 +85,7 @@ pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityA
     }
     // symbol -> Vec<InterimTrade>
     let mut trades: BTreeMap<String, Vec<InterimTrade>> = BTreeMap::new();
-    
+
     // symbol -> (quantity, value, cost_basis, close_price)
     let mut positions: BTreeMap<String, (Decimal, Decimal, Decimal, Decimal)> = BTreeMap::new();
 
@@ -135,17 +139,36 @@ pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityA
                         primary_sym = sym.to_string();
                     }
                     if !sym.is_empty() {
-                        instruments.insert(sym.to_string(), (primary_sym.clone(), description.clone(), isin.clone()));
+                        instruments.insert(
+                            sym.to_string(),
+                            (primary_sym.clone(), description.clone(), isin.clone()),
+                        );
                     }
                 }
             }
             (Some("Open Positions"), Some("Data"), Some("Summary")) => {
                 if record.get(3) == Some("Stocks") {
                     let symbol = record.get(5).unwrap_or("").to_string();
-                    let quantity: Decimal = record.get(6).unwrap_or("0").parse().unwrap_or(Decimal::ZERO);
-                    let cost_basis: Decimal = record.get(9).unwrap_or("0").parse().unwrap_or(Decimal::ZERO);
-                    let close_price: Decimal = record.get(10).unwrap_or("0").parse().unwrap_or(Decimal::ZERO);
-                    let value: Decimal = record.get(11).unwrap_or("0").parse().unwrap_or(Decimal::ZERO);
+                    let quantity: Decimal = record
+                        .get(6)
+                        .unwrap_or("0")
+                        .parse()
+                        .unwrap_or(Decimal::ZERO);
+                    let cost_basis: Decimal = record
+                        .get(9)
+                        .unwrap_or("0")
+                        .parse()
+                        .unwrap_or(Decimal::ZERO);
+                    let close_price: Decimal = record
+                        .get(10)
+                        .unwrap_or("0")
+                        .parse()
+                        .unwrap_or(Decimal::ZERO);
+                    let value: Decimal = record
+                        .get(11)
+                        .unwrap_or("0")
+                        .parse()
+                        .unwrap_or(Decimal::ZERO);
 
                     if !symbol.is_empty() {
                         positions.insert(symbol, (quantity, value, cost_basis, close_price));
@@ -155,8 +178,16 @@ pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityA
             (Some("Mark-to-Market Performance Summary"), Some("Data"), _) => {
                 if record.get(2) == Some("Stocks") {
                     let symbol = record.get(3).unwrap_or("").to_string();
-                    let prior_qty: Decimal = record.get(4).unwrap_or("0").parse().unwrap_or(Decimal::ZERO);
-                    let current_qty: Decimal = record.get(5).unwrap_or("0").parse().unwrap_or(Decimal::ZERO);
+                    let prior_qty: Decimal = record
+                        .get(4)
+                        .unwrap_or("0")
+                        .parse()
+                        .unwrap_or(Decimal::ZERO);
+                    let current_qty: Decimal = record
+                        .get(5)
+                        .unwrap_or("0")
+                        .parse()
+                        .unwrap_or(Decimal::ZERO);
 
                     if !symbol.is_empty() && symbol != "Total" {
                         mtm_summaries.insert(symbol, (prior_qty, current_qty));
@@ -165,35 +196,62 @@ pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityA
             }
             (Some("Open Positions"), Some("Total"), _) => {
                 if record.get(3) == Some("Stocks") {
-                    declared_cost_basis = record.get(9).unwrap_or("0").parse().unwrap_or(Decimal::ZERO);
-                    declared_current_value = record.get(11).unwrap_or("0").parse().unwrap_or(Decimal::ZERO);
+                    declared_cost_basis = record
+                        .get(9)
+                        .unwrap_or("0")
+                        .parse()
+                        .unwrap_or(Decimal::ZERO);
+                    declared_current_value = record
+                        .get(11)
+                        .unwrap_or("0")
+                        .parse()
+                        .unwrap_or(Decimal::ZERO);
                 }
             }
-            (Some("Trades"), Some("Data"), Some("Order"))
-                if record.get(3) == Some("Stocks") => {
-                    let symbol = record.get(5).unwrap_or("").to_string();
-                    let date = record.get(6).unwrap_or("").to_string();
-                    let quantity: Decimal = record.get(7).unwrap_or("0").parse().unwrap_or(Decimal::ZERO);
-                    let t_price: Decimal = record.get(8).unwrap_or("0").parse().unwrap_or(Decimal::ZERO);
-                    let proceeds: Decimal = record.get(10).unwrap_or("0").parse().unwrap_or(Decimal::ZERO);
-                    let comm_fee: Decimal = record.get(11).unwrap_or("0").parse().unwrap_or(Decimal::ZERO);
+            (Some("Trades"), Some("Data"), Some("Order")) if record.get(3) == Some("Stocks") => {
+                let symbol = record.get(5).unwrap_or("").to_string();
+                let date = record.get(6).unwrap_or("").to_string();
+                let quantity: Decimal = record
+                    .get(7)
+                    .unwrap_or("0")
+                    .parse()
+                    .unwrap_or(Decimal::ZERO);
+                let t_price: Decimal = record
+                    .get(8)
+                    .unwrap_or("0")
+                    .parse()
+                    .unwrap_or(Decimal::ZERO);
+                let proceeds: Decimal = record
+                    .get(10)
+                    .unwrap_or("0")
+                    .parse()
+                    .unwrap_or(Decimal::ZERO);
+                let comm_fee: Decimal = record
+                    .get(11)
+                    .unwrap_or("0")
+                    .parse()
+                    .unwrap_or(Decimal::ZERO);
 
-                    let amount = proceeds + comm_fee;
+                let amount = proceeds + comm_fee;
 
-                    if !symbol.is_empty() && !date.is_empty() && amount != Decimal::ZERO {
-                        let tx_type = if quantity > Decimal::ZERO { EquityTransactionType::Buy } else { EquityTransactionType::Sell };
-                        let tx = InterimTrade {
-                            date: format_date_iso(&date),
-                            tx_type,
-                            amount: amount.abs(),
-                            units: quantity.abs(),
-                            t_price,
-                            comm_fee,
-                        };
+                if !symbol.is_empty() && !date.is_empty() && amount != Decimal::ZERO {
+                    let tx_type = if quantity > Decimal::ZERO {
+                        EquityTransactionType::Buy
+                    } else {
+                        EquityTransactionType::Sell
+                    };
+                    let tx = InterimTrade {
+                        date: format_date_iso(&date),
+                        tx_type,
+                        amount: amount.abs(),
+                        units: quantity.abs(),
+                        t_price,
+                        comm_fee,
+                    };
 
-                        trades.entry(symbol).or_default().push(tx);
-                    }
+                    trades.entry(symbol).or_default().push(tx);
                 }
+            }
             _ => {}
         }
     }
@@ -213,10 +271,16 @@ pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityA
         }
     };
 
-    let mut merged_positions: BTreeMap<String, (Decimal, Decimal, Decimal, Decimal)> = BTreeMap::new();
+    let mut merged_positions: BTreeMap<String, (Decimal, Decimal, Decimal, Decimal)> =
+        BTreeMap::new();
     for (sym, pos) in positions {
         let primary = get_primary(&sym);
-        let entry = merged_positions.entry(primary).or_insert((Decimal::ZERO, Decimal::ZERO, Decimal::ZERO, Decimal::ZERO));
+        let entry = merged_positions.entry(primary).or_insert((
+            Decimal::ZERO,
+            Decimal::ZERO,
+            Decimal::ZERO,
+            Decimal::ZERO,
+        ));
         entry.0 += pos.0;
         entry.1 += pos.1;
         entry.2 += pos.2;
@@ -230,8 +294,12 @@ pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityA
     }
 
     let mut all_symbols = std::collections::BTreeSet::new();
-    for sym in merged_positions.keys() { all_symbols.insert(sym.clone()); }
-    for sym in merged_trades.keys() { all_symbols.insert(sym.clone()); }
+    for sym in merged_positions.keys() {
+        all_symbols.insert(sym.clone());
+    }
+    for sym in merged_trades.keys() {
+        all_symbols.insert(sym.clone());
+    }
 
     let mut txn_counter = 1;
 
@@ -241,10 +309,15 @@ pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityA
         } else {
             (symbol.clone(), "".to_string())
         };
-        
-        let pos = merged_positions.get(&symbol).cloned().unwrap_or((Decimal::ZERO, Decimal::ZERO, Decimal::ZERO, Decimal::ZERO));
+
+        let pos = merged_positions.get(&symbol).cloned().unwrap_or((
+            Decimal::ZERO,
+            Decimal::ZERO,
+            Decimal::ZERO,
+            Decimal::ZERO,
+        ));
         let mut txs = merged_trades.remove(&symbol).unwrap_or_default();
-        
+
         txs.sort_by(|a, b| a.date.cmp(&b.date));
         total_row_level_checked += txs.len();
 
@@ -257,8 +330,10 @@ pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityA
         let mut period_sell_count = 0;
 
         for tx in &txs {
-            let tx_date = chrono::DateTime::parse_from_rfc3339(&tx.date).map(|d| d.with_timezone(&Utc)).ok();
-            
+            let tx_date = chrono::DateTime::parse_from_rfc3339(&tx.date)
+                .map(|d| d.with_timezone(&Utc))
+                .ok();
+
             if tx.tx_type == EquityTransactionType::Buy {
                 tx_qty_diff += tx.units;
                 period_buy_units += tx.units;
@@ -279,7 +354,11 @@ pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityA
                 symbol: Some(symbol.clone()),
                 transaction_date_time: tx_date,
                 exchange: Some(TransactionsSymbol::Others),
-                isin: if isin.is_empty() { None } else { Some(isin.clone()) },
+                isin: if isin.is_empty() {
+                    None
+                } else {
+                    Some(isin.clone())
+                },
                 equity_category: Some(EquityCategory::Equity),
                 instrument_type: None,
                 option_type: None,
@@ -299,19 +378,22 @@ pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityA
         let total_units = pos.0;
         let current_value = pos.1;
         let mut opening_balance = total_units - tx_qty_diff;
-        
+
         // If we extracted true declared opening balance from MTM summary, use it.
         let declared_prior_qty = mtm_summaries.get(&symbol).map(|(prior, _)| *prior);
         if let Some(prior) = declared_prior_qty {
             opening_balance = prior;
         }
-        
+
         let total_cost_basis = pos.2;
         let close_price = pos.3;
 
         if let Some(prior) = declared_prior_qty {
             per_asset_checks.push(SummaryCheck::declared(
-                &format!("{}_opening_units_match", symbol.replace(' ', "_").to_lowercase()),
+                &format!(
+                    "{}_opening_units_match",
+                    symbol.replace(' ', "_").to_lowercase()
+                ),
                 prior,
                 total_units - tx_qty_diff,
                 Some(format!("symbol: {} (Prior Quantity from MTM)", symbol)),
@@ -334,7 +416,11 @@ pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityA
                 isin: isin.clone(),
                 units: total_units,
                 investment_date_time: None,
-                rate: if total_units != Decimal::ZERO { Some(total_cost_basis / total_units) } else { None },
+                rate: if total_units != Decimal::ZERO {
+                    Some(total_cost_basis / total_units)
+                } else {
+                    None
+                },
                 last_traded_price: Some(close_price),
                 description: Some(symbol.clone()),
                 xfina: Some(crate::models::equity::XfinaEquityHolding {
@@ -352,7 +438,11 @@ pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityA
     }
 
     let holder = EquityHolder {
-        name: if investor_name.is_empty() { "IBKR Investor".to_string() } else { investor_name },
+        name: if investor_name.is_empty() {
+            "IBKR Investor".to_string()
+        } else {
+            investor_name
+        },
         dob: None,
         mobile: None,
         nominee: None,
@@ -368,7 +458,7 @@ pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityA
     let profile = EquityProfile {
         holders: EquityHolders {
             holder: vec![holder],
-        }
+        },
     };
 
     let summary = EquitySummary {
@@ -376,7 +466,7 @@ pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityA
             holdings: EquityHoldings {
                 r#type: None,
                 holding: final_holdings,
-            }
+            },
         },
         investment_value: total_investment_value,
         current_value: total_current_value,
@@ -396,7 +486,7 @@ pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityA
         date_only_paths: None,
     };
 
-    let account = EquityAccount { 
+    let account = EquityAccount {
         r#type: EquityFiType::Equities,
         masked_acc_number: account_no,
         version: 1.1,
@@ -410,7 +500,7 @@ pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityA
     let mut validation = ValidationReport::empty();
     validation.row_level.checked_rows = total_row_level_checked;
     validation.row_level.passed = true;
-    
+
     validation.summary_level.checks.extend(per_asset_checks);
     validation.summary_level.checks.push(SummaryCheck::declared(
         "total_cost_basis_match",
@@ -426,5 +516,8 @@ pub fn parse_ibkr_csv<'a>(input: ParseRequest<'a>) -> Result<ParseResult<EquityA
     ));
     validation.finalize();
 
-    Ok(ParseResult { data: account, validation })
+    Ok(ParseResult {
+        data: account,
+        validation,
+    })
 }

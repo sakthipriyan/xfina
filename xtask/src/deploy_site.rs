@@ -1,8 +1,8 @@
+use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, exit};
-use serde::{Deserialize, Serialize};
+use std::process::{exit, Command};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct VersionRegistry {
@@ -56,8 +56,14 @@ pub fn run(args: &[String]) {
 
     // 1. Cleanup stale worktrees
     println!("Cleaning up any stale git worktrees...");
-    let _ = Command::new("git").current_dir(&workspace_root).args(["worktree", "remove", "--force", "gh-pages-worktree"]).status();
-    let _ = Command::new("git").current_dir(&workspace_root).args(["worktree", "prune"]).status();
+    let _ = Command::new("git")
+        .current_dir(&workspace_root)
+        .args(["worktree", "remove", "--force", "gh-pages-worktree"])
+        .status();
+    let _ = Command::new("git")
+        .current_dir(&workspace_root)
+        .args(["worktree", "prune"])
+        .status();
 
     // 2. Add worktree
     println!("Checking out gh-pages branch into gh-pages-worktree...");
@@ -71,11 +77,18 @@ pub fn run(args: &[String]) {
         // If it fails, maybe gh-pages doesn't exist locally. Try to fetch or create orphan
         let status2 = Command::new("git")
             .current_dir(&workspace_root)
-            .args(["worktree", "add", "-B", "gh-pages", "gh-pages-worktree", "origin/gh-pages"])
+            .args([
+                "worktree",
+                "add",
+                "-B",
+                "gh-pages",
+                "gh-pages-worktree",
+                "origin/gh-pages",
+            ])
             .status();
         if !status2.map(|s| s.success()).unwrap_or(false) {
-             eprintln!("Could not checkout gh-pages branch. Ensure it exists.");
-             exit(1);
+            eprintln!("Could not checkout gh-pages branch. Ensure it exists.");
+            exit(1);
         }
     }
 
@@ -99,12 +112,13 @@ pub fn run(args: &[String]) {
     if is_unreleased {
         println!("Building Unreleased version...");
         run_cmd(&wasm_dir, "wasm-pack", &["build", "--target", "web"]);
-        
+
         // Ensure dependencies like Vite are installed
         run_cmd(&web_dir, "npm", &["install"]);
-        
+
         let mut build_cmd = Command::new("npm");
-        build_cmd.current_dir(&web_dir)
+        build_cmd
+            .current_dir(&web_dir)
             .args(["run", "build"])
             .env("VITE_APP_VERSION", "Unreleased")
             .env("VITE_DOMAIN_BASE", "/");
@@ -114,20 +128,33 @@ pub fn run(args: &[String]) {
         if target_dir.exists() {
             fs::remove_dir_all(&target_dir).unwrap();
         }
-        
+
         // Use standard copy since fs::copy only copies files
-        run_cmd(&workspace_root, "cp", &["-r", "web/dist", "gh-pages-worktree/unreleased"]);
-        
+        run_cmd(
+            &workspace_root,
+            "cp",
+            &["-r", "web/dist", "gh-pages-worktree/unreleased"],
+        );
+
         registry.unreleased = true;
     } else {
         println!("Building Tagged version: {}...", tag_version);
         let parts: Vec<&str> = tag_version.split('.').collect();
         let minor_version = format!("{}.{}", parts[0], parts[1]);
-        
-        run_cmd(&web_dir, "npm", &["install", "--no-save", &format!("xfina-wasm@{}", tag_version)]);
-        
+
+        run_cmd(
+            &web_dir,
+            "npm",
+            &[
+                "install",
+                "--no-save",
+                &format!("xfina-wasm@{}", tag_version),
+            ],
+        );
+
         let mut build_cmd = Command::new("npm");
-        build_cmd.current_dir(&web_dir)
+        build_cmd
+            .current_dir(&web_dir)
             .args(["run", "build"])
             .env("VITE_APP_VERSION", &tag_version)
             .env("VITE_DOMAIN_BASE", "/");
@@ -137,8 +164,16 @@ pub fn run(args: &[String]) {
         if target_dir.exists() {
             fs::remove_dir_all(&target_dir).unwrap();
         }
-        
-        run_cmd(&workspace_root, "cp", &["-r", "web/dist", &format!("gh-pages-worktree/{}", minor_version)]);
+
+        run_cmd(
+            &workspace_root,
+            "cp",
+            &[
+                "-r",
+                "web/dist",
+                &format!("gh-pages-worktree/{}", minor_version),
+            ],
+        );
 
         // Update registry
         let mut found = false;
@@ -162,11 +197,11 @@ pub fn run(args: &[String]) {
         // Determine if this is the newest minor series
         let is_latest = match &registry.latest {
             Some(latest) => {
-                // simple lexicographic compare works for x.y since they are padded/small, 
+                // simple lexicographic compare works for x.y since they are padded/small,
                 // but better to parse. For now, string cmp works for 0.1 vs 0.2
                 minor_version >= latest.minor
-            },
-            None => true
+            }
+            None => true,
         };
 
         if is_latest {
@@ -178,12 +213,24 @@ pub fn run(args: &[String]) {
             // Mirror to root
             let index_path = worktree_dir.join("index.html");
             let assets_dir = worktree_dir.join("assets");
-            
-            if index_path.exists() { fs::remove_file(&index_path).unwrap(); }
-            if assets_dir.exists() { fs::remove_dir_all(&assets_dir).unwrap(); }
-            
+
+            if index_path.exists() {
+                fs::remove_file(&index_path).unwrap();
+            }
+            if assets_dir.exists() {
+                fs::remove_dir_all(&assets_dir).unwrap();
+            }
+
             fs::copy(target_dir.join("index.html"), index_path).unwrap();
-            run_cmd(&workspace_root, "cp", &["-r", format!("gh-pages-worktree/{}/assets", minor_version).as_str(), "gh-pages-worktree/assets"]);
+            run_cmd(
+                &workspace_root,
+                "cp",
+                &[
+                    "-r",
+                    format!("gh-pages-worktree/{}/assets", minor_version).as_str(),
+                    "gh-pages-worktree/assets",
+                ],
+            );
         }
     }
 
@@ -198,18 +245,25 @@ pub fn run(args: &[String]) {
         .args(["status", "--porcelain"])
         .output()
         .expect("Failed to run git status");
-    
+
     if diff_status.stdout.is_empty() {
         println!("No changes to publish.");
     } else {
         run_cmd(&worktree_dir, "git", &["add", "."]);
-        run_cmd(&worktree_dir, "git", &["commit", "-m", "Deploy site update"]);
+        run_cmd(
+            &worktree_dir,
+            "git",
+            &["commit", "-m", "Deploy site update"],
+        );
         run_cmd(&worktree_dir, "git", &["push", "origin", "gh-pages"]);
         println!("Successfully deployed to gh-pages.");
     }
-    
+
     // Cleanup
-    let _ = Command::new("git").current_dir(&workspace_root).args(["worktree", "remove", "--force", "gh-pages-worktree"]).status();
+    let _ = Command::new("git")
+        .current_dir(&workspace_root)
+        .args(["worktree", "remove", "--force", "gh-pages-worktree"])
+        .status();
 }
 
 fn run_cmd(dir: &Path, cmd: &str, args: &[&str]) {
@@ -219,7 +273,7 @@ fn run_cmd(dir: &Path, cmd: &str, args: &[&str]) {
         .args(args)
         .status()
         .expect("Failed to execute command");
-        
+
     if !status.success() {
         eprintln!("Command failed!");
         exit(1);
