@@ -189,10 +189,17 @@ fn main() {
     let filename = "hdfc_statement.xls";
     let bytes = std::fs::read(filename).unwrap();
     
+    // Extract file modified timestamp (Unix epoch seconds)
+    let modified_ts = std::fs::metadata(filename)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs() as i64);
+    
     // Create a ParseRequest and provide metadata to improve parsing accuracy
     let req = ParseRequest::new(&bytes)
         .with_filename(filename)
-        .with_modified_timestamp(1723000000); // Unix timestamp (optional)
+        .with_modified_timestamp(modified_ts);
 
     // Parse the statement
     let result = parse_hdfc_bank_statement(req).unwrap();
