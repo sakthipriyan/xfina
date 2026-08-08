@@ -1,12 +1,14 @@
 <p align="center">
-  <img src="web/public/favicon.svg" width="120" height="120" alt="Xfina Logo"/>
+  <a href="https://github.com/sakthipriyan/xfina" target="_blank">
+    <img src="web/public/favicon.svg" width="120" height="120" alt="Xfina Logo"/>
+  </a>
 </p>
 
-# Xfina
+# [Xfina](https://github.com/sakthipriyan/xfina)
 
-[![Crates.io](https://img.shields.io/crates/v/xfina.svg)](https://crates.io/crates/xfina)
-[![PyPI](https://img.shields.io/pypi/v/xfina.svg)](https://pypi.org/project/xfina/)
-[![npm](https://img.shields.io/npm/v/xfina-wasm.svg)](https://www.npmjs.com/package/xfina-wasm)
+[![Crates.io](https://img.shields.io/crates/v/xfina.svg?color=orange)](https://crates.io/crates/xfina)
+[![PyPI](https://img.shields.io/pypi/v/xfina.svg?color=blue)](https://pypi.org/project/xfina/)
+[![npm](https://img.shields.io/npm/v/xfina-wasm.svg?color=yellow)](https://www.npmjs.com/package/xfina-wasm)
 
 **Xfina** is a collection of libraries (Rust, Python, JS), a command-line interface (CLI), and a web interface for extracting structured financial data from **Indian** bank statements, credit card statements, mutual fund reports, and international brokerage reports.
 
@@ -176,21 +178,38 @@ You can also use Xfina directly as a Rust library in your own projects:
 
 ```toml
 [dependencies]
-xfina = "0.1"
+xfina = "0.2"
 ```
 
 ```rust
 use xfina::bank_accounts::hdfc::parse_hdfc_bank_statement;
+use xfina::models::request::ParseRequest;
 
 fn main() {
-    let bytes = std::fs::read("hdfc_statement.xls").unwrap();
+    let filename = "hdfc_statement.xls";
+    let bytes = std::fs::read(filename).unwrap();
     
+    // Extract file modified timestamp (Unix epoch seconds)
+    let modified_ts = std::fs::metadata(filename)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs() as i64);
+    
+    // Create a ParseRequest and provide metadata to improve parsing accuracy
+    let req = ParseRequest::new(&bytes)
+        .with_filename(filename)
+        .with_modified_timestamp(modified_ts);
+
     // Parse the statement
-    let statement = parse_hdfc_bank_statement(&bytes, None).unwrap();
+    let result = parse_hdfc_bank_statement(req).unwrap();
     
-    // Convert to JSON (choose either strict ReBIT or extended Xfina format)
-    let json = statement.to_xfina_json();
-    println!("{}", serde_json::to_string_pretty(&json).unwrap());
+    // The result contains both the validation report and the financial data
+    println!("Validation status: {:?}", result.validation.overall);
+
+    // Convert the data to JSON (choose either strict ReBIT or extended Xfina format)
+    let json_data = result.data.to_xfina_json();
+    println!("{}", serde_json::to_string_pretty(&json_data).unwrap());
 }
 ```
 

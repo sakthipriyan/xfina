@@ -1,8 +1,14 @@
-# Xfina (Python Bindings)
+<p align="center">
+  <a href="https://github.com/sakthipriyan/xfina" target="_blank">
+    <img src="https://github.com/sakthipriyan/xfina/raw/main/web/public/favicon.svg" width="120" height="120" alt="Xfina Logo"/>
+  </a>
+</p>
 
-[![Crates.io](https://img.shields.io/crates/v/xfina.svg)](https://crates.io/crates/xfina)
-[![PyPI](https://img.shields.io/pypi/v/xfina.svg)](https://pypi.org/project/xfina/)
-[![npm](https://img.shields.io/npm/v/xfina-wasm.svg)](https://www.npmjs.com/package/xfina-wasm)
+# [Xfina (Python Bindings)](https://github.com/sakthipriyan/xfina)
+
+[![Crates.io](https://img.shields.io/crates/v/xfina.svg?color=orange)](https://crates.io/crates/xfina)
+[![PyPI](https://img.shields.io/pypi/v/xfina.svg?color=blue)](https://pypi.org/project/xfina/)
+[![npm](https://img.shields.io/npm/v/xfina-wasm.svg?color=yellow)](https://www.npmjs.com/package/xfina-wasm)
 
 **Xfina** is a blazingly fast library for parsing Indian financial statements (Bank Accounts, Credit Cards, Mutual Funds) and international brokers (IBKR), written in Rust and exposed to Python via PyO3.
 
@@ -16,23 +22,53 @@ pip install xfina
 
 ## Quick Start
 
-The Python bindings expose the exact same parsing functions as the Rust core. Since it is backed by Rust, it requires raw bytes or string contents to be passed in, rather than file paths.
+The Python bindings expose the exact same parsing functions as the Rust core. To keep the core parsing logic as pure functions without side-effects (like file I/O), the library requires raw bytes to be passed in rather than file paths.
+
+### Parsing a Credit Card Statement
+
+```python
+import xfina
+import os
+
+filename = "icici_cc_statement.xls"
+
+with open(filename, "rb") as f:
+    file_bytes = f.read()
+
+result = xfina.parse_icici_cc(
+    file_bytes, 
+    filename=filename,
+    modified_timestamp=int(os.path.getmtime(filename))
+)
+
+print(f"Validation Status: {result['validation']['overall']}")
+```
 
 ### Parsing a Bank Statement (Excel)
 
 ```python
 import xfina
+import os
+
+filename = "hdfc_statement.xls"
+modified_ts = int(os.path.getmtime(filename))
 
 # Read the file as raw bytes
-with open("hdfc_statement.xls", "rb") as f:
+with open(filename, "rb") as f:
     file_bytes = f.read()
 
-# Parse it! 
-# The second argument is an optional password (None for Excel)
-# The format parameter defaults to "xfina" if omitted, but can be "rebit"
-account_data = xfina.parse_hdfc_ba(file_bytes, password=None, format="xfina")
+# Parse it! Providing the filename and modified timestamp helps improve parsing accuracy
+result = xfina.parse_hdfc_ba(
+    file_bytes, 
+    password=None, 
+    filename=filename,
+    modified_timestamp=modified_ts,
+    format="xfina"
+)
 
-print(f"Account Name: {account_data['profile']['holders']['holder'][0]['name']}")
+# The returned dictionary contains both the validation report and the financial data
+print(f"Validation Status: {result['validation']['overall']}")
+print(f"Account Name: {result['data']['profile']['holders']['holder'][0]['name']}")
 ```
 
 ### Parsing a CAMS Mutual Fund Statement (PDF)
@@ -57,11 +93,11 @@ with open("output.json", "w") as f:
 ```python
 import xfina
 
-# IBKR and HDFC Credit Card parsers expect a string (CSV content), not raw bytes
-with open("ibkr_activity.csv", "r", encoding="utf-8") as f:
-    csv_content = f.read()
+# All parsers now uniformly expect raw bytes, even for CSVs
+with open("ibkr_activity.csv", "rb") as f:
+    file_bytes = f.read()
 
-ibkr_data = xfina.parse_ibkr(csv_content, format="rebit")
+result = xfina.parse_ibkr(file_bytes, format="rebit")
 ```
 
 ## Available Parsers
@@ -70,12 +106,14 @@ All parsers return a structured Python dictionary that mirrors the ReBIT JSON sc
 
 | Category | Institution | Format | Python Function | Input Type |
 |---|---|---|---|---|
-| Bank Account | HDFC | `.xls` | `parse_hdfc_ba(bytes, password=None, format=None)` | `bytes` |
-| Bank Account | ICICI | `.xls` | `parse_icici_ba(bytes, filename=None, format=None)` | `bytes` |
-| Bank Account | SBI | PDF | `parse_sbi_ba(bytes, password=None, filename=None, format=None)` | `bytes` |
-| Bank Account | BOB | `.xls` | `parse_bob_ba(bytes, format=None)` | `bytes` |
-| Bank Account | Axis | `.xls` | `parse_axis_ba(bytes, filename=None, format=None)` | `bytes` |
-| Credit Card | HDFC | CSV | `parse_hdfc_cc(content, filename=None, format=None)` | `str` |
-| Credit Card | ICICI | `.xls` | `parse_icici_cc(bytes, filename=None, format=None)` | `bytes` |
-| Mutual Funds | CAMS | PDF | `parse_cams(bytes, password=None, format=None, filename=None)` | `bytes` |
-| Intl Stocks | IBKR | CSV | `parse_ibkr(content, format=None)` | `str` |
+| Bank Account | HDFC | `.xls` | `parse_hdfc_ba(bytes, **kwargs)` | `bytes` |
+| Bank Account | ICICI | `.xls` | `parse_icici_ba(bytes, **kwargs)` | `bytes` |
+| Bank Account | SBI | PDF | `parse_sbi_ba(bytes, **kwargs)` | `bytes` |
+| Bank Account | BOB | `.xls` | `parse_bob_ba(bytes, **kwargs)` | `bytes` |
+| Bank Account | Axis | `.xls` | `parse_axis_ba(bytes, **kwargs)` | `bytes` |
+| Credit Card | HDFC | CSV | `parse_hdfc_cc(bytes, **kwargs)` | `bytes` |
+| Credit Card | ICICI | `.xls` | `parse_icici_cc(bytes, **kwargs)` | `bytes` |
+| Mutual Funds | CAMS | PDF | `parse_cams(bytes, **kwargs)` | `bytes` |
+| Intl Stocks | IBKR | CSV | `parse_ibkr(bytes, **kwargs)` | `bytes` |
+
+*Note: All Python functions accept the following optional keyword arguments: `password`, `filename`, `modified_timestamp`, and `format`.*

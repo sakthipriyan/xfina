@@ -1,8 +1,14 @@
-# Xfina (WASM Bindings)
+<p align="center">
+  <a href="https://github.com/sakthipriyan/xfina" target="_blank">
+    <img src="https://github.com/sakthipriyan/xfina/raw/main/web/public/favicon.svg" width="120" height="120" alt="Xfina Logo"/>
+  </a>
+</p>
 
-[![Crates.io](https://img.shields.io/crates/v/xfina.svg)](https://crates.io/crates/xfina)
-[![PyPI](https://img.shields.io/pypi/v/xfina.svg)](https://pypi.org/project/xfina/)
-[![npm](https://img.shields.io/npm/v/xfina-wasm.svg)](https://www.npmjs.com/package/xfina-wasm)
+# [Xfina (WASM Bindings)](https://github.com/sakthipriyan/xfina)
+
+[![Crates.io](https://img.shields.io/crates/v/xfina.svg?color=orange)](https://crates.io/crates/xfina)
+[![PyPI](https://img.shields.io/pypi/v/xfina.svg?color=blue)](https://pypi.org/project/xfina/)
+[![npm](https://img.shields.io/npm/v/xfina-wasm.svg?color=yellow)](https://www.npmjs.com/package/xfina-wasm)
 
 **Xfina** is a blazingly fast WebAssembly (WASM) library for parsing Indian financial statements (Bank Accounts, Credit Cards, Mutual Funds) and international brokers (IBKR).
 
@@ -26,14 +32,22 @@ async function parseStatement(file) {
   // Read the file as an ArrayBuffer, then convert to Uint8Array
   const buffer = await file.arrayBuffer();
   const bytes = new Uint8Array(buffer);
+  
+  // Extract file metadata to improve parsing accuracy
+  const filename = file.name;
+  const modifiedTimestamp = Math.floor(file.lastModified / 1000);
 
   try {
     // Parse the statement!
-    // The format parameter can be "xfina" (default, with xfina extensions) or "rebit" (strict AA format)
+    // Args: bytes, password, filename, modifiedTimestamp, format
+    const jsonString = parse_hdfc_ba(bytes, null, filename, modifiedTimestamp, "xfina");
+    
+    // Parse the JSON string into a JS object
     // The returned object has two fields: `data` and `validation`
-    const result = parse_hdfc_ba(bytes, null, "xfina");
-    console.log(result.data);
-    console.log(result.validation);
+    const result = JSON.parse(jsonString);
+    
+    console.log("Validation status:", result.validation.overall);
+    console.log("Account data:", result.data);
   } catch (error) {
     console.error("Failed to parse statement:", error);
   }
@@ -47,14 +61,14 @@ Each parser accepts an optional `format` parameter which can be `"xfina"` (defau
 
 | Category | Institution | Format | JS Function | Input Type |
 |---|---|---|---|---|
-| Bank Account | HDFC | `.xls` | `parse_hdfc_ba(bytes, password, format)` | `Uint8Array` |
-| Bank Account | ICICI | `.xls` | `parse_icici_ba(bytes, filename, format)` | `Uint8Array` |
-| Bank Account | SBI | PDF | `parse_sbi_ba(bytes, password, filename, format)` | `Uint8Array` |
-| Bank Account | BOB | `.xls` | `parse_bob_ba(bytes, format)` | `Uint8Array` |
-| Bank Account | Axis | `.xls` | `parse_axis_ba(bytes, filename, format)` | `Uint8Array` |
-| Credit Card | HDFC | CSV | `parse_hdfc_cc(content, filename, format)` | `String` |
-| Credit Card | ICICI | `.xls` | `parse_icici_cc(bytes, filename, format)` | `Uint8Array` |
-| Mutual Funds | CAMS | PDF | `parse_cams(bytes, password, format, filename)` | `Uint8Array` |
-| Intl Stocks | IBKR | CSV | `parse_ibkr(content, format)` | `String` |
+| Bank Account | HDFC | `.xls` | `parse_hdfc_ba(bytes, ...)` | `Uint8Array` |
+| Bank Account | ICICI | `.xls` | `parse_icici_ba(bytes, ...)` | `Uint8Array` |
+| Bank Account | SBI | PDF | `parse_sbi_ba(bytes, ...)` | `Uint8Array` |
+| Bank Account | BOB | `.xls` | `parse_bob_ba(bytes, ...)` | `Uint8Array` |
+| Bank Account | Axis | `.xls` | `parse_axis_ba(bytes, ...)` | `Uint8Array` |
+| Credit Card | HDFC | CSV | `parse_hdfc_cc(bytes, ...)` | `Uint8Array` |
+| Credit Card | ICICI | `.xls` | `parse_icici_cc(bytes, ...)` | `Uint8Array` |
+| Mutual Funds | CAMS | PDF | `parse_cams(bytes, ...)` | `Uint8Array` |
+| Intl Stocks | IBKR | CSV | `parse_ibkr(bytes, ...)` | `Uint8Array` |
 
-*Note: For `parse_hdfc_cc` and `parse_ibkr`, you must read the file as text and pass a JavaScript `String` instead of a `Uint8Array`.*
+*Note: All WASM functions take the exact same 5 arguments: `(bytes, password, filename, modified_timestamp, format)`. Unused arguments can be passed as `null`.*

@@ -408,10 +408,14 @@ const camsGroupedAssets = computed(() => {
       <!-- Header -->
       <div class="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
         <div class="flex items-start gap-5">
-          <img src="/favicon.svg" alt="Xfina Logo" class="w-16 h-16" />
+          <a href="." class="hover:opacity-80 transition-opacity flex-shrink-0 cursor-pointer">
+            <img src="/favicon.svg" alt="Xfina Logo" class="w-16 h-16" />
+          </a>
           <div class="space-y-2">
             <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-              <h1 class="text-3xl font-bold tracking-tight">Xfina</h1>
+              <a href="." class="hover:text-primary transition-colors cursor-pointer">
+                <h1 class="text-3xl font-bold tracking-tight">Xfina</h1>
+              </a>
               <div class="flex items-center">
                 <Select :key="versionsData ? 'loaded' : 'loading'" :modelValue="selectedDropdownValue" @update:modelValue="onVersionChange">
                   <SelectTrigger class="w-[140px] h-9 border-border bg-background shadow-sm rounded-r-none focus:z-10 focus:ring-1">
