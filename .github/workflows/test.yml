@@ -50,15 +50,11 @@ jobs:
 
       - name: Cache cargo registry and build
         if: steps.check_changes.outputs.run_tests == 'true'
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        if: steps.check_changes.outputs.run_tests == 'true'
+        run: cargo fmt --check
 
       - name: Check for warnings
         if: steps.check_changes.outputs.run_tests == 'true'
@@ -66,7 +62,7 @@ jobs:
 
       - name: Run tests
         if: steps.check_changes.outputs.run_tests == 'true'
-        run: cargo test --workspace
+        run: cargo test --workspace --all-features
         
       - name: Build WASM
         if: steps.check_changes.outputs.run_tests == 'true'
