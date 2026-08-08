@@ -8,7 +8,7 @@ use regex::Regex;
 use rust_decimal::Decimal;
 use std::str::FromStr;
 use std::collections::HashMap;
-use crate::models::validation::{ParseResult, ValidationReport, SummaryCheck, SummarySource};
+use crate::models::validation::{ParseResult, ValidationReport, SummaryCheck, SummarySource, RowValidation, RowCheckFailure};
 
 #[derive(Debug, Clone)]
 struct ColumnBounds {
@@ -233,6 +233,7 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> R
     let mut holdings: Vec<MfHolding> = Vec::new();
     let mut all_transactions: Vec<MfTransaction> = Vec::new();
     
+    let mut validation = ValidationReport::empty();
     let mut statement_start_date = None;
     let mut statement_end_date = None;
     
@@ -313,8 +314,20 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> R
                 },
                 ParserState::InPortfolioSummary => {
                     if lower_text.starts_with("total ") {
+                        let parts: Vec<&str> = text.split_whitespace().collect();
+                        if parts.len() >= 3 {
+                            let len = parts.len();
+                            let current_str = parts[len - 1].replace(",", "");
+                            let invested_str = parts[len - 2].replace(",", "");
+                            if let (Ok(current), Ok(invested)) = (Decimal::from_str(&current_str), Decimal::from_str(&invested_str)) {
+                                portfolio_summary.insert("TOTAL_PORTFOLIO".to_string(), ValidationData {
+                                    total_invested: invested,
+                                    current_value: current,
+                                });
+                            }
+                        }
                         state = ParserState::OutsideFolio;
-                    } else if lower_text.ends_with("mutual fund") || lower_text.ends_with("fund") || lower_text.ends_with("mf") {
+                    } else {
                         let parts: Vec<&str> = text.split_whitespace().collect();
                         if parts.len() >= 3 {
                             let len = parts.len();
@@ -323,10 +336,13 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> R
                             
                             if let (Ok(current), Ok(invested)) = (Decimal::from_str(&current_str), Decimal::from_str(&invested_str)) {
                                 let fund_name = parts[0..len-2].join(" ");
-                                portfolio_summary.insert(fund_name, ValidationData {
-                                    total_invested: invested,
-                                    current_value: current,
-                                });
+                                let fund_name_lower = fund_name.to_lowercase();
+                                if fund_name_lower.contains("mutual") || fund_name_lower.contains("fund") || fund_name_lower.contains("mf") || fund_name_lower.contains("amc") {
+                                    portfolio_summary.insert(fund_name, ValidationData {
+                                        total_invested: invested,
+                                        current_value: current,
+                                    });
+                                }
                             }
                         }
                     }
@@ -360,7 +376,7 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> R
                 },
                 ParserState::InSchemeBody { holding, buffer } => {
                     if lower_text.starts_with("closing unit balance:") {
-                        let mut scheme_transactions = parse_transactions(holding, buffer, current_columns.as_deref());
+                        let mut scheme_transactions = parse_transactions(holding, buffer, current_columns.as_deref(), &mut validation);
                         
                         let mut period_buy_units = Decimal::ZERO;
                         let mut period_sell_units = Decimal::ZERO;
@@ -498,7 +514,6 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> R
     }
     
     // VALIDATION
-    let mut validation = ValidationReport::empty();
 
     if !portfolio_summary.is_empty() {
         let mut computed_summary: HashMap<String, ValidationData> = HashMap::new();
@@ -512,8 +527,14 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> R
             e.current_value += current;
         }
         
+        let mut overall_computed = ValidationData { total_invested: Decimal::ZERO, current_value: Decimal::ZERO };
         for (amc, summary) in portfolio_summary.iter() {
+            if amc == "TOTAL_PORTFOLIO" {
+                continue;
+            }
             if let Some(computed) = computed_summary.get(amc) {
+                overall_computed.total_invested += computed.total_invested;
+                overall_computed.current_value += computed.current_value;
                 // Invested validation
                 validation.summary_level.checks.push(SummaryCheck {
                     name: format!("{}_invested_match", amc).replace(' ', "_").to_lowercase(),
@@ -547,6 +568,27 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> R
                     note: Some(format!("amc: {} (no parsed schemes found)", amc)),
                 });
             }
+        }
+        
+        if let Some(total_decl) = portfolio_summary.get("TOTAL_PORTFOLIO") {
+            validation.summary_level.checks.push(SummaryCheck {
+                name: "overall_invested_match".to_string(),
+                passed: (total_decl.total_invested - overall_computed.total_invested).abs() <= Decimal::from(1),
+                source: SummarySource::Declared,
+                declared: Some(total_decl.total_invested),
+                computed: overall_computed.total_invested,
+                delta: Some(total_decl.total_invested - overall_computed.total_invested),
+                note: Some("overall portfolio".to_string()),
+            });
+            validation.summary_level.checks.push(SummaryCheck {
+                name: "overall_value_match".to_string(),
+                passed: (total_decl.current_value - overall_computed.current_value).abs() <= Decimal::from(1),
+                source: SummarySource::Declared,
+                declared: Some(total_decl.current_value),
+                computed: overall_computed.current_value,
+                delta: Some(total_decl.current_value - overall_computed.current_value),
+                note: Some("overall portfolio".to_string()),
+            });
         }
     }
     
@@ -709,7 +751,7 @@ fn parse_scheme_header(folio_no: String, amc: String, buffer: &[String]) -> MfHo
     holding
 }
 
-fn parse_transactions(holding: &MfHolding, buffer: &[Line], columns: Option<&[ColumnBounds]>) -> Vec<MfTransaction> {
+fn parse_transactions(holding: &MfHolding, buffer: &[Line], columns: Option<&[ColumnBounds]>, validation: &mut ValidationReport) -> Vec<MfTransaction> {
     let mut transactions: Vec<MfTransaction> = Vec::new();
     let date_re = Regex::new(r"^\d{2}-\S{3}-\d{4}").unwrap();
     let space_fix_re1 = Regex::new(r"([a-z])([A-Z])").unwrap();
@@ -857,10 +899,22 @@ fn parse_transactions(holding: &MfHolding, buffer: &[Line], columns: Option<&[Co
         }
         
         if let Some(printed) = bal {
-            if (running_balance - printed).abs() > Decimal::new(5, 3) {
+            let passed = (running_balance - printed).abs() <= Decimal::new(5, 3);
+            if !passed {
                 let s_name = holding.xfina.as_ref().and_then(|x| x.scheme_name.clone()).unwrap_or_default();
                 eprintln!("WARNING: Row-by-row checksum mismatch in {}. Computed {}, Printed {}. Resyncing.", s_name, running_balance, printed);
                 running_balance = printed;
+            }
+            validation.row_level.checked_rows += 1;
+            if !passed {
+                validation.row_level.passed = false;
+                validation.row_level.failed_rows.push(RowCheckFailure {
+                    row_index: validation.row_level.checked_rows - 1,
+                    narration: t.narration.clone().unwrap_or_default(),
+                    expected_balance: running_balance,
+                    actual_balance: printed,
+                    delta: running_balance - printed,
+                });
             }
         }
 

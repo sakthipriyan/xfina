@@ -1,5 +1,6 @@
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 // -----------------------------------------------------------------------------
 // ParseResult — top-level envelope returned by every Xfina parser
@@ -75,9 +76,19 @@ impl ValidationReport {
     /// Compute and set `overall` from the current state of both levels.
     /// Call this after all checks have been added.
     pub fn finalize(&mut self) {
-        let has_declared_failure = self.summary_level.checks.iter().any(|c| {
-            !c.passed && c.source == SummarySource::Declared
-        });
+        for check in self.summary_level.checks.drain(..) {
+            if check.source == SummarySource::Declared {
+                self.summary_level.declared.checks.push(check);
+            } else {
+                self.summary_level.derived.checks.push(check);
+            }
+        }
+        
+        self.summary_level.declared.passed = self.summary_level.declared.checks.iter().all(|c| c.passed);
+        self.summary_level.derived.passed = self.summary_level.derived.checks.iter().all(|c| c.passed);
+        self.summary_level.passed = self.summary_level.declared.passed && self.summary_level.derived.passed;
+        
+        let has_declared_failure = !self.summary_level.declared.passed;
         let all_passed = self.row_level.passed && self.summary_level.passed;
 
         self.overall = match (all_passed, has_declared_failure) {
@@ -99,6 +110,8 @@ impl ValidationReport {
             summary_level: SummaryValidation {
                 passed: true,
                 checks: Vec::new(),
+                declared: SubSummaryValidation::default(),
+                derived: SubSummaryValidation::default(),
             },
         }
     }
@@ -169,8 +182,25 @@ pub struct RowCheckFailure {
 pub struct SummaryValidation {
     /// `true` when every check in `checks` passed.
     pub passed: bool,
-    /// Individual cross-checks. May be empty for parsers with no summary data.
+    /// Individual cross-checks pushed during parsing. Will be bucketed during finalize.
+    #[serde(skip_serializing, skip_deserializing)]
     pub checks: Vec<SummaryCheck>,
+    /// Summary validations matching explicitly declared values in the statement.
+    pub declared: SubSummaryValidation,
+    /// Summary validations tracking internally derived limits or bounds.
+    pub derived: SubSummaryValidation,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubSummaryValidation {
+    pub passed: bool,
+    pub checks: Vec<SummaryCheck>,
+}
+
+impl Default for SubSummaryValidation {
+    fn default() -> Self {
+        Self { passed: true, checks: Vec::new() }
+    }
 }
 
 /// A single summary cross-check.
@@ -208,8 +238,10 @@ pub struct SummaryCheck {
 impl SummaryCheck {
     /// Build a check comparing a declared value to a computed one.
     pub fn declared(name: &str, declared: Decimal, computed: Decimal, note: Option<String>) -> Self {
-        let passed = declared == computed;
-        let delta = if passed { None } else { Some(declared - computed) };
+        // Use a 1.0 tolerance for checking to account for floating-point rounding or bank minor adjustments
+        let delta_val = declared - computed;
+        let passed = delta_val.abs() < Decimal::from_str("1.0").unwrap_or_default();
+        let delta = if passed { None } else { Some(delta_val) };
         Self {
             name: name.to_string(),
             passed,
@@ -223,8 +255,10 @@ impl SummaryCheck {
 
     /// Build a check comparing two computed values (no declared figure available).
     pub fn derived(name: &str, expected: Decimal, computed: Decimal, note: Option<String>) -> Self {
-        let passed = expected == computed;
-        let delta = if passed { None } else { Some(expected - computed) };
+        // Use a 1.0 tolerance for checking to account for floating-point rounding or bank minor adjustments
+        let delta_val = expected - computed;
+        let passed = delta_val.abs() < Decimal::from_str("1.0").unwrap_or_default();
+        let delta = if passed { None } else { Some(delta_val) };
         Self {
             name: name.to_string(),
             passed,

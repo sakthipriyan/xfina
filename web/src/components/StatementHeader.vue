@@ -53,19 +53,7 @@ const props = defineProps({
           <span v-if="institutionName">{{ institutionName }}</span>
         </div>
 
-        <div v-if="validationStatus" class="mt-2 text-xs font-semibold flex items-center gap-1.5"
-             :class="{
-               'text-emerald-500': validationStatus === 'Passed',
-               'text-amber-500': validationStatus === 'DerivedDiscrepancy',
-               'text-destructive': validationStatus === 'DeclaredDiscrepancy'
-             }">
-          <CheckCircle2 v-if="validationStatus === 'Passed'" class="w-4 h-4" />
-          <AlertTriangle v-if="validationStatus === 'DerivedDiscrepancy'" class="w-4 h-4" />
-          <XCircle v-if="validationStatus === 'DeclaredDiscrepancy'" class="w-4 h-4" />
-          <span v-if="validationStatus === 'Passed'">Validation Passed</span>
-          <span v-else-if="validationStatus === 'DerivedDiscrepancy'">Warning: Validation Discrepancy</span>
-          <span v-else-if="validationStatus === 'DeclaredDiscrepancy'">Error: Validation Failed</span>
-        </div>
+
       </CardHeader>
       <CardContent class="mt-1 flex-1">
         <div class="flex flex-col gap-1">

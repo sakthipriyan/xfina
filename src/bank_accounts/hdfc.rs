@@ -308,6 +308,15 @@ pub fn parse_hdfc_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposit
     let mut ob_val = None;
     if let Some(ob) = parsed_summary_opening {
         ob_val = Some(ob);
+        if let Some(first) = parsed_transactions.first() {
+            let derived_ob = if first.r#type == TransactionType::Credit { first.current_balance - first.amount } else { first.current_balance + first.amount };
+            validation.summary_level.checks.push(SummaryCheck::declared(
+                "opening_balance_match",
+                ob,
+                derived_ob,
+                None,
+            ));
+        }
     } else if let Some(first) = parsed_transactions.first() {
         ob_val = Some(if first.r#type == TransactionType::Credit { first.current_balance - first.amount } else { first.current_balance + first.amount });
     }
@@ -339,13 +348,68 @@ pub fn parse_hdfc_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposit
     transactions_obj.transaction = parsed_transactions;
 
     // Level 1 — Row-by-row running balance check
-    if let Some(ob) = stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.opening_balance) {
+
+
+    let inferred_ob = transactions_obj.transaction.first().map(|t| {
+
+
+        if t.r#type == TransactionType::Credit {
+
+
+            t.current_balance - t.amount
+
+
+        } else {
+
+
+            t.current_balance + t.amount
+
+
+        }
+
+
+    });
+
+
+    
+
+
+    let ob_to_use = stmt.summary.as_ref()
+
+
+        .and_then(|s| s.xfina.as_ref())
+
+
+        .and_then(|x| x.opening_balance)
+
+
+        .or(inferred_ob);
+
+
+    
+
+
+    if let Some(ob) = ob_to_use {
+
+
         let row_tuples: Vec<(bool, Decimal, Decimal, String)> = transactions_obj
+
+
             .transaction
+
+
             .iter()
+
+
             .map(|t| (t.r#type == TransactionType::Credit, t.amount, t.current_balance, t.narration.clone()))
+
+
             .collect();
+
+
         validation.row_level = check_row_balances(ob, &row_tuples);
+
+
     }
     // Summary level pass/fail rollup
     validation.summary_level.passed = validation.summary_level.checks.iter().all(|c| c.passed);

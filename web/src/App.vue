@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
 import init, { parse_ibkr, parse_cams, parse_hdfc_cc, parse_icici_cc, parse_hdfc_ba, parse_icici_ba, parse_sbi_ba, parse_bob_ba, parse_axis_ba } from 'xfina-wasm';
-import { Sun, Moon, Github, HelpCircle, ChevronDown, Loader2, ArrowUp, ArrowDown, GitCommit } from 'lucide-vue-next';
+import { Sun, Moon, Github, HelpCircle, ChevronDown, Loader2, ArrowUp, ArrowDown, GitCommit, CheckCircle2, AlertTriangle, XCircle, MinusCircle } from 'lucide-vue-next';
 
 // Shadcn components
 import { Button } from '@/components/ui/button';
@@ -41,7 +41,20 @@ const bankStatement = ref(null);
 const equityStatement = ref(null);
 const validationReport = ref(null);
 const isProcessing = ref(false);
+const totalTxns = computed(() => {
+    if (selectedCategory.value === 'Bank Accounts' && bankStatement.value) {
+        return bankStatement.value.transactions?.transaction?.length || 0;
+    } else if (selectedCategory.value === 'Credit Cards' && ccStatement.value) {
+        return ccStatement.value.transactions?.transaction?.length || 0;
+    } else if (selectedCategory.value === 'Mutual Funds' && mfStatement.value) {
+        return mfStatement.value.transactions?.transaction?.length || 0;
+    } else if (selectedCategory.value === 'Intl Brokers' && equityStatement.value) {
+        return equityStatement.value.transactions?.transaction?.length || 0;
+    }
+    return 0;
+});
 const parseTime = ref(null);
+const uploadedFile = ref(null);
 
 const versionsData = ref(null);
 const appVersion = import.meta.env.VITE_APP_VERSION || 'Unreleased';
@@ -115,14 +128,25 @@ const getAcceptString = computed(() => {
     return '*';
 });
 
-const setCategory = (cat) => {
-    selectedCategory.value = cat;
+const clearState = () => {
     mfStatement.value = null;
     ccStatement.value = null;
     bankStatement.value = null;
     equityStatement.value = null;
     validationReport.value = null;
     error.value = null;
+    parseTime.value = null;
+    uploadedFile.value = null;
+};
+
+const setSource = (src) => {
+    selectedSource.value = src;
+    clearState();
+};
+
+const setCategory = (cat) => {
+    selectedCategory.value = cat;
+    clearState();
     if (cat === 'Mutual Funds') selectedSource.value = 'CAMS';
     else if (cat === 'Intl Brokers') selectedSource.value = 'IBKR';
     else if (cat === 'Credit Cards') selectedSource.value = 'HDFC';
@@ -151,6 +175,7 @@ onMounted(async () => {
 const onFileSelect = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
+    uploadedFile.value = file;
 
     error.value = null;
     mfStatement.value = null;
@@ -168,7 +193,7 @@ const onFileSelect = async (event) => {
         let jsonString;
         const start = performance.now();
         
-        const modTime = file.lastModified ? Math.floor(file.lastModified / 1000) : null;
+        const modTime = file.lastModified ? BigInt(Math.floor(file.lastModified / 1000)) : null;
         
         if (selectedCategory.value === 'Bank Accounts') {
             const arrayBuffer = await file.arrayBuffer();
@@ -261,7 +286,7 @@ const formatDate = (ts) => {
     if (ts === null || ts === undefined || ts === '') return '-';
     const d = new Date(Number(ts) * 1000);
     if (isNaN(d)) return ts;
-    return new Intl.DateTimeFormat('en-US', { 
+    return new Intl.DateTimeFormat(undefined, { 
         year: 'numeric', 
         month: 'short', 
         day: 'numeric',
@@ -284,6 +309,7 @@ const formatDateTime = (ts, path = null, dateOnlyPaths = []) => {
             hour: '2-digit', 
             minute: '2-digit', 
             second: '2-digit',
+            hour12: false,
             timeZone: 'Asia/Kolkata'
         }).format(d);
     } else {
@@ -467,9 +493,6 @@ const camsGroupedAssets = computed(() => {
             <span>Parsing...</span>
             <Loader2 class="h-4 w-4 animate-spin" />
           </div>
-          <div v-else-if="parseTime !== null" class="text-sm font-medium text-muted-foreground whitespace-nowrap mt-0.5">
-            Parsed in {{ parseTime }}s
-          </div>
         </CardHeader>
         <CardContent>
           <div class="flex flex-wrap gap-4 mb-6">
@@ -495,30 +518,30 @@ const camsGroupedAssets = computed(() => {
              <div class="space-y-2" v-if="selectedCategory === 'Mutual Funds'">
                <Label>Provider</Label>
                <div class="flex flex-wrap gap-4">
-                 <Button :variant="selectedSource === 'CAMS' ? 'default' : 'outline'" @click="selectedSource = 'CAMS'">CAMS</Button>
+                 <Button :variant="selectedSource === 'CAMS' ? 'default' : 'outline'" @click="setSource('CAMS')">CAMS</Button>
                </div>
              </div>
              <div class="space-y-2" v-if="selectedCategory === 'Intl Brokers'">
                <Label>Broker</Label>
                <div class="flex flex-wrap gap-4">
-                 <Button :variant="selectedSource === 'IBKR' ? 'default' : 'outline'" @click="selectedSource = 'IBKR'">IBKR</Button>
+                 <Button :variant="selectedSource === 'IBKR' ? 'default' : 'outline'" @click="setSource('IBKR')">IBKR</Button>
                </div>
              </div>
              <div class="space-y-2" v-if="selectedCategory === 'Credit Cards'">
                <Label>Bank</Label>
                <div class="flex flex-wrap gap-4">
-                 <Button :variant="selectedSource === 'HDFC' ? 'default' : 'outline'" @click="selectedSource = 'HDFC'">HDFC Bank</Button>
-                 <Button :variant="selectedSource === 'ICICI' ? 'default' : 'outline'" @click="selectedSource = 'ICICI'">ICICI Bank</Button>
+                 <Button :variant="selectedSource === 'HDFC' ? 'default' : 'outline'" @click="setSource('HDFC')">HDFC Bank</Button>
+                 <Button :variant="selectedSource === 'ICICI' ? 'default' : 'outline'" @click="setSource('ICICI')">ICICI Bank</Button>
                </div>
              </div>
              <div class="space-y-2" v-if="selectedCategory === 'Bank Accounts'">
                <Label>Bank</Label>
                <div class="flex flex-wrap gap-4">
-                 <Button :variant="selectedSource === 'Axis' ? 'default' : 'outline'" @click="selectedSource = 'Axis'">Axis Bank</Button>
-                 <Button :variant="selectedSource === 'BoB' ? 'default' : 'outline'" @click="selectedSource = 'BoB'">Bank of Baroda</Button>
-                 <Button :variant="selectedSource === 'HDFC' ? 'default' : 'outline'" @click="selectedSource = 'HDFC'">HDFC Bank</Button>
-                 <Button :variant="selectedSource === 'ICICI' ? 'default' : 'outline'" @click="selectedSource = 'ICICI'">ICICI Bank</Button>
-                 <Button :variant="selectedSource === 'SBI' ? 'default' : 'outline'" @click="selectedSource = 'SBI'">State Bank of India</Button>
+                 <Button :variant="selectedSource === 'Axis' ? 'default' : 'outline'" @click="setSource('Axis')">Axis Bank</Button>
+                 <Button :variant="selectedSource === 'BoB' ? 'default' : 'outline'" @click="setSource('BoB')">Bank of Baroda</Button>
+                 <Button :variant="selectedSource === 'HDFC' ? 'default' : 'outline'" @click="setSource('HDFC')">HDFC Bank</Button>
+                 <Button :variant="selectedSource === 'ICICI' ? 'default' : 'outline'" @click="setSource('ICICI')">ICICI Bank</Button>
+                 <Button :variant="selectedSource === 'SBI' ? 'default' : 'outline'" @click="setSource('SBI')">State Bank of India</Button>
                </div>
              </div>
 
@@ -551,6 +574,98 @@ const camsGroupedAssets = computed(() => {
         </CardContent>
       </Card>
       <div v-else class="text-muted-foreground animate-pulse">Loading WebAssembly module...</div>
+
+      <!-- Status Bar -->
+      <div v-if="parseTime !== null && uploadedFile" class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-2">
+        <Card class="bg-card text-card-foreground shadow-sm border flex flex-col justify-center p-3 px-4">
+          <span class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">File Name</span>
+          <span class="font-medium text-sm truncate" :title="uploadedFile.name">{{ uploadedFile.name }}</span>
+        </Card>
+        
+        <Card class="bg-card text-card-foreground shadow-sm border flex items-center justify-between p-3 px-4">
+          <div class="flex flex-col">
+            <span class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">Size</span>
+            <span class="font-mono text-sm">{{ (uploadedFile.size / 1024).toFixed(1) }} KB</span>
+          </div>
+          <div class="flex flex-col text-right">
+            <span class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">Last Modified</span>
+            <span class="font-medium text-sm">{{ formatDateTime(uploadedFile.lastModified / 1000) }}</span>
+          </div>
+        </Card>
+        
+        <Card class="bg-card text-card-foreground shadow-sm border flex items-center justify-between p-3 px-4">
+          <div class="flex flex-col">
+            <span class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">Validation Status</span>
+            
+            <div v-if="validationReport?.overall" class="flex items-center gap-3">
+              <!-- Summary Badge -->
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger class="cursor-help flex items-center gap-1.5 font-semibold text-sm w-fit"
+                       :class="{
+                         'text-emerald-500': validationReport.summary_level?.passed,
+                         'text-destructive': !validationReport.summary_level?.passed
+                       }">
+                    <CheckCircle2 v-if="validationReport.summary_level?.passed" class="w-4 h-4" />
+                    <XCircle v-else class="w-4 h-4" />
+                    <span>Summary</span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" class="p-3 max-w-sm">
+                    <div class="space-y-3 text-sm">
+                      <div v-if="validationReport.summary_level?.declared?.checks?.length > 0">
+                        <div class="font-semibold text-foreground mb-0.5">Declared Validations</div>
+                        <div class="text-muted-foreground">{{ validationReport.summary_level.declared.checks.filter(c => c.passed).length }} / {{ validationReport.summary_level.declared.checks.length }} checks passed</div>
+                      </div>
+                      <div v-if="validationReport.summary_level?.derived?.checks?.length > 0">
+                        <div class="font-semibold text-foreground mb-0.5">Derived Validations</div>
+                        <div class="text-muted-foreground">{{ validationReport.summary_level.derived.checks.filter(c => c.passed).length }} / {{ validationReport.summary_level.derived.checks.length }} checks passed</div>
+                      </div>
+                      <div v-if="!validationReport.summary_level?.declared?.checks?.length && !validationReport.summary_level?.derived?.checks?.length" class="text-muted-foreground">
+                        No summary checks available.
+                      </div>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              <!-- Transaction Badge -->
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger class="cursor-help flex items-center gap-1.5 font-semibold text-sm w-fit"
+                       :class="{
+                         'text-muted-foreground': !validationReport.row_level?.checked_rows,
+                         'text-emerald-500': validationReport.row_level?.checked_rows > 0 && validationReport.row_level?.passed,
+                         'text-destructive': validationReport.row_level?.checked_rows > 0 && !validationReport.row_level?.passed
+                       }">
+                    <CheckCircle2 v-if="validationReport.row_level?.passed && validationReport.row_level?.checked_rows > 0" class="w-4 h-4" />
+                    <XCircle v-else-if="!validationReport.row_level?.passed" class="w-4 h-4" />
+                    <MinusCircle v-else class="w-4 h-4 opacity-70" />
+                    <span>Transactions</span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" class="p-3 max-w-sm">
+                    <div class="space-y-1 text-sm">
+                      <div class="font-semibold text-foreground mb-0.5">Running Transactions</div>
+                      <div class="text-muted-foreground" v-if="validationReport.row_level?.checked_rows > 0">
+                        {{ (validationReport.row_level?.checked_rows || 0) - (validationReport.row_level?.failed_rows?.length || 0) }} / {{ validationReport.row_level?.checked_rows || 0 }} txns passed
+                      </div>
+                      <div class="text-muted-foreground" v-else>
+                        Balances not printed ({{ totalTxns }} txns extracted)
+                      </div>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+
+            <div v-else class="text-sm font-medium text-muted-foreground">-</div>
+          </div>
+          <div class="flex flex-col text-right">
+            <span class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">Parse Time</span>
+            <span class="font-mono text-sm">{{ parseTime }}s</span>
+          </div>
+        </Card>
+      </div>
+
       
       <!-- Credit Card Results Table -->
       <div v-if="ccStatement" class="space-y-6">
@@ -954,6 +1069,7 @@ const camsGroupedAssets = computed(() => {
         
         <!-- Standardized Header -->
         <StatementHeader
+          :validationStatus="validationReport?.overall"
           :customerName="bankStatement.profile?.holders?.holder?.[0]?.name || 'Customer'"
           :address="bankStatement.profile?.holders?.holder?.[0]?.address || ''"
           :customerId="bankStatement.profile?.holders?.holder?.[0]?.xfina?.customerId || ''"
@@ -1098,6 +1214,7 @@ const camsGroupedAssets = computed(() => {
         
         <!-- Standardized Header -->
         <StatementHeader
+          :validationStatus="validationReport?.overall"
           :customerName="equityStatement.profile?.holders?.holder?.[0]?.name || 'Customer'"
           :address="equityStatement.profile?.holders?.holder?.[0]?.address || ''"
           :customerId="equityStatement.profile?.holders?.holder?.[0]?.xfina?.customerId || ''"
@@ -1153,12 +1270,15 @@ const camsGroupedAssets = computed(() => {
                <div class="px-4 py-4 flex flex-col items-start w-full pr-0 gap-3 border-b border-transparent transition-colors group-data-[state=open]/item:border-border group-data-[state=open]/item:border-b">
                  <div class="flex flex-col items-start w-full pr-0 gap-3">
                    <!-- Top Row: Chevron, Name, Tags, Txn Pill -->
-                   <div class="flex items-center gap-2.5 flex-wrap w-full">
-                     <span class="text-xs font-medium font-mono bg-muted/30 border border-primary/20 rounded px-2 py-0.5 text-primary shadow-sm" v-if="holding.isin">{{ holding.isin }}</span>
-                     <span class="font-medium text-foreground text-lg">{{ holding.issuerName || holding.description }}</span>
-                     <span class="text-xs font-medium font-mono bg-muted/30 border border-primary/20 rounded px-2 py-0.5 text-primary shadow-sm">{{ holding.description || holding.issuerName }}</span>
+                   <div class="grid grid-cols-[auto_1fr_auto] items-start gap-4 w-full">
+                     <span class="text-xs font-medium font-mono bg-muted/30 border border-primary/20 rounded px-2 py-0.5 text-primary shadow-sm shrink-0" v-if="holding.isin">{{ holding.isin }}</span>
                      
-                     <AccordionTrigger class="py-1.5 flex-none font-mono text-xs font-normal hover:no-underline justify-end gap-1.5 bg-primary/10 text-primary hover:bg-primary/20 transition-colors pl-2.5 pr-2 rounded ml-auto shrink-0 group w-auto" :disabled="!getAssetTransactions(holding).length">
+                     <div class="flex flex-wrap items-center gap-2 min-w-0">
+                       <span class="font-medium text-foreground text-left text-base lg:text-lg leading-tight break-words">{{ holding.issuerName || holding.description }}</span>
+                       <span class="text-xs font-medium font-mono bg-muted/30 border border-primary/20 rounded px-2 py-0.5 text-primary shadow-sm shrink-0">{{ holding.description || holding.issuerName }}</span>
+                     </div>
+                     
+                     <AccordionTrigger class="py-1.5 flex-none font-mono text-xs font-normal hover:no-underline justify-end gap-1.5 bg-primary/10 text-primary hover:bg-primary/20 transition-colors pl-2.5 pr-2 rounded shrink-0 group w-auto" :disabled="!getAssetTransactions(holding).length">
                        <span>{{ getAssetTransactions(holding).length }} {{ getAssetTransactions(holding).length === 1 ? 'Txn' : 'Txns' }}</span>
                        <ChevronDown v-if="getAssetTransactions(holding).length" class="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
                        <template #icon><span class="hidden"></span></template>

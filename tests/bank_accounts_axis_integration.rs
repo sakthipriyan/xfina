@@ -16,7 +16,8 @@ fn test_axis_parser() {
     let _ = fs::create_dir_all(&xfina_dir);
     let _ = fs::create_dir_all(&rebit_dir);
 
-    let paths = fs::read_dir(axis_dir).unwrap();
+    let raw_dir = format!("{}/raw", axis_dir);
+    let paths = fs::read_dir(raw_dir).unwrap();
 
     for path in paths {
         let path = path.unwrap().path();

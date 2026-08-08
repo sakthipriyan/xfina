@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Parsers:** Added derived `computed_closing_balance` validation logic for Bank of Baroda statements.
+- **Parsers:** Added `overall_invested_match` and `overall_value_match` summary checks for Mutual Funds (CAS) by extracting portfolio summaries.
+
+### Changed
+- **Web App:** Standardized the UI header components across all statement types and added visual validation badges.
+
+### Fixed
+- **Web App:** Corrected UI alignment issues for IBKR transaction badges and properly greyed out non-applicable row-level validations for Credit Cards.
+
+## [0.2.0] - 2026-08-06
+
+### Added
 - **Validation Engine:** Added a comprehensive two-level validation engine (`src/models/validation.rs`) to detect parsing discrepancies.
   - Row-level validation checks `opening balance + transaction amount = current balance`.
   - Summary-level validation checks `computed_closing = declared_closing` and verifies total credits/debits against declared summaries in PDFs/XLS files.
