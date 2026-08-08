@@ -1,4 +1,10 @@
-# Xfina (Python Bindings)
+<p align="center">
+  <a href="https://github.com/sakthipriyan/xfina" target="_blank">
+    <img src="https://raw.githubusercontent.com/sakthipriyan/xfina/main/web/public/favicon.svg" width="120" height="120" alt="Xfina Logo"/>
+  </a>
+</p>
+
+# [Xfina (Python Bindings)](https://github.com/sakthipriyan/xfina)
 
 [![Crates.io](https://img.shields.io/crates/v/xfina.svg?color=orange)](https://crates.io/crates/xfina)
 [![PyPI](https://img.shields.io/pypi/v/xfina.svg?color=blue)](https://pypi.org/project/xfina/)
