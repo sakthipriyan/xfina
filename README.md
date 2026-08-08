@@ -176,7 +176,7 @@ You can also use Xfina directly as a Rust library in your own projects:
 
 ```toml
 [dependencies]
-xfina = "0.1"
+xfina = "0.2"
 ```
 
 ```rust
