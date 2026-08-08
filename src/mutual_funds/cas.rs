@@ -8,6 +8,7 @@ use regex::Regex;
 use rust_decimal::Decimal;
 use std::str::FromStr;
 use std::collections::HashMap;
+use crate::models::validation::{ParseResult, ValidationReport, SummaryCheck, SummarySource};
 
 #[derive(Debug, Clone)]
 struct ColumnBounds {
@@ -194,7 +195,7 @@ fn extract_investor_info(pages_lines: &[Vec<Line>]) -> (Option<String>, Option<S
 }
 
 
-pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> Result<MutualFundsAccount, crate::error::XfinaError> {
+pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> Result<ParseResult<MutualFundsAccount>, crate::error::XfinaError> {
     let mut account = MutualFundsAccount {
         r#type: "mutualfunds".to_string(),
         masked_acc_number: String::new(),
@@ -497,6 +498,8 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> R
     }
     
     // VALIDATION
+    let mut validation = ValidationReport::empty();
+
     if !portfolio_summary.is_empty() {
         let mut computed_summary: HashMap<String, ValidationData> = HashMap::new();
         for h in &holdings {
@@ -509,25 +512,48 @@ pub fn parse_cas_lines(pages_lines: Vec<Vec<Line>>, filename: Option<&str>) -> R
             e.current_value += current;
         }
         
-        let mut validation_errors = Vec::new();
         for (amc, summary) in portfolio_summary.iter() {
             if let Some(computed) = computed_summary.get(amc) {
-                let diff_invested = (summary.total_invested - computed.total_invested).abs();
-                let diff_current = (summary.current_value - computed.current_value).abs();
-                if diff_invested > Decimal::from(1) || diff_current > Decimal::from(1) {
-                    validation_errors.push(format!("AMC '{}' mismatch. Summary: {:?}, Computed: {:?}", amc, summary, computed));
-                }
+                // Invested validation
+                validation.summary_level.checks.push(SummaryCheck {
+                    name: format!("{}_invested_match", amc).replace(' ', "_").to_lowercase(),
+                    passed: (summary.total_invested - computed.total_invested).abs() <= Decimal::from(1),
+                    source: SummarySource::Declared,
+                    declared: Some(summary.total_invested),
+                    computed: computed.total_invested,
+                    delta: Some(summary.total_invested - computed.total_invested),
+                    note: Some(format!("amc: {}", amc)),
+                });
+                
+                // Current Value validation
+                validation.summary_level.checks.push(SummaryCheck {
+                    name: format!("{}_value_match", amc).replace(' ', "_").to_lowercase(),
+                    passed: (summary.current_value - computed.current_value).abs() <= Decimal::from(1),
+                    source: SummarySource::Declared,
+                    declared: Some(summary.current_value),
+                    computed: computed.current_value,
+                    delta: Some(summary.current_value - computed.current_value),
+                    note: Some(format!("amc: {}", amc)),
+                });
             } else {
-                validation_errors.push(format!("AMC '{}' found in summary but no parsed schemes found.", amc));
+                // Missing AMC in computed - register a failure
+                validation.summary_level.checks.push(SummaryCheck {
+                    name: format!("{}_invested_match", amc).replace(' ', "_").to_lowercase(),
+                    passed: false,
+                    source: SummarySource::Declared,
+                    declared: Some(summary.total_invested),
+                    computed: Decimal::ZERO,
+                    delta: Some(summary.total_invested),
+                    note: Some(format!("amc: {} (no parsed schemes found)", amc)),
+                });
             }
         }
-        
-        if !validation_errors.is_empty() {
-            println!("VALIDATION WARNINGS:\n{}", validation_errors.join("\n"));
-        }
     }
+    
+    validation.summary_level.passed = validation.summary_level.checks.iter().all(|c| c.passed);
+    validation.finalize();
 
-    Ok(account)
+    Ok(ParseResult { data: account, validation })
 }
 
 

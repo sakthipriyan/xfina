@@ -1,7 +1,7 @@
 <script setup>
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Download, FileJson } from 'lucide-vue-next';
+import { Download, FileJson, CheckCircle2, AlertTriangle, XCircle } from 'lucide-vue-next';
 
 const props = defineProps({
   // Customer Card
@@ -34,6 +34,10 @@ const props = defineProps({
   statementDetails: {
     type: Array,
     default: () => []
+  },
+  validationStatus: {
+    type: String,
+    default: null
   }
 });
 </script>
@@ -48,6 +52,8 @@ const props = defineProps({
           <span v-if="institutionName && statementType" class="text-muted-foreground/50">|</span>
           <span v-if="institutionName">{{ institutionName }}</span>
         </div>
+
+
       </CardHeader>
       <CardContent class="mt-1 flex-1">
         <div class="flex flex-col gap-1">

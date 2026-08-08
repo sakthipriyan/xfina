@@ -4,8 +4,14 @@ use crate::models::mask_account_number;
 use super::{pdf_parser, layout};
 use regex::Regex;
 use chrono::{NaiveDate, TimeZone, Utc};
+use crate::models::validation::{ParseResult, ValidationReport};
 
-pub fn parse_sbi_bank_statement(bytes: &[u8], password: Option<&str>, filename: Option<&str>) -> Result<DepositAccount, crate::error::XfinaError> {
+use crate::models::request::ParseRequest;
+
+pub fn parse_sbi_bank_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
+    let bytes = input.content;
+    let password = input.password;
+    let filename = input.filename;
     let pages = pdf_parser::extract_spatial_pages(bytes, password)?;
     
     let mut statement = DepositAccount {
@@ -376,5 +382,5 @@ if !account_number.is_empty() {
     }
     statement.xfina = Some(xfina_account);
 
-    Ok(statement)
+    Ok(ParseResult { data: statement, validation: ValidationReport::empty() })
 }

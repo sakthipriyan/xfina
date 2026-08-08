@@ -11,10 +11,13 @@
 //!
 //! # fn main() -> Result<(), xfina::error::XfinaError> {
 //! let bytes = std::fs::read("statement.xls").unwrap();
-//! let account = parse_hdfc_bank_statement(&bytes, None)?;
+//! use xfina::models::request::ParseRequest;
+//!
+//! let req = ParseRequest::new(&bytes);
+//! let account = parse_hdfc_bank_statement(req)?;
 //!
 //! // Example: Accessing parsed data (this will compile if you load an actual account)
-//! if let Some(profile) = account.profile {
+//! if let Some(profile) = account.data.profile {
 //!     println!("Account Name: {}", profile.holders.holder[0].name);
 //! }
 //! # Ok(())
