@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **xtask:** Split release command into `prepare-release` and `tag-release` stages to support PR-based branch protection workflows.
+
 ### Changed
 - Add `homepage` to package metadata pointing to `xfina.dev`
 - Fix page title to just `Xfina`
