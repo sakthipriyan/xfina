@@ -11,7 +11,7 @@ pub fn run(args: &[String]) {
 
     // 0. Ensure we are on the main branch
     let output = Command::new("git")
-        .args(&["rev-parse", "--abbrev-ref", "HEAD"])
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .output()
         .expect("Failed to execute git command");
     
