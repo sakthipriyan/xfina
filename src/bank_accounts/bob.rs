@@ -4,7 +4,7 @@ use std::io::Cursor;
 use rust_decimal::Decimal;
 use crate::models::deposit::{DepositAccount, Transaction, XfinaDepositAccount, XfinaSummary, Profile, Holders, Holder, Summary, Transactions, HoldersType, TransactionType, TransactionMode, FiType, HoldingNominee, XfinaHolder};
 use crate::models::mask_account_number;
-use crate::models::validation::{ParseResult, ValidationReport};
+use crate::models::validation::{ParseResult, ValidationReport, check_row_balances};
 use regex::Regex;
 
 use crate::models::request::ParseRequest;
@@ -233,6 +233,8 @@ pub fn parse_bob_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositA
         }
     }
 
+    parsed_transactions.reverse();
+
     let mut summary = Summary::default();
     if let Some(first) = parsed_transactions.first() {
         let ob = if first.r#type == TransactionType::Credit { first.current_balance - first.amount } else { first.current_balance + first.amount };
@@ -262,8 +264,6 @@ pub fn parse_bob_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositA
     
     // Always assign xfina_summary back to summary.xfina as it contains at least defaults/opening balance
     summary.xfina = Some(xfina_summary);
-    
-    parsed_transactions.reverse();
     let transactions_obj = Transactions {
         start_date,
         end_date,
@@ -319,5 +319,31 @@ pub fn parse_bob_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositA
     }
     statement.xfina = Some(xfina_account);
 
-    Ok(ParseResult { data: statement, validation: ValidationReport::empty() })
+    let mut validation = ValidationReport::empty();
+    
+    if let Some(ob) = statement.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.opening_balance) {
+        let row_tuples: Vec<(bool, rust_decimal::Decimal, rust_decimal::Decimal, String)> = statement.transactions.as_ref().unwrap().transaction
+            .iter()
+            .map(|t| (t.r#type == crate::models::deposit::TransactionType::Credit, t.amount, t.current_balance, t.narration.clone()))
+            .collect();
+        validation.row_level = check_row_balances(ob, &row_tuples);
+    }
+    
+    // Derived check: opening + credits - debits = closing
+    if let (Some(ob), cb) = (statement.summary.as_ref().and_then(|x| x.xfina.as_ref()).and_then(|x| x.opening_balance), statement.summary.as_ref().map(|s| s.current_balance).unwrap_or(rust_decimal::Decimal::ZERO)) {
+        let credits: rust_decimal::Decimal = statement.transactions.as_ref().unwrap().transaction.iter().filter(|t| t.r#type == crate::models::deposit::TransactionType::Credit).map(|t| t.amount).sum();
+        let debits: rust_decimal::Decimal = statement.transactions.as_ref().unwrap().transaction.iter().filter(|t| t.r#type == crate::models::deposit::TransactionType::Debit).map(|t| t.amount).sum();
+        
+        validation.summary_level.checks.push(crate::models::validation::SummaryCheck::derived(
+            "computed_closing_balance",
+            cb,
+            ob + credits - debits,
+            None
+        ));
+    }
+    
+    validation.summary_level.passed = validation.summary_level.checks.iter().all(|c| c.passed);
+    validation.finalize();
+
+    Ok(ParseResult { data: statement, validation })
 }
