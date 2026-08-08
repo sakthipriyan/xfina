@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://github.com/sakthipriyan/xfina" target="_blank">
-    <img src="https://raw.githubusercontent.com/sakthipriyan/xfina/main/web/public/favicon.svg" width="120" height="120" alt="Xfina Logo"/>
+    <img src="web/public/favicon.svg" width="120" height="120" alt="Xfina Logo"/>
   </a>
 </p>
 
