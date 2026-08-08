@@ -42,7 +42,7 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
-          cargo publish --package xfina --allow-dirty || true
+          cargo publish --package xfina --allow-dirty
 
   npm:
     name: Publish to NPM
