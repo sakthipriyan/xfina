@@ -1687,7 +1687,7 @@ dependencies = [
 
 [[package]]
 name = "xfina"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "calamine",
@@ -1707,7 +1707,7 @@ dependencies = [
 
 [[package]]
 name = "xfina-py"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "pyo3",
  "pythonize",
@@ -1717,7 +1717,7 @@ dependencies = [
 
 [[package]]
 name = "xfina-wasm"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -1727,7 +1727,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "serde",
  "serde_json",
