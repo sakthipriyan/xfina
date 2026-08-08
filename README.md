@@ -184,10 +184,13 @@ use xfina::bank_accounts::hdfc::parse_hdfc_bank_statement;
 use xfina::models::request::ParseRequest;
 
 fn main() {
-    let bytes = std::fs::read("hdfc_statement.xls").unwrap();
+    let filename = "hdfc_statement.xls";
+    let bytes = std::fs::read(filename).unwrap();
     
-    // Create a ParseRequest
-    let req = ParseRequest::new(&bytes);
+    // Create a ParseRequest and provide metadata to improve parsing accuracy
+    let req = ParseRequest::new(&bytes)
+        .with_filename(filename)
+        .with_modified_timestamp(1723000000); // Unix timestamp (optional)
 
     // Parse the statement
     let result = parse_hdfc_bank_statement(req).unwrap();

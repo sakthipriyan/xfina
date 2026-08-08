@@ -22,15 +22,23 @@ The Python bindings expose the exact same parsing functions as the Rust core. Si
 
 ```python
 import xfina
+import os
+
+filename = "hdfc_statement.xls"
+modified_ts = int(os.path.getmtime(filename))
 
 # Read the file as raw bytes
-with open("hdfc_statement.xls", "rb") as f:
+with open(filename, "rb") as f:
     file_bytes = f.read()
 
-# Parse it! 
-# The second argument is an optional password (None for Excel)
-# The format parameter defaults to "xfina" if omitted, but can be "rebit"
-result = xfina.parse_hdfc_ba(file_bytes, password=None, format="xfina")
+# Parse it! Providing the filename and modified timestamp helps improve parsing accuracy
+result = xfina.parse_hdfc_ba(
+    file_bytes, 
+    password=None, 
+    filename=filename,
+    modified_timestamp=modified_ts,
+    format="xfina"
+)
 
 # The returned dictionary contains both the validation report and the financial data
 print(f"Validation Status: {result['validation']['overall']}")

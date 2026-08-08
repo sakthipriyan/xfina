@@ -26,11 +26,15 @@ async function parseStatement(file) {
   // Read the file as an ArrayBuffer, then convert to Uint8Array
   const buffer = await file.arrayBuffer();
   const bytes = new Uint8Array(buffer);
+  
+  // Extract file metadata to improve parsing accuracy
+  const filename = file.name;
+  const modifiedTimestamp = Math.floor(file.lastModified / 1000);
 
   try {
     // Parse the statement!
     // Args: bytes, password, filename, modifiedTimestamp, format
-    const jsonString = parse_hdfc_ba(bytes, null, null, null, "xfina");
+    const jsonString = parse_hdfc_ba(bytes, null, filename, modifiedTimestamp, "xfina");
     
     // Parse the JSON string into a JS object
     // The returned object has two fields: `data` and `validation`
