@@ -1,5 +1,5 @@
 use std::fs;
-use std::process::{Command, exit};
+use std::process::{exit, Command};
 
 pub fn run(args: &[String]) {
     if args.is_empty() || !["major", "minor", "patch"].contains(&args[0].as_str()) {
@@ -14,7 +14,7 @@ pub fn run(args: &[String]) {
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .output()
         .expect("Failed to execute git command");
-    
+
     let current_branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if current_branch != "main" {
         eprintln!("Error: Releasing is only allowed on the 'main' branch.");
@@ -82,8 +82,9 @@ pub fn run(args: &[String]) {
 
     // 2. Read CHANGELOG.md
     let changelog_path = "CHANGELOG.md";
-    let changelog_content = fs::read_to_string(changelog_path).expect("Failed to read CHANGELOG.md");
-    
+    let changelog_content =
+        fs::read_to_string(changelog_path).expect("Failed to read CHANGELOG.md");
+
     // Get current date YYYY-MM-DD
     let output = Command::new("date")
         .arg("+%Y-%m-%d")
@@ -93,12 +94,12 @@ pub fn run(args: &[String]) {
 
     let unreleased_header = "## [Unreleased]";
     let new_header = format!("## [Unreleased]\n\n## [{}] - {}", current_version, date_str);
-    
+
     if !changelog_content.contains(unreleased_header) {
         eprintln!("Error: Could not find '## [Unreleased]' in CHANGELOG.md");
         exit(1);
     }
-    
+
     let new_changelog_content = changelog_content.replacen(unreleased_header, &new_header, 1);
     fs::write(changelog_path, new_changelog_content).expect("Failed to write CHANGELOG.md");
 
@@ -107,13 +108,13 @@ pub fn run(args: &[String]) {
 
     // 4. Git commands
     run_cmd("git", &["add", "Cargo.toml", "Cargo.lock", "CHANGELOG.md"]);
-    
+
     let commit_msg = format!("chore(release): v{}", current_version);
     run_cmd("git", &["commit", "-m", &commit_msg]);
-    
+
     let tag_name = format!("v{}", current_version);
     run_cmd("git", &["tag", &tag_name]);
-    
+
     println!("Successfully bumped to {}. Ready to push!", current_version);
     println!("Run: git push origin main --tags");
 }
@@ -124,7 +125,7 @@ fn run_cmd(cmd: &str, args: &[&str]) {
         .args(args)
         .status()
         .expect("Failed to execute command");
-        
+
     if !status.success() {
         eprintln!("Command failed!");
         exit(1);
