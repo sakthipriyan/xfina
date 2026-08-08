@@ -506,30 +506,30 @@ const camsGroupedAssets = computed(() => {
              <div class="space-y-2" v-if="selectedCategory === 'Mutual Funds'">
                <Label>Provider</Label>
                <div class="flex flex-wrap gap-4">
-                 <Button :variant="selectedSource === 'CAMS' ? 'default' : 'outline'" @click="setSource(\'CAMS\')">CAMS</Button>
+                 <Button :variant="selectedSource === 'CAMS' ? 'default' : 'outline'" @click="setSource('CAMS')">CAMS</Button>
                </div>
              </div>
              <div class="space-y-2" v-if="selectedCategory === 'Intl Brokers'">
                <Label>Broker</Label>
                <div class="flex flex-wrap gap-4">
-                 <Button :variant="selectedSource === 'IBKR' ? 'default' : 'outline'" @click="setSource(\'IBKR\')">IBKR</Button>
+                 <Button :variant="selectedSource === 'IBKR' ? 'default' : 'outline'" @click="setSource('IBKR')">IBKR</Button>
                </div>
              </div>
              <div class="space-y-2" v-if="selectedCategory === 'Credit Cards'">
                <Label>Bank</Label>
                <div class="flex flex-wrap gap-4">
-                 <Button :variant="selectedSource === 'HDFC' ? 'default' : 'outline'" @click="setSource(\'HDFC\')">HDFC Bank</Button>
-                 <Button :variant="selectedSource === 'ICICI' ? 'default' : 'outline'" @click="setSource(\'ICICI\')">ICICI Bank</Button>
+                 <Button :variant="selectedSource === 'HDFC' ? 'default' : 'outline'" @click="setSource('HDFC')">HDFC Bank</Button>
+                 <Button :variant="selectedSource === 'ICICI' ? 'default' : 'outline'" @click="setSource('ICICI')">ICICI Bank</Button>
                </div>
              </div>
              <div class="space-y-2" v-if="selectedCategory === 'Bank Accounts'">
                <Label>Bank</Label>
                <div class="flex flex-wrap gap-4">
-                 <Button :variant="selectedSource === 'Axis' ? 'default' : 'outline'" @click="setSource(\'Axis\')">Axis Bank</Button>
-                 <Button :variant="selectedSource === 'BoB' ? 'default' : 'outline'" @click="setSource(\'BoB\')">Bank of Baroda</Button>
-                 <Button :variant="selectedSource === 'HDFC' ? 'default' : 'outline'" @click="setSource(\'HDFC\')">HDFC Bank</Button>
-                 <Button :variant="selectedSource === 'ICICI' ? 'default' : 'outline'" @click="setSource(\'ICICI\')">ICICI Bank</Button>
-                 <Button :variant="selectedSource === 'SBI' ? 'default' : 'outline'" @click="setSource(\'SBI\')">State Bank of India</Button>
+                 <Button :variant="selectedSource === 'Axis' ? 'default' : 'outline'" @click="setSource('Axis')">Axis Bank</Button>
+                 <Button :variant="selectedSource === 'BoB' ? 'default' : 'outline'" @click="setSource('BoB')">Bank of Baroda</Button>
+                 <Button :variant="selectedSource === 'HDFC' ? 'default' : 'outline'" @click="setSource('HDFC')">HDFC Bank</Button>
+                 <Button :variant="selectedSource === 'ICICI' ? 'default' : 'outline'" @click="setSource('ICICI')">ICICI Bank</Button>
+                 <Button :variant="selectedSource === 'SBI' ? 'default' : 'outline'" @click="setSource('SBI')">State Bank of India</Button>
                </div>
              </div>
 
