@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **CI/CD:** Fixed publish workflow skipping jobs on tag push due to missing remote tracking branch in GitHub Actions checkout.
+
 ## [0.2.2] - 2026-08-08
 
 ### Added

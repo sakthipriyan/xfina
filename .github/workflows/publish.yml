@@ -41,6 +41,7 @@ jobs:
           fetch-depth: 0
       - name: Check if tag is on main
         run: |
+          git fetch origin main
           if ! git branch -r --contains ${{ github.sha }} | grep -E -q '(^|\s)origin/main$'; then
             echo "Error: Tag ${{ github.ref_name }} is not on the main branch."
             exit 1
