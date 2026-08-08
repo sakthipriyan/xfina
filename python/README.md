@@ -72,12 +72,14 @@ All parsers return a structured Python dictionary that mirrors the ReBIT JSON sc
 
 | Category | Institution | Format | Python Function | Input Type |
 |---|---|---|---|---|
-| Bank Account | HDFC | `.xls` | `parse_hdfc_ba(bytes, password=None, format=None)` | `bytes` |
-| Bank Account | ICICI | `.xls` | `parse_icici_ba(bytes, filename=None, format=None)` | `bytes` |
-| Bank Account | SBI | PDF | `parse_sbi_ba(bytes, password=None, filename=None, format=None)` | `bytes` |
-| Bank Account | BOB | `.xls` | `parse_bob_ba(bytes, format=None)` | `bytes` |
-| Bank Account | Axis | `.xls` | `parse_axis_ba(bytes, filename=None, format=None)` | `bytes` |
-| Credit Card | HDFC | CSV | `parse_hdfc_cc(content, filename=None, format=None)` | `str` |
-| Credit Card | ICICI | `.xls` | `parse_icici_cc(bytes, filename=None, format=None)` | `bytes` |
-| Mutual Funds | CAMS | PDF | `parse_cams(bytes, password=None, format=None, filename=None)` | `bytes` |
-| Intl Stocks | IBKR | CSV | `parse_ibkr(content, format=None)` | `str` |
+| Bank Account | HDFC | `.xls` | `parse_hdfc_ba(bytes, **kwargs)` | `bytes` |
+| Bank Account | ICICI | `.xls` | `parse_icici_ba(bytes, **kwargs)` | `bytes` |
+| Bank Account | SBI | PDF | `parse_sbi_ba(bytes, **kwargs)` | `bytes` |
+| Bank Account | BOB | `.xls` | `parse_bob_ba(bytes, **kwargs)` | `bytes` |
+| Bank Account | Axis | `.xls` | `parse_axis_ba(bytes, **kwargs)` | `bytes` |
+| Credit Card | HDFC | CSV | `parse_hdfc_cc(content, **kwargs)` | `str` |
+| Credit Card | ICICI | `.xls` | `parse_icici_cc(bytes, **kwargs)` | `bytes` |
+| Mutual Funds | CAMS | PDF | `parse_cams(bytes, **kwargs)` | `bytes` |
+| Intl Stocks | IBKR | CSV | `parse_ibkr(content, **kwargs)` | `str` |
+
+*Note: All Python functions accept the following optional keyword arguments: `password`, `filename`, `modified_timestamp`, and `format`.*

@@ -29,11 +29,15 @@ async function parseStatement(file) {
 
   try {
     // Parse the statement!
-    // The format parameter can be "xfina" (default, with xfina extensions) or "rebit" (strict AA format)
+    // Args: bytes, password, filename, modifiedTimestamp, format
+    const jsonString = parse_hdfc_ba(bytes, null, null, null, "xfina");
+    
+    // Parse the JSON string into a JS object
     // The returned object has two fields: `data` and `validation`
-    const result = parse_hdfc_ba(bytes, null, "xfina");
-    console.log(result.data);
-    console.log(result.validation);
+    const result = JSON.parse(jsonString);
+    
+    console.log("Validation status:", result.validation.overall);
+    console.log("Account data:", result.data);
   } catch (error) {
     console.error("Failed to parse statement:", error);
   }
@@ -47,14 +51,15 @@ Each parser accepts an optional `format` parameter which can be `"xfina"` (defau
 
 | Category | Institution | Format | JS Function | Input Type |
 |---|---|---|---|---|
-| Bank Account | HDFC | `.xls` | `parse_hdfc_ba(bytes, password, format)` | `Uint8Array` |
-| Bank Account | ICICI | `.xls` | `parse_icici_ba(bytes, filename, format)` | `Uint8Array` |
-| Bank Account | SBI | PDF | `parse_sbi_ba(bytes, password, filename, format)` | `Uint8Array` |
-| Bank Account | BOB | `.xls` | `parse_bob_ba(bytes, format)` | `Uint8Array` |
-| Bank Account | Axis | `.xls` | `parse_axis_ba(bytes, filename, format)` | `Uint8Array` |
-| Credit Card | HDFC | CSV | `parse_hdfc_cc(content, filename, format)` | `String` |
-| Credit Card | ICICI | `.xls` | `parse_icici_cc(bytes, filename, format)` | `Uint8Array` |
-| Mutual Funds | CAMS | PDF | `parse_cams(bytes, password, format, filename)` | `Uint8Array` |
-| Intl Stocks | IBKR | CSV | `parse_ibkr(content, format)` | `String` |
+| Bank Account | HDFC | `.xls` | `parse_hdfc_ba(bytes, ...)` | `Uint8Array` |
+| Bank Account | ICICI | `.xls` | `parse_icici_ba(bytes, ...)` | `Uint8Array` |
+| Bank Account | SBI | PDF | `parse_sbi_ba(bytes, ...)` | `Uint8Array` |
+| Bank Account | BOB | `.xls` | `parse_bob_ba(bytes, ...)` | `Uint8Array` |
+| Bank Account | Axis | `.xls` | `parse_axis_ba(bytes, ...)` | `Uint8Array` |
+| Credit Card | HDFC | CSV | `parse_hdfc_cc(content, ...)` | `String` |
+| Credit Card | ICICI | `.xls` | `parse_icici_cc(bytes, ...)` | `Uint8Array` |
+| Mutual Funds | CAMS | PDF | `parse_cams(bytes, ...)` | `Uint8Array` |
+| Intl Stocks | IBKR | CSV | `parse_ibkr(content, ...)` | `String` |
 
+*Note: All WASM functions take the exact same 5 arguments: `(input, password, filename, modified_timestamp, format)`. Unused arguments can be passed as `null`.*
 *Note: For `parse_hdfc_cc` and `parse_ibkr`, you must read the file as text and pass a JavaScript `String` instead of a `Uint8Array`.*
