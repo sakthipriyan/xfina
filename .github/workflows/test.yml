@@ -22,7 +22,7 @@ jobs:
           git fetch origin ${{ github.base_ref }}
           
           # Define the core paths that require a changelog update (excluding markdown files like README.md)
-          CORE_CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- src/ python/ wasm/ web/ xtask/ tests/ Cargo.toml | grep -v -i '\.md$' || true)
+          CORE_CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- src/ python/ wasm/ web/ tests/ Cargo.toml | grep -v -i '\.md$' || true)
           
           if [ -n "$CORE_CHANGED" ]; then
             echo "The following core files were modified:"
