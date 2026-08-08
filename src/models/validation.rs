@@ -83,18 +83,21 @@ impl ValidationReport {
                 self.summary_level.derived.checks.push(check);
             }
         }
-        
-        self.summary_level.declared.passed = self.summary_level.declared.checks.iter().all(|c| c.passed);
-        self.summary_level.derived.passed = self.summary_level.derived.checks.iter().all(|c| c.passed);
-        self.summary_level.passed = self.summary_level.declared.passed && self.summary_level.derived.passed;
-        
+
+        self.summary_level.declared.passed =
+            self.summary_level.declared.checks.iter().all(|c| c.passed);
+        self.summary_level.derived.passed =
+            self.summary_level.derived.checks.iter().all(|c| c.passed);
+        self.summary_level.passed =
+            self.summary_level.declared.passed && self.summary_level.derived.passed;
+
         let has_declared_failure = !self.summary_level.declared.passed;
         let all_passed = self.row_level.passed && self.summary_level.passed;
 
         self.overall = match (all_passed, has_declared_failure) {
-            (true, _)  => ValidationStatus::Passed,
-            (_, true)  => ValidationStatus::Failed,
-            _          => ValidationStatus::Warning,
+            (true, _) => ValidationStatus::Passed,
+            (_, true) => ValidationStatus::Failed,
+            _ => ValidationStatus::Warning,
         };
     }
 
@@ -199,7 +202,10 @@ pub struct SubSummaryValidation {
 
 impl Default for SubSummaryValidation {
     fn default() -> Self {
-        Self { passed: true, checks: Vec::new() }
+        Self {
+            passed: true,
+            checks: Vec::new(),
+        }
     }
 }
 
@@ -237,7 +243,12 @@ pub struct SummaryCheck {
 
 impl SummaryCheck {
     /// Build a check comparing a declared value to a computed one.
-    pub fn declared(name: &str, declared: Decimal, computed: Decimal, note: Option<String>) -> Self {
+    pub fn declared(
+        name: &str,
+        declared: Decimal,
+        computed: Decimal,
+        note: Option<String>,
+    ) -> Self {
         // Use a 1.0 tolerance for checking to account for floating-point rounding or bank minor adjustments
         let delta_val = declared - computed;
         let passed = delta_val.abs() < Decimal::from_str("1.0").unwrap_or_default();

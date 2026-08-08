@@ -1,30 +1,34 @@
-use calamine::{Reader, Xlsx, open_workbook_from_rs};
-use std::io::Cursor;
-use chrono::{NaiveDate, DateTime, Utc};
-use rust_decimal::Decimal;
-use rust_decimal::prelude::ToPrimitive;
 use crate::models::credit_card::{
-    CreditCardAccount, CcProfile, CcHolders, CcHolder, CcSummary, RewardPointsSummary,
-    CcTransactions, CcTransaction, XfinaCreditCardAccount, CcXfinaSummary, CcXfinaTransactions, CcXfinaTransaction,
+    CcHolder, CcHolders, CcProfile, CcSummary, CcTransaction, CcTransactions, CcXfinaSummary,
+    CcXfinaTransaction, CcXfinaTransactions, CreditCardAccount, RewardPointsSummary,
+    XfinaCreditCardAccount,
 };
-use crate::models::deposit::TransactionType;
-use crate::models::validation::{ParseResult, ValidationReport, SummaryCheck};
-use std::collections::HashMap;
 use crate::models::date_utils;
+use crate::models::deposit::TransactionType;
+use crate::models::validation::{ParseResult, SummaryCheck, ValidationReport};
+use calamine::{open_workbook_from_rs, Reader, Xlsx};
+use chrono::{DateTime, NaiveDate, Utc};
 use regex::Regex;
+use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::Decimal;
+use std::collections::HashMap;
+use std::io::Cursor;
 
 use crate::models::request::ParseRequest;
 
-pub fn parse_icici_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<CreditCardAccount>, crate::error::XfinaError> {
+pub fn parse_icici_statement<'a>(
+    input: ParseRequest<'a>,
+) -> Result<ParseResult<CreditCardAccount>, crate::error::XfinaError> {
     let bytes = input.content;
     let filename = input.filename;
     let cursor = Cursor::new(bytes);
-    let mut workbook: Xlsx<_> = open_workbook_from_rs(cursor)
-        .map_err(|e| format!("Failed to open workbook: {}", e))?;
+    let mut workbook: Xlsx<_> =
+        open_workbook_from_rs(cursor).map_err(|e| format!("Failed to open workbook: {}", e))?;
 
     let sheet_names = workbook.sheet_names().to_owned();
     let first_sheet = sheet_names.first().ok_or("No sheets found in workbook")?;
-    let range = workbook.worksheet_range(first_sheet)
+    let range = workbook
+        .worksheet_range(first_sheet)
         .map_err(|e| format!("Failed to get worksheet: {}", e))?;
 
     let mut stmt = CreditCardAccount {
@@ -39,7 +43,7 @@ pub fn parse_icici_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<
         institution_name: Some("ICICI Bank".to_string()),
         ..Default::default()
     };
-    
+
     let mut date_only_paths = Vec::new();
 
     if let Some(fname) = filename {
@@ -49,7 +53,10 @@ pub fn parse_icici_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<
                 if let Ok(d) = NaiveDate::parse_from_str(m.as_str(), "%d-%m-%Y") {
                     let dt = d.and_hms_opt(0, 0, 0).unwrap();
                     let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
-                    xfina_account.generated_date = chrono::TimeZone::from_local_datetime(&ist_offset, &dt).single().map(|dt| dt.with_timezone(&Utc));
+                    xfina_account.generated_date =
+                        chrono::TimeZone::from_local_datetime(&ist_offset, &dt)
+                            .single()
+                            .map(|dt| dt.with_timezone(&Utc));
                     date_only_paths.push("xfina.generatedDate".to_string());
                 }
             }
@@ -57,7 +64,7 @@ pub fn parse_icici_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<
     }
     let mut summary = CcSummary::default();
     let mut xfina_summary = CcXfinaSummary::default();
-    
+
     let mut transactions_list = Vec::new();
     let mut xfina_txns = CcXfinaTransactions::default();
 
@@ -74,7 +81,9 @@ pub fn parse_icici_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<
 
     for row in range.rows() {
         let cells: Vec<String> = row.iter().map(|c| c.to_string()).collect();
-        if cells.is_empty() { continue; }
+        if cells.is_empty() {
+            continue;
+        }
 
         let _col0 = cells.first().map(|s| s.trim()).unwrap_or("");
 
@@ -83,7 +92,7 @@ pub fn parse_icici_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<
                 if let (Some(key_str), Some(val_str)) = (cells.get(i), cells.get(i + 4)) {
                     let key = key_str.trim();
                     let val = val_str.replace("INR", "").trim().to_string();
-                    
+
                     match key {
                         "Card Holder Name" => {
                             card_holder_name = val.clone();
@@ -147,21 +156,32 @@ pub fn parse_icici_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<
             // Parse Transactions
             // 0=Date, 4=Details, 8=Amount, 12=Reward Points, 16=Ref Number
             let date_str = cells.first().map(|s| s.trim()).unwrap_or("");
-            if date_str.is_empty() || date_str == "Transaction Date" { continue; } // skip empty or header
-            
+            if date_str.is_empty() || date_str == "Transaction Date" {
+                continue;
+            } // skip empty or header
+
             let details = cells.get(4).map(|s| s.trim()).unwrap_or("").to_string();
             let amount_str = cells.get(8).map(|s| s.trim()).unwrap_or("").to_string();
-            
+
             // Parse amount and type
             let is_credit = amount_str.ends_with("Cr.");
             let _is_debit = amount_str.ends_with("Dr.");
-            let txn_type = if is_credit { TransactionType::Credit } else { TransactionType::Debit };
-            
-            let amt_clean = amount_str.replace("Dr.", "").replace("Cr.", "").replace("INR", "").trim().to_string();
+            let txn_type = if is_credit {
+                TransactionType::Credit
+            } else {
+                TransactionType::Debit
+            };
+
+            let amt_clean = amount_str
+                .replace("Dr.", "")
+                .replace("Cr.", "")
+                .replace("INR", "")
+                .trim()
+                .to_string();
             let amount = parse_decimal(&amt_clean).unwrap_or_default().abs();
-            
+
             let reward_points = cells.get(12).and_then(|s| s.trim().parse::<i32>().ok());
-            
+
             let mut tx_xfina = CcXfinaTransaction {
                 owner: Some(card_holder_name.clone()),
                 ..Default::default()
@@ -191,29 +211,33 @@ pub fn parse_icici_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<
                 masked_card_number: None,
                 xfina: Some(tx_xfina),
             });
-            
+
             // Aggregations
             use rust_decimal::prelude::ToPrimitive;
             let amt_f64 = amount.to_f64().unwrap_or(0.0);
-            
+
             if let Some(pts) = reward_points {
                 default_rewards += pts;
             }
             if txn_type == TransactionType::Credit {
-                *owner_credit_breakdown.entry(card_holder_name.clone()).or_insert(0.0) += amt_f64;
+                *owner_credit_breakdown
+                    .entry(card_holder_name.clone())
+                    .or_insert(0.0) += amt_f64;
             } else if txn_type == TransactionType::Debit {
-                *owner_debit_breakdown.entry(card_holder_name.clone()).or_insert(0.0) += amt_f64;
+                *owner_debit_breakdown
+                    .entry(card_holder_name.clone())
+                    .or_insert(0.0) += amt_f64;
             }
         }
     }
-    
+
     xfina_summary.opening_balance = Some(previous_balance);
     xfina_summary.payment_credit = Some(payments);
     xfina_summary.purchases_debits = Some(purchases);
     summary.finance_charges = Some(Decimal::new(0, 0)); // not clearly separated in this ICICI extract
     xfina_summary.owner_credit_breakdown = owner_credit_breakdown;
     xfina_summary.owner_debit_breakdown = owner_debit_breakdown;
-    
+
     xfina_summary.reward_points_summary = Some(RewardPointsSummary {
         default_rewards,
         opening_balance: 0,
@@ -224,21 +248,21 @@ pub fn parse_icici_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<
         expiring_in_30_days: None,
         expiring_in_60_days: None,
     });
-    
+
     let stmt_date_opt = summary.last_statement_date;
     summary.xfina = Some(xfina_summary);
     stmt.summary = Some(summary);
-    
+
     stmt.profile = Some(CcProfile {
         holders: CcHolders {
             holder: vec![holder],
-        }
+        },
     });
 
     transactions_list.sort_by_key(|a| a.txn_date);
 
     let mut txns = stmt.transactions.unwrap_or_default();
-    
+
     if txns.start_date.is_none() || txns.end_date.is_none() {
         if let Some(stmt_date) = stmt_date_opt {
             let (start, end) = crate::models::date_utils::derive_statement_period(stmt_date);
@@ -261,101 +285,155 @@ pub fn parse_icici_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<
             }
         }
     }
-    
+
     txns.transaction = transactions_list;
     txns.xfina = Some(xfina_txns);
     stmt.transactions = Some(txns);
-    
+
     if !date_only_paths.is_empty() {
         xfina_account.date_only_paths = Some(date_only_paths);
     }
     stmt.xfina = Some(xfina_account);
-    
+
     let mut validation = ValidationReport::empty();
-    
+
     // Level 2 - Summary Checks
-    
+
     // 1. closing_balance_match: total_due == opening_balance + purchases_debits - payment_credit
     if let (Some(total_due), Some(ob), Some(pd), Some(pc)) = (
         stmt.summary.as_ref().and_then(|s| s.total_due_amount),
-        stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.opening_balance),
-        stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.purchases_debits),
-        stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.payment_credit)
+        stmt.summary
+            .as_ref()
+            .and_then(|s| s.xfina.as_ref())
+            .and_then(|x| x.opening_balance),
+        stmt.summary
+            .as_ref()
+            .and_then(|s| s.xfina.as_ref())
+            .and_then(|x| x.purchases_debits),
+        stmt.summary
+            .as_ref()
+            .and_then(|s| s.xfina.as_ref())
+            .and_then(|x| x.payment_credit),
     ) {
         validation.summary_level.checks.push(SummaryCheck::declared(
             "closing_balance_match",
             total_due,
             ob + pd - pc,
-            None
+            None,
         ));
     }
 
     // 2. txn_credits_match: payment_credit == sum(txn.amount where type == Credit)
-    if let Some(pc) = stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.payment_credit) {
+    if let Some(pc) = stmt
+        .summary
+        .as_ref()
+        .and_then(|s| s.xfina.as_ref())
+        .and_then(|x| x.payment_credit)
+    {
         use rust_decimal::prelude::FromPrimitive;
         let sum_credits: Decimal = Decimal::from_f64(
-            stmt.transactions.as_ref().unwrap().transaction.iter()
+            stmt.transactions
+                .as_ref()
+                .unwrap()
+                .transaction
+                .iter()
                 .filter(|t| t.txn_type == TransactionType::Credit)
-            .map(|t| t.amount.to_f64().unwrap_or(0.0))
-            .sum()
-        ).unwrap_or(Decimal::from(0));
+                .map(|t| t.amount.to_f64().unwrap_or(0.0))
+                .sum(),
+        )
+        .unwrap_or(Decimal::from(0));
         validation.summary_level.checks.push(SummaryCheck::declared(
             "txn_credits_match",
             pc,
             sum_credits,
-            None
+            None,
         ));
     }
 
     // 3. txn_debits_match: purchases_debits == sum(txn.amount where type == Debit)
-    if let Some(pd) = stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.purchases_debits) {
+    if let Some(pd) = stmt
+        .summary
+        .as_ref()
+        .and_then(|s| s.xfina.as_ref())
+        .and_then(|x| x.purchases_debits)
+    {
         use rust_decimal::prelude::FromPrimitive;
         let sum_debits: Decimal = Decimal::from_f64(
-            stmt.transactions.as_ref().unwrap().transaction.iter()
+            stmt.transactions
+                .as_ref()
+                .unwrap()
+                .transaction
+                .iter()
                 .filter(|t| t.txn_type == TransactionType::Debit)
-            .map(|t| t.amount.to_f64().unwrap_or(0.0))
-            .sum()
-        ).unwrap_or(Decimal::from(0));
+                .map(|t| t.amount.to_f64().unwrap_or(0.0))
+                .sum(),
+        )
+        .unwrap_or(Decimal::from(0));
         validation.summary_level.checks.push(SummaryCheck::declared(
             "txn_debits_match",
             pd,
             sum_debits,
-            None
+            None,
         ));
     }
 
     // 4. owner_credits_match: payment_credit == sum(owner_credit_breakdown.values())
-    if let Some(pc) = stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.payment_credit) {
+    if let Some(pc) = stmt
+        .summary
+        .as_ref()
+        .and_then(|s| s.xfina.as_ref())
+        .and_then(|x| x.payment_credit)
+    {
         use rust_decimal::prelude::FromPrimitive;
-        if let Some(owner_credits) = stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).map(|x| &x.owner_credit_breakdown) {
-            let sum_owner_credits = Decimal::from_f64(owner_credits.values().sum()).unwrap_or(Decimal::from(0));
+        if let Some(owner_credits) = stmt
+            .summary
+            .as_ref()
+            .and_then(|s| s.xfina.as_ref())
+            .map(|x| &x.owner_credit_breakdown)
+        {
+            let sum_owner_credits =
+                Decimal::from_f64(owner_credits.values().sum()).unwrap_or(Decimal::from(0));
             validation.summary_level.checks.push(SummaryCheck::declared(
                 "owner_credits_match",
                 pc,
                 sum_owner_credits,
-                None
+                None,
             ));
         }
     }
 
     // 5. owner_debits_match: purchases_debits == sum(owner_debit_breakdown.values())
-    if let Some(pd) = stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).and_then(|x| x.purchases_debits) {
+    if let Some(pd) = stmt
+        .summary
+        .as_ref()
+        .and_then(|s| s.xfina.as_ref())
+        .and_then(|x| x.purchases_debits)
+    {
         use rust_decimal::prelude::FromPrimitive;
-        if let Some(owner_debits) = stmt.summary.as_ref().and_then(|s| s.xfina.as_ref()).map(|x| &x.owner_debit_breakdown) {
-            let sum_owner_debits = Decimal::from_f64(owner_debits.values().sum()).unwrap_or(Decimal::from(0));
+        if let Some(owner_debits) = stmt
+            .summary
+            .as_ref()
+            .and_then(|s| s.xfina.as_ref())
+            .map(|x| &x.owner_debit_breakdown)
+        {
+            let sum_owner_debits =
+                Decimal::from_f64(owner_debits.values().sum()).unwrap_or(Decimal::from(0));
             validation.summary_level.checks.push(SummaryCheck::declared(
                 "owner_debits_match",
                 pd,
                 sum_owner_debits,
-                None
+                None,
             ));
         }
     }
 
     validation.summary_level.passed = validation.summary_level.checks.iter().all(|c| c.passed);
     validation.finalize();
-    
-    Ok(ParseResult { data: stmt, validation })
+
+    Ok(ParseResult {
+        data: stmt,
+        validation,
+    })
 }
 
 fn parse_decimal(val: &str) -> Option<Decimal> {
@@ -394,9 +472,18 @@ fn parse_partial_date(val: &str, stmt_date: NaiveDate) -> Option<DateTime<Utc>> 
             month_str.parse::<u32>().unwrap_or(0)
         } else {
             match month_str.to_lowercase().as_str() {
-                "jan" => 1, "feb" => 2, "mar" => 3, "apr" => 4,
-                "may" => 5, "jun" => 6, "jul" => 7, "aug" => 8,
-                "sep" => 9, "oct" => 10, "nov" => 11, "dec" => 12,
+                "jan" => 1,
+                "feb" => 2,
+                "mar" => 3,
+                "apr" => 4,
+                "may" => 5,
+                "jun" => 6,
+                "jul" => 7,
+                "aug" => 8,
+                "sep" => 9,
+                "oct" => 10,
+                "nov" => 11,
+                "dec" => 12,
                 _ => 0,
             }
         };

@@ -1,15 +1,21 @@
-use calamine::{Reader, open_workbook_auto_from_rs};
-use chrono::{NaiveDate, TimeZone, Utc, FixedOffset};
-use std::io::Cursor;
-use rust_decimal::Decimal;
-use crate::models::deposit::{DepositAccount, Transaction, XfinaDepositAccount, XfinaSummary, Profile, Holders, Holder, Summary, Transactions, HoldersType, TransactionType, TransactionMode, FiType, HoldingNominee, XfinaHolder};
+use crate::models::deposit::{
+    DepositAccount, FiType, Holder, Holders, HoldersType, HoldingNominee, Profile, Summary,
+    Transaction, TransactionMode, TransactionType, Transactions, XfinaDepositAccount, XfinaHolder,
+    XfinaSummary,
+};
 use crate::models::mask_account_number;
-use crate::models::validation::{ParseResult, ValidationReport, SummaryCheck, check_row_balances};
+use crate::models::validation::{check_row_balances, ParseResult, SummaryCheck, ValidationReport};
+use calamine::{open_workbook_auto_from_rs, Reader};
+use chrono::{FixedOffset, NaiveDate, TimeZone, Utc};
 use regex::Regex;
+use rust_decimal::Decimal;
+use std::io::Cursor;
 
 use crate::models::request::ParseRequest;
 
-pub fn parse_axis_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
+pub fn parse_axis_xls<'a>(
+    input: ParseRequest<'a>,
+) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
     let bytes = input.content;
     let filename = input.filename;
     let cursor = Cursor::new(bytes);
@@ -27,7 +33,7 @@ pub fn parse_axis_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposit
         version: 1.1,
         ..Default::default()
     };
-    
+
     let mut xfina_account = XfinaDepositAccount {
         institution_name: Some("Axis Bank".to_string()),
         ..Default::default()
@@ -43,7 +49,10 @@ pub fn parse_axis_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposit
                 if let Ok(d) = NaiveDate::parse_from_str(m.as_str(), "%d-%m-%Y") {
                     let dt = d.and_hms_opt(0, 0, 0).unwrap();
                     let ist_offset = FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
-                    xfina_account.generated_date = ist_offset.from_local_datetime(&dt).single().map(|d| d.with_timezone(&Utc));
+                    xfina_account.generated_date = ist_offset
+                        .from_local_datetime(&dt)
+                        .single()
+                        .map(|d| d.with_timezone(&Utc));
                     date_only_paths.push("xfina.generatedDate".to_string());
                 }
             }
@@ -52,7 +61,7 @@ pub fn parse_axis_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposit
 
     let mut in_transactions = false;
     let mut parsed_transactions: Vec<Transaction> = Vec::new();
-    
+
     let mut account_number = String::new();
     let mut ifsc_code = String::new();
     let mut micr_code = String::new();
@@ -69,16 +78,20 @@ pub fn parse_axis_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposit
     let mut start_date: Option<NaiveDate> = None;
     let mut end_date: Option<NaiveDate> = None;
 
-    let re_acc = Regex::new(r"Account No\s*-\s*(\d+).*?From\s*:\s*([\d-]+)\s*To\s*:\s*([\d-]+)").unwrap();
+    let re_acc =
+        Regex::new(r"Account No\s*-\s*(\d+).*?From\s*:\s*([\d-]+)\s*To\s*:\s*([\d-]+)").unwrap();
 
     for (row_idx, row) in range.rows().enumerate() {
-        let row_vec: Vec<String> = row.iter().map(|c| c.to_string().trim().to_string()).collect();
+        let row_vec: Vec<String> = row
+            .iter()
+            .map(|c| c.to_string().trim().to_string())
+            .collect();
         if row_vec.is_empty() {
             continue;
         }
 
         let first_col = row_vec[0].trim();
-        
+
         if first_col.is_empty() && !in_transactions {
             continue;
         }
@@ -133,14 +146,21 @@ pub fn parse_axis_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposit
             } else if first_col == "SRL NO" && row_vec.len() >= 8 {
                 in_transactions = true;
                 continue;
-            } else if row_idx > 1 && row_idx < 6 && !first_col.starts_with("Joint Holder") && !first_col.is_empty() {
+            } else if row_idx > 1
+                && row_idx < 6
+                && !first_col.starts_with("Joint Holder")
+                && !first_col.is_empty()
+            {
                 // Collect address rows roughly (e.g. rows 2 to 5 typically in the sample)
                 address_parts.push(first_col.to_string());
             }
         }
 
         if in_transactions {
-            if first_col.is_empty() || first_col.starts_with("BRANCH ADDRESS") || first_col == "Legend :" {
+            if first_col.is_empty()
+                || first_col.starts_with("BRANCH ADDRESS")
+                || first_col == "Legend :"
+            {
                 // End of transaction block or empty line
                 if first_col.starts_with("BRANCH ADDRESS") {
                     if let Some(branch_text) = first_col.strip_prefix("BRANCH ADDRESS -") {
@@ -168,14 +188,14 @@ pub fn parse_axis_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposit
                 let debit_str = row_vec[4].replace(",", "");
                 let credit_str = row_vec[5].replace(",", "");
                 let balance_str = row_vec[6].replace(",", "");
-                
+
                 let iso_date = crate::models::parse_indian_date(date_str);
                 let parsed_date = NaiveDate::parse_from_str(&iso_date, "%Y-%m-%d").ok();
-                    
+
                 let withdrawal: Decimal = debit_str.parse().unwrap_or(Decimal::from(0));
                 let deposit: Decimal = credit_str.parse().unwrap_or(Decimal::from(0));
                 let balance: Decimal = balance_str.parse().unwrap_or(Decimal::from(0));
-                
+
                 if row_vec.len() >= 8 && summary_branch.is_empty() {
                     summary_branch = row_vec[7].clone();
                 }
@@ -201,28 +221,38 @@ pub fn parse_axis_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposit
 
                 if let Some(p_date) = parsed_date {
                     let ist_offset = FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
-                    let txn_timestamp = ist_offset.from_local_datetime(&p_date.and_hms_opt(0, 0, 0).unwrap()).single().map(|dt| dt.with_timezone(&Utc));
+                    let txn_timestamp = ist_offset
+                        .from_local_datetime(&p_date.and_hms_opt(0, 0, 0).unwrap())
+                        .single()
+                        .map(|dt| dt.with_timezone(&Utc));
 
                     parsed_transactions.push(Transaction {
                         transaction_timestamp: txn_timestamp,
                         value_date: Some(p_date),
                         narration: desc.to_string(),
-                        reference: if ref_num == "-" || ref_num.is_empty() { None } else { Some(ref_num.to_string()) },
+                        reference: if ref_num == "-" || ref_num.is_empty() {
+                            None
+                        } else {
+                            Some(ref_num.to_string())
+                        },
                         r#type: tx_type,
                         amount,
                         mode,
                         current_balance: balance,
                         txn_id: None,
                     });
-                    
-                    if !date_only_paths.contains(&"transactions.transaction.transactionTimestamp".to_string()) {
-                        date_only_paths.push("transactions.transaction.transactionTimestamp".to_string());
+
+                    if !date_only_paths
+                        .contains(&"transactions.transaction.transactionTimestamp".to_string())
+                    {
+                        date_only_paths
+                            .push("transactions.transaction.transactionTimestamp".to_string());
                     }
                 }
             }
         }
     }
-    
+
     let mut summary = Summary::default();
     let mut xfina_sum = XfinaSummary::default();
 
@@ -235,11 +265,11 @@ pub fn parse_axis_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposit
             xfina_sum.opening_balance = Some(ob);
         }
     }
-    
+
     if let Some(last) = parsed_transactions.last() {
         summary.current_balance = last.current_balance;
     }
-    
+
     if !ifsc_code.is_empty() {
         summary.ifsc_code = Some(ifsc_code);
     }
@@ -251,7 +281,7 @@ pub fn parse_axis_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposit
     }
 
     summary.xfina = Some(xfina_sum);
-    
+
     let transactions_obj = Transactions {
         start_date,
         end_date,
@@ -263,7 +293,7 @@ pub fn parse_axis_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposit
         name,
         ..Default::default()
     };
-    
+
     let address = address_parts.join(", ");
     if !address.is_empty() {
         holder.address = Some(address);
@@ -275,9 +305,15 @@ pub fn parse_axis_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposit
         holder.nominee = Some(HoldingNominee::NotRegistered);
     }
 
-    if !mobile.is_empty() { holder.mobile = Some(mobile); }
-    if !email.is_empty() { holder.email = Some(email); }
-    if !pan.is_empty() { holder.pan = Some(pan); }
+    if !mobile.is_empty() {
+        holder.mobile = Some(mobile);
+    }
+    if !email.is_empty() {
+        holder.email = Some(email);
+    }
+    if !pan.is_empty() {
+        holder.pan = Some(pan);
+    }
 
     let mut x_holder = XfinaHolder::default();
     if !customer_id.is_empty() {
@@ -287,11 +323,15 @@ pub fn parse_axis_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposit
 
     let profile = Profile {
         holders: Holders {
-            r#type: if is_joint { HoldersType::Joint } else { HoldersType::Single },
+            r#type: if is_joint {
+                HoldersType::Joint
+            } else {
+                HoldersType::Single
+            },
             holder: vec![holder],
-        }
+        },
     };
-    
+
     if !account_number.is_empty() {
         statement.masked_acc_number = mask_account_number(&account_number);
     }
@@ -302,24 +342,44 @@ pub fn parse_axis_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposit
         let row_tuples: Vec<(bool, Decimal, Decimal, String)> = transactions_obj
             .transaction
             .iter()
-            .map(|t| (t.r#type == TransactionType::Credit, t.amount, t.current_balance, t.narration.clone()))
+            .map(|t| {
+                (
+                    t.r#type == TransactionType::Credit,
+                    t.amount,
+                    t.current_balance,
+                    t.narration.clone(),
+                )
+            })
             .collect();
         validation.row_level = check_row_balances(ob, &row_tuples);
     }
-    
+
     // Derived check: opening + credits - debits = closing
-    if let (Some(ob), cb) = (summary.xfina.as_ref().and_then(|x| x.opening_balance), summary.current_balance) {
-        let credits: Decimal = transactions_obj.transaction.iter().filter(|t| t.r#type == TransactionType::Credit).map(|t| t.amount).sum();
-        let debits: Decimal = transactions_obj.transaction.iter().filter(|t| t.r#type == TransactionType::Debit).map(|t| t.amount).sum();
-        
+    if let (Some(ob), cb) = (
+        summary.xfina.as_ref().and_then(|x| x.opening_balance),
+        summary.current_balance,
+    ) {
+        let credits: Decimal = transactions_obj
+            .transaction
+            .iter()
+            .filter(|t| t.r#type == TransactionType::Credit)
+            .map(|t| t.amount)
+            .sum();
+        let debits: Decimal = transactions_obj
+            .transaction
+            .iter()
+            .filter(|t| t.r#type == TransactionType::Debit)
+            .map(|t| t.amount)
+            .sum();
+
         validation.summary_level.checks.push(SummaryCheck::derived(
             "computed_closing_balance",
             cb,
             ob + credits - debits,
-            None
+            None,
         ));
     }
-    
+
     validation.summary_level.passed = validation.summary_level.checks.iter().all(|c| c.passed);
     validation.finalize();
 
@@ -331,9 +391,14 @@ pub fn parse_axis_xls<'a>(input: ParseRequest<'a>) -> Result<ParseResult<Deposit
     }
     statement.xfina = Some(xfina_account);
 
-    Ok(ParseResult { data: statement, validation })
+    Ok(ParseResult {
+        data: statement,
+        validation,
+    })
 }
 
-pub fn parse_axis_bank_statement<'a>(input: ParseRequest<'a>) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
+pub fn parse_axis_bank_statement<'a>(
+    input: ParseRequest<'a>,
+) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
     parse_axis_xls(input)
 }

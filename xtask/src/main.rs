@@ -1,8 +1,8 @@
 use std::env;
 use std::process::exit;
 
-mod release;
 mod deploy_site;
+mod release;
 
 fn main() {
     let args: Vec<String> = env::args().collect();

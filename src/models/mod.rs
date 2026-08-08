@@ -1,4 +1,3 @@
-
 pub mod credit_card;
 pub use credit_card::*;
 
@@ -13,7 +12,7 @@ pub use mutual_funds::*;
 
 pub fn parse_indian_date(input: &str) -> String {
     let input = input.trim();
-    
+
     // Extract date and optional time component like "09:41:11"
     let mut ws_parts = input.split_whitespace();
     let date_str = ws_parts.next().unwrap_or("");
@@ -25,12 +24,12 @@ pub fn parse_indian_date(input: &str) -> String {
     } else {
         date_str.split('-').collect()
     };
-    
+
     if parts.len() == 3 {
         let day = parts[0].trim();
         let month_str = parts[1].trim();
         let year = parts[2].trim();
-        
+
         let month = if month_str.chars().all(|c| c.is_ascii_digit()) {
             format!("{:02}", month_str.parse::<u32>().unwrap_or(0))
         } else {
@@ -50,16 +49,20 @@ pub fn parse_indian_date(input: &str) -> String {
                 _ => month_str.to_string(),
             }
         };
-        
+
         let formatted_day = format!("{:02}", day.parse::<u32>().unwrap_or(0));
-        
+
         let formatted_year = if year.len() == 2 {
             let year_num = year.parse::<u32>().unwrap_or(0);
-            if year_num > 50 { format!("19{:02}", year_num) } else { format!("20{:02}", year_num) }
+            if year_num > 50 {
+                format!("19{:02}", year_num)
+            } else {
+                format!("20{:02}", year_num)
+            }
         } else {
             year.to_string()
         };
-        
+
         let mut iso_date = format!("{}-{}-{}", formatted_year, month, formatted_day);
         if !time_str.is_empty() {
             iso_date.push('T');
@@ -67,7 +70,7 @@ pub fn parse_indian_date(input: &str) -> String {
         }
         return iso_date;
     }
-    
+
     input.to_string()
 }
 
@@ -78,16 +81,18 @@ pub fn mask_account_number(acc: &str) -> String {
         return acc.to_string();
     }
     let first = &acc[0..2];
-    let last = &acc[len-4..len];
+    let last = &acc[len - 4..len];
     let middle = "X".repeat(len - 6);
     format!("{}{}{}", first, middle, last)
 }
 
-
 pub mod date_utils;
 pub mod serializer;
 pub mod validation;
-pub use validation::{ParseResult, ValidationReport, ValidationStatus, RowValidation, RowCheckFailure, SummaryValidation, SummaryCheck, SummarySource, check_row_balances};
+pub use validation::{
+    check_row_balances, ParseResult, RowCheckFailure, RowValidation, SummaryCheck, SummarySource,
+    SummaryValidation, ValidationReport, ValidationStatus,
+};
 
 pub mod request;
 pub use request::ParseRequest;

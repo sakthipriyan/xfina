@@ -10,7 +10,8 @@ pub fn group_into_lines(page: &[CharItem], y_tolerance: f64) -> Vec<Line> {
     let mut chars = page.to_vec();
     // Sort by y0 first, then x0
     chars.sort_by(|a, b| {
-        a.y0.partial_cmp(&b.y0).unwrap_or(std::cmp::Ordering::Equal)
+        a.y0.partial_cmp(&b.y0)
+            .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| a.x0.partial_cmp(&b.x0).unwrap_or(std::cmp::Ordering::Equal))
     });
 
@@ -30,13 +31,15 @@ pub fn group_into_lines(page: &[CharItem], y_tolerance: f64) -> Vec<Line> {
                 current_baseline = current_baseline * ((count - 1.0) / count) + (ch.y0 / count);
             } else {
                 // finish current line
-                current_line_chars.sort_by(|a, b| a.x0.partial_cmp(&b.x0).unwrap_or(std::cmp::Ordering::Equal));
+                current_line_chars
+                    .sort_by(|a, b| a.x0.partial_cmp(&b.x0).unwrap_or(std::cmp::Ordering::Equal));
                 let mut text = String::new();
                 let mut last_x1 = current_line_chars.first().map(|c| c.x0).unwrap_or(0.0);
                 for c in &current_line_chars {
                     // add space if gap is large enough
                     let gap = c.x0 - last_x1;
-                    if gap > (c.y1 - c.y0).abs() * 0.25 { // heuristic space
+                    if gap > (c.y1 - c.y0).abs() * 0.25 {
+                        // heuristic space
                         text.push(' ');
                     }
                     text.push_str(&c.text);
@@ -46,7 +49,7 @@ pub fn group_into_lines(page: &[CharItem], y_tolerance: f64) -> Vec<Line> {
                     chars: current_line_chars.clone(),
                     text: text.trim().to_string(),
                 });
-                
+
                 current_line_chars.clear();
                 current_line_chars.push(ch.clone());
                 current_baseline = ch.y0;
@@ -55,7 +58,8 @@ pub fn group_into_lines(page: &[CharItem], y_tolerance: f64) -> Vec<Line> {
     }
 
     if !current_line_chars.is_empty() {
-        current_line_chars.sort_by(|a, b| a.x0.partial_cmp(&b.x0).unwrap_or(std::cmp::Ordering::Equal));
+        current_line_chars
+            .sort_by(|a, b| a.x0.partial_cmp(&b.x0).unwrap_or(std::cmp::Ordering::Equal));
         let mut text = String::new();
         let mut last_x1 = current_line_chars.first().map(|c| c.x0).unwrap_or(0.0);
         for c in &current_line_chars {

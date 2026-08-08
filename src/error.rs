@@ -4,19 +4,19 @@ use thiserror::Error;
 pub enum XfinaError {
     #[error("I/O Error: {0}")]
     Io(#[from] std::io::Error),
-    
+
     #[error("Invalid Format: {0}")]
     InvalidFormat(String),
-    
+
     #[error("Parse Error: {0}")]
     ParseError(String),
-    
+
     #[error("Password required to parse this document")]
     PasswordRequired,
-    
+
     #[error("Incorrect password provided")]
     IncorrectPassword,
-    
+
     #[error("Feature not supported: {0}")]
     Unsupported(String),
 }
