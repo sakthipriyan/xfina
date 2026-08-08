@@ -16,7 +16,8 @@ fn test_axis_parser() {
     let _ = fs::create_dir_all(&xfina_dir);
     let _ = fs::create_dir_all(&rebit_dir);
 
-    let paths = fs::read_dir(axis_dir).unwrap();
+    let raw_dir = format!("{}/raw", axis_dir);
+    let paths = fs::read_dir(raw_dir).unwrap();
 
     for path in paths {
         let path = path.unwrap().path();
@@ -25,10 +26,10 @@ fn test_axis_parser() {
             if extension == "xls" || extension == "xlsx" {
                 let bytes = fs::read(&path).unwrap();
                 let file_name = path.file_stem().unwrap().to_str().unwrap();
-                let parsed = parse_axis_bank_statement(&bytes, Some(file_name)).expect("Failed to parse Axis XLS");
+                let parsed = parse_axis_bank_statement(xfina::models::request::ParseRequest::new(&bytes).with_filename(Some(file_name))).expect("Failed to parse Axis XLS");
 
-                let xfina_json = serde_json::to_string_pretty(&parsed.to_xfina_json()).unwrap();
-                let rebit_json = serde_json::to_string_pretty(&parsed.to_rebit_json()).unwrap();
+                let xfina_json = serialize_result(&parsed, parsed.data.to_xfina_json()).unwrap();
+                let rebit_json = serialize_result(&parsed, parsed.data.to_rebit_json()).unwrap();
 
                 let expected_xfina_path = format!("{}/{}.json", xfina_dir, file_name);
                 let expected_rebit_path = format!("{}/{}.json", rebit_dir, file_name);
@@ -44,4 +45,15 @@ fn test_axis_parser() {
             }
         }
     }
+}
+
+fn serialize_result<T: serde::Serialize>(
+    stmt: &xfina::models::validation::ParseResult<T>,
+    data_json: serde_json::Value,
+) -> Result<String, serde_json::Error> {
+    let mut root = serde_json::to_value(stmt)?;
+    if let Some(obj) = root.as_object_mut() {
+        obj.insert("data".to_string(), data_json);
+    }
+    serde_json::to_string_pretty(&root)
 }

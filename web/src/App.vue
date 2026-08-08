@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
 import init, { parse_ibkr, parse_cams, parse_hdfc_cc, parse_icici_cc, parse_hdfc_ba, parse_icici_ba, parse_sbi_ba, parse_bob_ba, parse_axis_ba } from 'xfina-wasm';
-import { Sun, Moon, Github, HelpCircle, ChevronDown, Loader2, ArrowUp, ArrowDown, GitCommit } from 'lucide-vue-next';
+import { Sun, Moon, Github, HelpCircle, ChevronDown, Loader2, ArrowUp, ArrowDown, GitCommit, CheckCircle2, AlertTriangle, XCircle } from 'lucide-vue-next';
 
 // Shadcn components
 import { Button } from '@/components/ui/button';
@@ -39,8 +39,10 @@ const mfStatement = ref(null);
 const ccStatement = ref(null);
 const bankStatement = ref(null);
 const equityStatement = ref(null);
+const validationReport = ref(null);
 const isProcessing = ref(false);
 const parseTime = ref(null);
+const uploadedFile = ref(null);
 
 const versionsData = ref(null);
 const appVersion = import.meta.env.VITE_APP_VERSION || 'Unreleased';
@@ -114,13 +116,25 @@ const getAcceptString = computed(() => {
     return '*';
 });
 
-const setCategory = (cat) => {
-    selectedCategory.value = cat;
+const clearState = () => {
     mfStatement.value = null;
     ccStatement.value = null;
     bankStatement.value = null;
     equityStatement.value = null;
+    validationReport.value = null;
     error.value = null;
+    parseTime.value = null;
+    uploadedFile.value = null;
+};
+
+const setSource = (src) => {
+    selectedSource.value = src;
+    clearState();
+};
+
+const setCategory = (cat) => {
+    selectedCategory.value = cat;
+    clearState();
     if (cat === 'Mutual Funds') selectedSource.value = 'CAMS';
     else if (cat === 'Intl Brokers') selectedSource.value = 'IBKR';
     else if (cat === 'Credit Cards') selectedSource.value = 'HDFC';
@@ -149,12 +163,14 @@ onMounted(async () => {
 const onFileSelect = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
+    uploadedFile.value = file;
 
     error.value = null;
     mfStatement.value = null;
     ccStatement.value = null;
     bankStatement.value = null;
     equityStatement.value = null;
+    validationReport.value = null;
     isProcessing.value = true;
     parseTime.value = null;
     
@@ -165,65 +181,56 @@ const onFileSelect = async (event) => {
         let jsonString;
         const start = performance.now();
         
+        const modTime = file.lastModified ? BigInt(Math.floor(file.lastModified / 1000)) : null;
+        
         if (selectedCategory.value === 'Bank Accounts') {
             const arrayBuffer = await file.arrayBuffer();
             const uint8Array = new Uint8Array(arrayBuffer);
             if (selectedSource.value === 'HDFC') {
-                jsonString = parse_hdfc_ba(uint8Array);
+                jsonString = parse_hdfc_ba(uint8Array, null, file.name, modTime, null);
             } else if (selectedSource.value === 'ICICI') {
-                jsonString = parse_icici_ba(uint8Array, file.name);
+                jsonString = parse_icici_ba(uint8Array, null, file.name, modTime, null);
             } else if (selectedSource.value === 'SBI') {
-                jsonString = parse_sbi_ba(uint8Array, password.value ? password.value : null, file.name);
+                jsonString = parse_sbi_ba(uint8Array, password.value ? password.value : null, file.name, modTime, null);
             } else if (selectedSource.value === 'BoB') {
-                jsonString = parse_bob_ba(uint8Array);
+                jsonString = parse_bob_ba(uint8Array, null, file.name, modTime, null);
             } else if (selectedSource.value === 'Axis') {
-                jsonString = parse_axis_ba(uint8Array, file.name);
+                jsonString = parse_axis_ba(uint8Array, null, file.name, modTime, null);
             }
-            bankStatement.value = JSON.parse(jsonString);
+            const parsed = JSON.parse(jsonString);
+            bankStatement.value = parsed.data;
+            validationReport.value = parsed.validation;
         } else if (selectedSource.value === 'IBKR') {
-            const text = await file.text();
-            jsonString = parse_ibkr(text);
-            equityStatement.value = JSON.parse(jsonString);
+            const arrayBuffer = await file.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+            jsonString = parse_ibkr(uint8Array, null, file.name, modTime, null);
+            const parsed = JSON.parse(jsonString);
+            equityStatement.value = parsed.data;
+            validationReport.value = parsed.validation;
         } else if (selectedSource.value === 'CAMS') {
             const arrayBuffer = await file.arrayBuffer();
             const uint8Array = new Uint8Array(arrayBuffer);
-            jsonString = parse_cams(uint8Array, password.value ? password.value : null, undefined, file.name);
-            mfStatement.value = JSON.parse(jsonString);
+            jsonString = parse_cams(uint8Array, password.value ? password.value : null, file.name, modTime, null);
+            const parsed = JSON.parse(jsonString);
+            mfStatement.value = parsed.data;
+            validationReport.value = parsed.validation;
         } else if (selectedSource.value === 'HDFC') {
-            const text = await file.text();
-            jsonString = parse_hdfc_cc(text, file.name);
-            ccStatement.value = JSON.parse(jsonString);
+            const arrayBuffer = await file.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+            jsonString = parse_hdfc_cc(uint8Array, null, file.name, modTime, null);
+            const parsed = JSON.parse(jsonString);
+            ccStatement.value = parsed.data;
+            validationReport.value = parsed.validation;
         } else if (selectedSource.value === 'ICICI') {
             const arrayBuffer = await file.arrayBuffer();
             const uint8Array = new Uint8Array(arrayBuffer);
-            jsonString = parse_icici_cc(uint8Array, file.name);
-            ccStatement.value = JSON.parse(jsonString);
+            jsonString = parse_icici_cc(uint8Array, null, file.name, modTime, null);
+            const parsed = JSON.parse(jsonString);
+            ccStatement.value = parsed.data;
+            validationReport.value = parsed.validation;
         }
         
-        if (bankStatement.value) {
-            if (!bankStatement.value.xfina) bankStatement.value.xfina = {};
-            if (!bankStatement.value.xfina.generatedDate && file.lastModified) {
-                bankStatement.value.xfina.generatedDate = Math.floor(file.lastModified / 1000);
-                bankStatement.value.xfina.generatedDateDerived = true;
-            }
-        } else if (ccStatement.value) {
-            if (!ccStatement.value.xfina) ccStatement.value.xfina = {};
-            if (!ccStatement.value.xfina.generatedDate && file.lastModified) {
-                ccStatement.value.xfina.generatedDate = Math.floor(file.lastModified / 1000);
-                ccStatement.value.xfina.generatedDateDerived = true;
-            }
-        } else if (mfStatement.value) {
-            if (!mfStatement.value.generated_date && file.lastModified) {
-                mfStatement.value.generated_date = Math.floor(file.lastModified / 1000);
-                mfStatement.value.generated_date_derived = true;
-            }
-        } else if (equityStatement.value) {
-            if (!equityStatement.value.xfina) equityStatement.value.xfina = {};
-            if (!equityStatement.value.xfina.generatedDate && file.lastModified) {
-                equityStatement.value.xfina.generatedDate = Math.floor(file.lastModified / 1000);
-                equityStatement.value.xfina.generatedDateDerived = true;
-            }
-        }
+
 
         const end = performance.now();
         parseTime.value = ((end - start) / 1000).toFixed(3);
@@ -267,7 +274,7 @@ const formatDate = (ts) => {
     if (ts === null || ts === undefined || ts === '') return '-';
     const d = new Date(Number(ts) * 1000);
     if (isNaN(d)) return ts;
-    return new Intl.DateTimeFormat('en-US', { 
+    return new Intl.DateTimeFormat(undefined, { 
         year: 'numeric', 
         month: 'short', 
         day: 'numeric',
@@ -290,6 +297,7 @@ const formatDateTime = (ts, path = null, dateOnlyPaths = []) => {
             hour: '2-digit', 
             minute: '2-digit', 
             second: '2-digit',
+            hour12: false,
             timeZone: 'Asia/Kolkata'
         }).format(d);
     } else {
@@ -473,9 +481,6 @@ const camsGroupedAssets = computed(() => {
             <span>Parsing...</span>
             <Loader2 class="h-4 w-4 animate-spin" />
           </div>
-          <div v-else-if="parseTime !== null" class="text-sm font-medium text-muted-foreground whitespace-nowrap mt-0.5">
-            Parsed in {{ parseTime }}s
-          </div>
         </CardHeader>
         <CardContent>
           <div class="flex flex-wrap gap-4 mb-6">
@@ -501,30 +506,30 @@ const camsGroupedAssets = computed(() => {
              <div class="space-y-2" v-if="selectedCategory === 'Mutual Funds'">
                <Label>Provider</Label>
                <div class="flex flex-wrap gap-4">
-                 <Button :variant="selectedSource === 'CAMS' ? 'default' : 'outline'" @click="selectedSource = 'CAMS'">CAMS</Button>
+                 <Button :variant="selectedSource === 'CAMS' ? 'default' : 'outline'" @click="setSource('CAMS')">CAMS</Button>
                </div>
              </div>
              <div class="space-y-2" v-if="selectedCategory === 'Intl Brokers'">
                <Label>Broker</Label>
                <div class="flex flex-wrap gap-4">
-                 <Button :variant="selectedSource === 'IBKR' ? 'default' : 'outline'" @click="selectedSource = 'IBKR'">IBKR</Button>
+                 <Button :variant="selectedSource === 'IBKR' ? 'default' : 'outline'" @click="setSource('IBKR')">IBKR</Button>
                </div>
              </div>
              <div class="space-y-2" v-if="selectedCategory === 'Credit Cards'">
                <Label>Bank</Label>
                <div class="flex flex-wrap gap-4">
-                 <Button :variant="selectedSource === 'HDFC' ? 'default' : 'outline'" @click="selectedSource = 'HDFC'">HDFC Bank</Button>
-                 <Button :variant="selectedSource === 'ICICI' ? 'default' : 'outline'" @click="selectedSource = 'ICICI'">ICICI Bank</Button>
+                 <Button :variant="selectedSource === 'HDFC' ? 'default' : 'outline'" @click="setSource('HDFC')">HDFC Bank</Button>
+                 <Button :variant="selectedSource === 'ICICI' ? 'default' : 'outline'" @click="setSource('ICICI')">ICICI Bank</Button>
                </div>
              </div>
              <div class="space-y-2" v-if="selectedCategory === 'Bank Accounts'">
                <Label>Bank</Label>
                <div class="flex flex-wrap gap-4">
-                 <Button :variant="selectedSource === 'Axis' ? 'default' : 'outline'" @click="selectedSource = 'Axis'">Axis Bank</Button>
-                 <Button :variant="selectedSource === 'BoB' ? 'default' : 'outline'" @click="selectedSource = 'BoB'">Bank of Baroda</Button>
-                 <Button :variant="selectedSource === 'HDFC' ? 'default' : 'outline'" @click="selectedSource = 'HDFC'">HDFC Bank</Button>
-                 <Button :variant="selectedSource === 'ICICI' ? 'default' : 'outline'" @click="selectedSource = 'ICICI'">ICICI Bank</Button>
-                 <Button :variant="selectedSource === 'SBI' ? 'default' : 'outline'" @click="selectedSource = 'SBI'">State Bank of India</Button>
+                 <Button :variant="selectedSource === 'Axis' ? 'default' : 'outline'" @click="setSource('Axis')">Axis Bank</Button>
+                 <Button :variant="selectedSource === 'BoB' ? 'default' : 'outline'" @click="setSource('BoB')">Bank of Baroda</Button>
+                 <Button :variant="selectedSource === 'HDFC' ? 'default' : 'outline'" @click="setSource('HDFC')">HDFC Bank</Button>
+                 <Button :variant="selectedSource === 'ICICI' ? 'default' : 'outline'" @click="setSource('ICICI')">ICICI Bank</Button>
+                 <Button :variant="selectedSource === 'SBI' ? 'default' : 'outline'" @click="setSource('SBI')">State Bank of India</Button>
                </div>
              </div>
 
@@ -557,12 +562,57 @@ const camsGroupedAssets = computed(() => {
         </CardContent>
       </Card>
       <div v-else class="text-muted-foreground animate-pulse">Loading WebAssembly module...</div>
+
+      <!-- Status Bar -->
+      <div v-if="parseTime !== null && uploadedFile" class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-2">
+        <Card class="bg-card text-card-foreground shadow-sm border flex flex-col justify-center p-3 px-4">
+          <span class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">File Name</span>
+          <span class="font-medium text-sm truncate" :title="uploadedFile.name">{{ uploadedFile.name }}</span>
+        </Card>
+        
+        <Card class="bg-card text-card-foreground shadow-sm border flex items-center justify-between p-3 px-4">
+          <div class="flex flex-col">
+            <span class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">Size</span>
+            <span class="font-mono text-sm">{{ (uploadedFile.size / 1024).toFixed(1) }} KB</span>
+          </div>
+          <div class="flex flex-col text-right">
+            <span class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">Last Modified</span>
+            <span class="font-medium text-sm">{{ formatDateTime(uploadedFile.lastModified / 1000) }}</span>
+          </div>
+        </Card>
+        
+        <Card class="bg-card text-card-foreground shadow-sm border flex items-center justify-between p-3 px-4">
+          <div class="flex flex-col">
+            <span class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">Validation Status</span>
+            <div v-if="validationReport?.overall" class="font-semibold flex items-center gap-1.5 text-sm"
+                 :class="{
+                   'text-emerald-500': validationReport.overall === 'passed',
+                   'text-amber-500': validationReport.overall === 'warning',
+                   'text-destructive': validationReport.overall === 'failed'
+                 }">
+              <CheckCircle2 v-if="validationReport.overall === 'passed'" class="w-4 h-4" />
+              <AlertTriangle v-if="validationReport.overall === 'warning'" class="w-4 h-4" />
+              <XCircle v-if="validationReport.overall === 'failed'" class="w-4 h-4" />
+              <span v-if="validationReport.overall === 'passed'">Passed</span>
+              <span v-else-if="validationReport.overall === 'warning'">Warning</span>
+              <span v-else-if="validationReport.overall === 'failed'">Failed</span>
+            </div>
+            <div v-else class="text-sm font-medium text-muted-foreground">-</div>
+          </div>
+          <div class="flex flex-col text-right">
+            <span class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">Parse Time</span>
+            <span class="font-mono text-sm">{{ parseTime }}s</span>
+          </div>
+        </Card>
+      </div>
+
       
       <!-- Credit Card Results Table -->
       <div v-if="ccStatement" class="space-y-6">
         
         <!-- Standardized Header -->
         <StatementHeader 
+          :validationStatus="validationReport?.overall"
           :customerName="ccStatement.profile?.holders?.holder?.[0]?.name || 'Customer'"
           :institutionName="ccStatement.xfina?.institutionName || 'Credit Card'"
           statementType="Credit Card"
@@ -959,6 +1009,7 @@ const camsGroupedAssets = computed(() => {
         
         <!-- Standardized Header -->
         <StatementHeader
+          :validationStatus="validationReport?.overall"
           :customerName="bankStatement.profile?.holders?.holder?.[0]?.name || 'Customer'"
           :address="bankStatement.profile?.holders?.holder?.[0]?.address || ''"
           :customerId="bankStatement.profile?.holders?.holder?.[0]?.xfina?.customerId || ''"
@@ -1103,6 +1154,7 @@ const camsGroupedAssets = computed(() => {
         
         <!-- Standardized Header -->
         <StatementHeader
+          :validationStatus="validationReport?.overall"
           :customerName="equityStatement.profile?.holders?.holder?.[0]?.name || 'Customer'"
           :address="equityStatement.profile?.holders?.holder?.[0]?.address || ''"
           :customerId="equityStatement.profile?.holders?.holder?.[0]?.xfina?.customerId || ''"
