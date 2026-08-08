@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Add `homepage` to package metadata pointing to `xfina.dev`
+- Fix page title to just `Xfina`
+
 ## [0.2.1] - 2026-08-08
 
 ### Added
