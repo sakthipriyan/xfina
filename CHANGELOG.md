@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-08-08
+
 ### Added
 - **Parsers:** Added derived `computed_closing_balance` validation logic for Bank of Baroda statements.
 - **Parsers:** Added `overall_invested_match` and `overall_value_match` summary checks for Mutual Funds (CAS) by extracting portfolio summaries.
