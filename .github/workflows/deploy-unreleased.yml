@@ -32,11 +32,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           target: wasm32-unknown-unknown
-      - name: Cache Cargo binaries
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/bin
-          key: ${{ runner.os }}-cargo-bin-wasm-pack
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
       - name: Install wasm-pack
         run: |
           if ! command -v wasm-pack &> /dev/null; then
