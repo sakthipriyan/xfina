@@ -14,8 +14,23 @@ permissions:
   id-token: write
 
 jobs:
+  check_branch:
+    name: Verify Tag is on Main
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check if tag is on main
+        run: |
+          if ! git branch -r --contains ${{ github.sha }} | grep -E -q '(^|\s)origin/main$'; then
+            echo "Error: Tag ${{ github.ref_name }} is not on the main branch."
+            exit 1
+          fi
+
   crates_io:
     name: Publish to crates.io
+    needs: check_branch
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

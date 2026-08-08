@@ -9,6 +9,18 @@ pub fn run(args: &[String]) {
 
     let bump_type = &args[0];
 
+    // 0. Ensure we are on the main branch
+    let output = Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .output()
+        .expect("Failed to execute git command");
+    
+    let current_branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if current_branch != "main" {
+        eprintln!("Error: Releasing is only allowed on the 'main' branch.");
+        exit(1);
+    }
+
     // 1. Read Cargo.toml
     let cargo_path = "Cargo.toml";
     let cargo_content = fs::read_to_string(cargo_path).expect("Failed to read Cargo.toml");
