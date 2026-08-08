@@ -67,11 +67,11 @@ with open("output.json", "w") as f:
 ```python
 import xfina
 
-# IBKR and HDFC Credit Card parsers expect a string (CSV content), not raw bytes
-with open("ibkr_activity.csv", "r", encoding="utf-8") as f:
-    csv_content = f.read()
+# All parsers now uniformly expect raw bytes, even for CSVs
+with open("ibkr_activity.csv", "rb") as f:
+    file_bytes = f.read()
 
-ibkr_data = xfina.parse_ibkr(csv_content, format="rebit")
+result = xfina.parse_ibkr(file_bytes, format="rebit")
 ```
 
 ## Available Parsers
@@ -85,9 +85,9 @@ All parsers return a structured Python dictionary that mirrors the ReBIT JSON sc
 | Bank Account | SBI | PDF | `parse_sbi_ba(bytes, **kwargs)` | `bytes` |
 | Bank Account | BOB | `.xls` | `parse_bob_ba(bytes, **kwargs)` | `bytes` |
 | Bank Account | Axis | `.xls` | `parse_axis_ba(bytes, **kwargs)` | `bytes` |
-| Credit Card | HDFC | CSV | `parse_hdfc_cc(content, **kwargs)` | `str` |
+| Credit Card | HDFC | CSV | `parse_hdfc_cc(bytes, **kwargs)` | `bytes` |
 | Credit Card | ICICI | `.xls` | `parse_icici_cc(bytes, **kwargs)` | `bytes` |
 | Mutual Funds | CAMS | PDF | `parse_cams(bytes, **kwargs)` | `bytes` |
-| Intl Stocks | IBKR | CSV | `parse_ibkr(content, **kwargs)` | `str` |
+| Intl Stocks | IBKR | CSV | `parse_ibkr(bytes, **kwargs)` | `bytes` |
 
 *Note: All Python functions accept the following optional keyword arguments: `password`, `filename`, `modified_timestamp`, and `format`.*

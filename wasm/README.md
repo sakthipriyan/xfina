@@ -60,10 +60,9 @@ Each parser accepts an optional `format` parameter which can be `"xfina"` (defau
 | Bank Account | SBI | PDF | `parse_sbi_ba(bytes, ...)` | `Uint8Array` |
 | Bank Account | BOB | `.xls` | `parse_bob_ba(bytes, ...)` | `Uint8Array` |
 | Bank Account | Axis | `.xls` | `parse_axis_ba(bytes, ...)` | `Uint8Array` |
-| Credit Card | HDFC | CSV | `parse_hdfc_cc(content, ...)` | `String` |
+| Credit Card | HDFC | CSV | `parse_hdfc_cc(bytes, ...)` | `Uint8Array` |
 | Credit Card | ICICI | `.xls` | `parse_icici_cc(bytes, ...)` | `Uint8Array` |
 | Mutual Funds | CAMS | PDF | `parse_cams(bytes, ...)` | `Uint8Array` |
-| Intl Stocks | IBKR | CSV | `parse_ibkr(content, ...)` | `String` |
+| Intl Stocks | IBKR | CSV | `parse_ibkr(bytes, ...)` | `Uint8Array` |
 
-*Note: All WASM functions take the exact same 5 arguments: `(input, password, filename, modified_timestamp, format)`. Unused arguments can be passed as `null`.*
-*Note: For `parse_hdfc_cc` and `parse_ibkr`, you must read the file as text and pass a JavaScript `String` instead of a `Uint8Array`.*
+*Note: All WASM functions take the exact same 5 arguments: `(bytes, password, filename, modified_timestamp, format)`. Unused arguments can be passed as `null`.*
