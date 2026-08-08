@@ -16,7 +16,7 @@ pip install xfina
 
 ## Quick Start
 
-The Python bindings expose the exact same parsing functions as the Rust core. Since it is backed by Rust, it requires raw bytes to be passed in, rather than file paths.
+The Python bindings expose the exact same parsing functions as the Rust core. To keep the core parsing logic as pure functions without side-effects (like file I/O), the library requires raw bytes to be passed in rather than file paths.
 
 ### Parsing a Credit Card Statement
 
