@@ -14,7 +14,7 @@
 
 All parsers are compiled to **WebAssembly (WASM)** and run entirely in the browser — your financial data never leaves your device. 
 
-🌐 **Live App**: [xfina.sakthipriyan.com](https://xfina.sakthipriyan.com/)
+🌐 **Live App**: [xfina.dev](https://xfina.dev/)
 
 ---
 
@@ -226,7 +226,7 @@ npm run dev
 ### Deployment
 
 Pushed to `main` → GitHub Actions automatically builds the unreleased WASM + Vue site and deploys to `unreleased/` on GitHub Pages.
-Tagged releases (`v0.1.3`) → Deploys a permanent, versioned snapshot (`/0.1/`) which is mirrored to the root at [xfina.sakthipriyan.com](https://xfina.sakthipriyan.com/).
+Tagged releases (`v0.1.3`) → Deploys a permanent, versioned snapshot (`/0.1/`) which is mirrored to the root at [xfina.dev](https://xfina.dev/).
 
 ---
 
