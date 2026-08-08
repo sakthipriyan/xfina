@@ -39,7 +39,7 @@ By building Xfina in **Rust**, we achieve:
 | 🏦 Bank Account | HDFC Bank | XLS | **Production Ready** | Full support |
 | 🏦 Bank Account | ICICI Bank | XLS | **Production Ready** | Full support |
 | 🏦 Bank Account | State Bank of India | PDF (password protected) | **Production Ready** | Full support |
-| 💳 Credit Card | Axis Bank | | **TODO** | Waiting for the statement to be generated |
+| 💳 Credit Card | Axis Bank | - | **TODO** | Waiting for the statement to be generated |
 | 💳 Credit Card | HDFC Bank | CSV | **Production Ready** | Full support incl. add-on cardholders, reward points |
 | 💳 Credit Card | ICICI Bank | XLS | **Production Ready** | Tested card without any add-on cards |
 | 📈 Mutual Funds | CAMS | PDF (password protected) | **Production Ready** | Combined Account Statement (CAS) |
