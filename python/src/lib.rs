@@ -1,7 +1,7 @@
-use pyo3::prelude::*;
-use pyo3::exceptions::PyValueError;
-use pythonize::pythonize;
 use ::xfina::models::request::ParseRequest;
+use pyo3::exceptions::PyValueError;
+use pyo3::prelude::*;
+use pythonize::pythonize;
 
 fn to_py_dict(py: Python, json_value: serde_json::Value) -> PyResult<PyObject> {
     pythonize(py, &json_value)
@@ -17,7 +17,7 @@ macro_rules! create_py_binding {
                 .with_password(password)
                 .with_filename(filename)
                 .with_modified_timestamp(modified_timestamp);
-            
+
             match $parser_func(req) {
                 Ok(stmt) => {
                     let mut root = serde_json::to_value(&stmt).map_err(|e| PyValueError::new_err(e.to_string()))?;
@@ -35,13 +35,31 @@ macro_rules! create_py_binding {
 
 create_py_binding!(parse_ibkr, ::xfina::intl_stocks::ibkr::parse_ibkr_csv);
 create_py_binding!(parse_cams, ::xfina::mutual_funds::cams::parse_cams_pdf);
-create_py_binding!(parse_hdfc_cc, ::xfina::credit_cards::hdfc::parse_hdfc_statement);
-create_py_binding!(parse_icici_cc, ::xfina::credit_cards::icici::parse_icici_statement);
-create_py_binding!(parse_hdfc_ba, ::xfina::bank_accounts::hdfc::parse_hdfc_bank_statement);
-create_py_binding!(parse_icici_ba, ::xfina::bank_accounts::icici::parse_icici_bank_statement);
-create_py_binding!(parse_sbi_ba, ::xfina::bank_accounts::sbi::parse_sbi_bank_statement);
+create_py_binding!(
+    parse_hdfc_cc,
+    ::xfina::credit_cards::hdfc::parse_hdfc_statement
+);
+create_py_binding!(
+    parse_icici_cc,
+    ::xfina::credit_cards::icici::parse_icici_statement
+);
+create_py_binding!(
+    parse_hdfc_ba,
+    ::xfina::bank_accounts::hdfc::parse_hdfc_bank_statement
+);
+create_py_binding!(
+    parse_icici_ba,
+    ::xfina::bank_accounts::icici::parse_icici_bank_statement
+);
+create_py_binding!(
+    parse_sbi_ba,
+    ::xfina::bank_accounts::sbi::parse_sbi_bank_statement
+);
 create_py_binding!(parse_bob_ba, ::xfina::bank_accounts::bob::parse_bob_xls);
-create_py_binding!(parse_axis_ba, ::xfina::bank_accounts::axis::parse_axis_bank_statement);
+create_py_binding!(
+    parse_axis_ba,
+    ::xfina::bank_accounts::axis::parse_axis_bank_statement
+);
 
 /// A Python module implemented in Rust for xfina.
 #[pymodule]
