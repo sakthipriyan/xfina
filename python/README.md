@@ -16,7 +16,27 @@ pip install xfina
 
 ## Quick Start
 
-The Python bindings expose the exact same parsing functions as the Rust core. Since it is backed by Rust, it requires raw bytes or string contents to be passed in, rather than file paths.
+The Python bindings expose the exact same parsing functions as the Rust core. Since it is backed by Rust, it requires raw bytes to be passed in, rather than file paths.
+
+### Parsing a Credit Card Statement
+
+```python
+import xfina
+import os
+
+filename = "icici_cc_statement.xls"
+
+with open(filename, "rb") as f:
+    file_bytes = f.read()
+
+result = xfina.parse_icici_cc(
+    file_bytes, 
+    filename=filename,
+    modified_timestamp=int(os.path.getmtime(filename))
+)
+
+print(f"Validation Status: {result['validation']['overall']}")
+```
 
 ### Parsing a Bank Statement (Excel)
 
