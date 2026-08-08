@@ -49,7 +49,7 @@ jobs:
 
   crates_io:
     name: Publish to crates.io
-    if: inputs.publish_crates != false
+    if: github.event_name == 'push' || inputs.publish_crates != false
     needs: check_branch
     runs-on: ubuntu-latest
     steps:
@@ -68,7 +68,7 @@ jobs:
 
   npm:
     name: Publish to NPM
-    if: inputs.publish_npm != false
+    if: github.event_name == 'push' || inputs.publish_npm != false
     runs-on: ubuntu-latest
     needs: check_branch
     steps:
@@ -100,7 +100,7 @@ jobs:
 
   pypi:
     name: Publish to PyPI
-    if: inputs.publish_pypi != false
+    if: github.event_name == 'push' || inputs.publish_pypi != false
     runs-on: ubuntu-latest
     needs: check_branch
     steps:
@@ -122,7 +122,7 @@ jobs:
 
   deploy_docs_tag:
     name: Deploy Tagged Docs
-    if: inputs.deploy_docs != false
+    if: github.event_name == 'push' || inputs.deploy_docs != false
     runs-on: ubuntu-latest
     needs: check_branch
     steps:
