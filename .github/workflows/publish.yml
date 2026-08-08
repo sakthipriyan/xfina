@@ -58,10 +58,13 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
       - name: Publish xfina crate
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
-          cargo publish --package xfina --allow-dirty
+          OIDC_TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=crates.io" | jq -r .value)
+          CRATES_TOKEN=$(curl -sS -X POST https://crates.io/api/v1/authenticate/trusted_publisher \
+            -H "Content-Type: application/json" \
+            -d "{\"jwt\": \"$OIDC_TOKEN\"}" | jq -r .token)
+          cargo publish --package xfina --allow-dirty --token "$CRATES_TOKEN"
 
   npm:
     name: Publish to NPM
