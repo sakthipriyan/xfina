@@ -92,4 +92,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Web App:** Vue 3 + Tailwind CSS frontend interface demonstrating local, privacy-preserving WASM parsing.
 - **CI/CD:** Automated GitHub Actions pipeline for testing and publishing to Crates.io, NPM, PyPI, and GitHub Pages.
 
-
