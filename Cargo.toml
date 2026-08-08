@@ -24,6 +24,7 @@ version = "0.2.1"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/sakthipriyan/xfina"
+homepage = "https://xfina.dev"
 description = "Fast, privacy-first parser for Indian financial statements (ReBIT/AA standard)"
 readme = "README.md"
 keywords = ["finance", "parser", "account-aggregator", "india", "pdf"]
