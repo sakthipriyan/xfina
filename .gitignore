@@ -40,3 +40,8 @@ parse_test*.rs
 gh-pages-worktree/
 /web/public/versions.json
 .venv/
+
+# Scratch and debug files
+scratch/
+test_output.json
+*.txt
