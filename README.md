@@ -35,13 +35,13 @@ By building Xfina in **Rust**, we achieve:
 | Category | Institution / Provider | Format | Status | Notes |
 |---|---|---|---|---|
 | 🏦 Bank Account | Axis Bank | XLS | **Production Ready** | Full support |
-| 🏦 Bank Account | Bank of Baroda | XLS / XLSX | **Production Ready** | Full support |
-| 🏦 Bank Account | HDFC Bank | XLS / XLSX | **Production Ready** | Full support |
-| 🏦 Bank Account | ICICI Bank | XLS / XLSX | **Production Ready** | Full support |
+| 🏦 Bank Account | Bank of Baroda | XLS | **Production Ready** | Full support |
+| 🏦 Bank Account | HDFC Bank | XLS | **Production Ready** | Full support |
+| 🏦 Bank Account | ICICI Bank | XLS | **Production Ready** | Full support |
 | 🏦 Bank Account | State Bank of India | PDF (password protected) | **Production Ready** | Full support |
 | 💳 Credit Card | Axis Bank | TBA | **TODO** | |
 | 💳 Credit Card | HDFC Bank | CSV | **Production Ready** | Full support incl. add-on cardholders, reward points |
-| 💳 Credit Card | ICICI Bank | XLS / XLSX | **Production Ready** | Tested card without any add-on cards |
+| 💳 Credit Card | ICICI Bank | XLS | **Production Ready** | Tested card without any add-on cards |
 | 📈 Mutual Funds | CAMS | PDF (password protected) | **Production Ready** | Combined Account Statement (CAS) |
 | 📈 Mutual Funds | KFinTech | PDF (password protected) | **TODO** | Combined Account Statement (CAS) |
 | 🌍 Intl Brokers | Interactive Brokers (IBKR) | CSV | **Production Ready** | Activity statements |
