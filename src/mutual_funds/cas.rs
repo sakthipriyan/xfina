@@ -8,7 +8,7 @@ use regex::Regex;
 use rust_decimal::Decimal;
 use std::str::FromStr;
 use std::collections::HashMap;
-use crate::models::validation::{ParseResult, ValidationReport, SummaryCheck, SummarySource, RowValidation, RowCheckFailure};
+use crate::models::validation::{ParseResult, ValidationReport, SummaryCheck, SummarySource, RowCheckFailure};
 
 #[derive(Debug, Clone)]
 struct ColumnBounds {
