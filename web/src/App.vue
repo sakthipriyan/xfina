@@ -1267,8 +1267,8 @@ const camsGroupedAssets = computed(() => {
              class="border rounded-lg bg-card text-card-foreground shadow-sm overflow-hidden"
              :disabled="!getAssetTransactions(holding).length"
            >
-               <div class="px-4 py-4 flex flex-col items-start w-full pr-0 gap-3 border-b border-transparent transition-colors group-data-[state=open]/item:border-border group-data-[state=open]/item:border-b">
-                 <div class="flex flex-col items-start w-full pr-0 gap-3">
+               <div class="px-4 py-4 flex flex-col items-start w-full gap-3 border-b border-transparent transition-colors group-data-[state=open]/item:border-border group-data-[state=open]/item:border-b">
+                 <div class="flex flex-col items-start w-full gap-3">
                    <!-- Top Row: Chevron, Name, Tags, Txn Pill -->
                    <div class="grid grid-cols-[auto_1fr_auto] items-start gap-4 w-full">
                      <span class="text-xs font-medium font-mono bg-muted/30 border border-primary/20 rounded px-2 py-0.5 text-primary shadow-sm shrink-0" v-if="holding.isin">{{ holding.isin }}</span>
