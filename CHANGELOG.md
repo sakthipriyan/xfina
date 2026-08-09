@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Web App:** Added a privacy-first Analytics Consent modal with 3 tracking levels (Off, Page View, Parser Usage).
+
 ### Fixed
 - **CI/CD:** Fixed publish workflow skipping jobs on tag push due to missing remote tracking branch in GitHub Actions checkout.
 

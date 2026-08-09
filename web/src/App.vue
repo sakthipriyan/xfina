@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
 import init, { parse_ibkr, parse_cams, parse_hdfc_cc, parse_icici_cc, parse_hdfc_ba, parse_icici_ba, parse_sbi_ba, parse_bob_ba, parse_axis_ba } from 'xfina-wasm';
-import { Sun, Moon, Github, HelpCircle, ChevronDown, Loader2, ArrowUp, ArrowDown, GitCommit, CheckCircle2, AlertTriangle, XCircle, MinusCircle } from 'lucide-vue-next';
+import { Sun, Moon, Github, HelpCircle, ChevronDown, Loader2, ArrowUp, ArrowDown, GitCommit, CheckCircle2, AlertTriangle, XCircle, MinusCircle, Activity } from 'lucide-vue-next';
 
 // Shadcn components
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { getStoredAnalyticsLevel, setStoredAnalyticsLevel, updateAnalyticsState, trackParserEvent, LEVEL_OFF, LEVEL_ANONYMOUS } from '@/lib/analytics.js';
 import StatementHeader from '@/components/StatementHeader.vue';
+
+const analyticsLevel = ref(getStoredAnalyticsLevel());
+
+const setAnalyticsLevel = (level) => {
+    analyticsLevel.value = level;
+    setStoredAnalyticsLevel(level);
+};
 
 const isDark = useDark();
 const toggleDark = () => {
@@ -31,6 +40,7 @@ onMounted(() => {
     } else {
         document.documentElement.classList.remove('dark');
     }
+    updateAnalyticsState(analyticsLevel.value);
 });
 
 const wasmLoaded = ref(false);
@@ -247,9 +257,68 @@ const onFileSelect = async (event) => {
         const end = performance.now();
         parseTime.value = ((end - start) / 1000).toFixed(3);
         console.log(`🚀 Rust WASM Processing Time: ${(end - start).toFixed(2)} ms`);
+        
+        // Consider it a failure unless the validation report explicitly says it passed completely
+        // (Note: Rust sets 'warning' if row-level checks fail, which we treat as a failure for analytics)
+        const isSuccess = validationReport.value?.overall === 'passed';
+
+        let validationMetrics = null;
+        if (!isSuccess && validationReport.value) {
+            validationMetrics = {};
+            
+            const txnsFailed = validationReport.value.row_level?.failed_rows?.length || 0;
+            if (txnsFailed > 0) validationMetrics.txns_failed = txnsFailed;
+
+            const declaredChecks = validationReport.value.summary_level?.declared?.checks || [];
+            const declaredFailed = declaredChecks.filter(c => !c.passed).length;
+            if (declaredFailed > 0) validationMetrics.declared_failed = declaredFailed;
+
+            const derivedChecks = validationReport.value.summary_level?.derived?.checks || [];
+            const derivedFailed = derivedChecks.filter(c => !c.passed).length;
+            if (derivedFailed > 0) validationMetrics.derived_failed = derivedFailed;
+        }
+
+        let parserName = 'unknown';
+        if (selectedCategory.value === 'Bank Accounts') {
+            if (selectedSource.value === 'HDFC') parserName = 'hdfc_ba';
+            else if (selectedSource.value === 'ICICI') parserName = 'icici_ba';
+            else if (selectedSource.value === 'SBI') parserName = 'sbi_ba';
+            else if (selectedSource.value === 'Bank of Baroda') parserName = 'bob_ba';
+            else if (selectedSource.value === 'Axis') parserName = 'axis_ba';
+        } else if (selectedCategory.value === 'Credit Cards') {
+            if (selectedSource.value === 'HDFC') parserName = 'hdfc_cc';
+            else if (selectedSource.value === 'ICICI') parserName = 'icici_cc';
+        } else if (selectedCategory.value === 'Mutual Funds') {
+            if (selectedSource.value === 'CAS') parserName = 'cas';
+            else if (selectedSource.value === 'CAMS') parserName = 'cams';
+        } else if (selectedCategory.value === 'Intl Stocks') {
+            if (selectedSource.value === 'Interactive Brokers') parserName = 'ibkr';
+        }
+
+        trackParserEvent(parserName, isSuccess, Math.round(end - start), validationMetrics, appVersion);
 
     } catch (e) {
         error.value = "Error parsing file: " + e;
+        const end = performance.now();
+        
+        let parserName = 'unknown';
+        if (selectedCategory.value === 'Bank Accounts') {
+            if (selectedSource.value === 'HDFC') parserName = 'hdfc_ba';
+            else if (selectedSource.value === 'ICICI') parserName = 'icici_ba';
+            else if (selectedSource.value === 'SBI') parserName = 'sbi_ba';
+            else if (selectedSource.value === 'Bank of Baroda') parserName = 'bob_ba';
+            else if (selectedSource.value === 'Axis') parserName = 'axis_ba';
+        } else if (selectedCategory.value === 'Credit Cards') {
+            if (selectedSource.value === 'HDFC') parserName = 'hdfc_cc';
+            else if (selectedSource.value === 'ICICI') parserName = 'icici_cc';
+        } else if (selectedCategory.value === 'Mutual Funds') {
+            if (selectedSource.value === 'CAS') parserName = 'cas';
+            else if (selectedSource.value === 'CAMS') parserName = 'cams';
+        } else if (selectedCategory.value === 'Intl Stocks') {
+            if (selectedSource.value === 'Interactive Brokers') parserName = 'ibkr';
+        }
+        
+        trackParserEvent(parserName, false, Math.round(end - start), null, appVersion);
     } finally {
         isProcessing.value = false;
     }
@@ -473,7 +542,153 @@ const camsGroupedAssets = computed(() => {
               <span class="sr-only">GitHub Repository</span>
             </Button>
           </a>
-          <Button variant="outline" size="icon" @click="toggleDark()">
+          <Dialog>
+            <DialogTrigger as-child>
+              <Button variant="outline" size="icon" title="Privacy & Analytics">
+                <Activity class="h-[1.2rem] w-[1.2rem] text-foreground" />
+                <span class="sr-only">Privacy & Analytics</span>
+              </Button>
+            </DialogTrigger>
+            <DialogContent class="sm:max-w-3xl">
+              <DialogHeader>
+                <DialogTitle>Privacy &amp; Analytics</DialogTitle>
+                <DialogDescription>
+                  <strong>Help Improve Xfina.</strong> Choose how you'd like to help us make Xfina better.
+                </DialogDescription>
+              </DialogHeader>
+              <div class="space-y-4 py-4">
+                <div class="flex items-center space-x-2 p-2 border rounded-md cursor-pointer hover:bg-muted" 
+                     :class="{'border-primary bg-primary/5': analyticsLevel === LEVEL_ANONYMOUS}"
+                     @click="setAnalyticsLevel(LEVEL_ANONYMOUS)">
+                  <div class="flex-1">
+                    <div class="font-semibold text-base flex items-center">
+                      Anonymous Usage Statistics 
+                      <span class="bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-md text-[10px] uppercase font-bold ml-2 tracking-wide">Recommended</span>
+                    </div>
+                    <div class="text-sm text-muted-foreground mt-2">
+                      <p>Help us improve parser quality and performance, and catch broken statement formats by sharing anonymous telemetry. <strong>No personal or financial data is collected.</strong> No file contents, transaction descriptions, financial values, or account numbers are ever included.</p>
+                      
+                      <div class="mt-3" @click.stop>
+                        <Accordion type="single" collapsible class="w-full">
+                          <AccordionItem value="payload" class="border-b-0">
+                            <AccordionTrigger class="text-sm py-1 hover:no-underline hover:text-primary">View exact payload details</AccordionTrigger>
+                            <AccordionContent>
+                              <div class="max-h-[300px] overflow-y-auto pr-2">
+                                <div class="rounded-md border overflow-hidden bg-background">
+                                  <table class="w-full text-left text-sm">
+                                    <thead class="bg-muted/50 text-muted-foreground">
+                                      <tr>
+                                        <th class="px-2 py-1.5 font-medium border-b whitespace-nowrap">Query Param</th>
+                                        <th class="px-2 py-1.5 font-medium border-b w-full">Description</th>
+                                        <th class="px-2 py-1.5 font-medium border-b w-1/4">Example Value</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody class="divide-y">
+                                      <tr>
+                                        <td class="px-2 py-1.5 font-mono text-primary/80">v</td>
+                                        <td class="px-2 py-1.5">Standard GA4 protocol version</td>
+                                        <td class="px-2 py-1.5 font-mono">2</td>
+                                      </tr>
+                                      <tr>
+                                        <td class="px-2 py-1.5 font-mono text-primary/80">tid</td>
+                                        <td class="px-2 py-1.5">Google Analytics measurement ID</td>
+                                        <td class="px-2 py-1.5 font-mono">G-WZEYQGS8PE</td>
+                                      </tr>
+                                      <tr>
+                                        <td class="px-2 py-1.5 font-mono text-primary/80">cid</td>
+                                        <td class="px-2 py-1.5">Randomly generated session ID. Resets on every page load; never stored.</td>
+                                        <td class="px-2 py-1.5 font-mono">433214986.1786291736</td>
+                                      </tr>
+                                      <tr>
+                                        <td class="px-2 py-1.5 font-mono text-primary/80">en</td>
+                                        <td class="px-2 py-1.5">Event Name</td>
+                                        <td class="px-2 py-1.5 font-mono">parser_usage</td>
+                                      </tr>
+                                      <tr>
+                                        <td class="px-2 py-1.5 font-mono text-primary/80">ep.app_version</td>
+                                        <td class="px-2 py-1.5">Version of the web app and parsers</td>
+                                        <td class="px-2 py-1.5 font-mono">{{ appVersion }}</td>
+                                      </tr>
+                                      <tr>
+                                        <td class="px-2 py-1.5 font-mono text-primary/80">ep.parser_type</td>
+                                        <td class="px-2 py-1.5">The type of statement being parsed</td>
+                                        <td class="px-2 py-1.5 font-mono">icici_ba</td>
+                                      </tr>
+                                      <tr>
+                                        <td class="px-2 py-1.5 font-mono text-primary/80">ep.success</td>
+                                        <td class="px-2 py-1.5">True if no math/validation errors occurred</td>
+                                        <td class="px-2 py-1.5 font-mono">false</td>
+                                      </tr>
+                                      <tr>
+                                        <td class="px-2 py-1.5 font-mono text-primary/80">epn.parse_time_ms</td>
+                                        <td class="px-2 py-1.5">Time taken to process the file locally</td>
+                                        <td class="px-2 py-1.5 font-mono">2</td>
+                                      </tr>
+                                      <tr>
+                                        <td class="px-2 py-1.5 font-mono text-primary/80">epn.txns_failed</td>
+                                        <td class="px-2 py-1.5">Total failed transactions <i>(&gt; 0)</i></td>
+                                        <td class="px-2 py-1.5 font-mono">3</td>
+                                      </tr>
+                                      <tr>
+                                        <td class="px-2 py-1.5 font-mono text-primary/80">epn.declared_failed</td>
+                                        <td class="px-2 py-1.5">Total failed declared checks <i>(&gt; 0)</i></td>
+                                        <td class="px-2 py-1.5 font-mono">2</td>
+                                      </tr>
+                                      <tr>
+                                        <td class="px-2 py-1.5 font-mono text-primary/80">epn.derived_failed</td>
+                                        <td class="px-2 py-1.5">Total failed derived checks <i>(&gt; 0)</i></td>
+                                        <td class="px-2 py-1.5 font-mono">1</td>
+                                      </tr>
+                                    </tbody>
+                                  </table>
+                                </div>
+                                <div class="rounded-md border mt-4 overflow-hidden bg-background">
+                                  <table class="w-full text-left text-sm">
+                                    <thead class="bg-muted/50 text-muted-foreground">
+                                      <tr>
+                                        <th class="px-2 py-1.5 font-medium border-b">Actual Request URL (Example)</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      <tr>
+                                        <td class="p-0">
+                                          <pre class="p-2 text-xs overflow-x-auto font-mono text-muted-foreground"><code>https://www.google-analytics.com/g/collect?
+  v=2&amp;
+  tid=G-WZEYQGS8PE&amp;
+  cid=433214986.1786291736&amp;
+  en=parser_usage&amp;
+  ep.app_version=Unreleased&amp;
+  ep.parser_type=icici_ba&amp;
+  ep.success=false&amp;
+  epn.parse_time_ms=2&amp;
+  epn.txns_failed=3&amp;
+  epn.declared_failed=2&amp;
+  epn.derived_failed=1</code></pre>
+                                        </td>
+                                      </tr>
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            </AccordionContent>
+                          </AccordionItem>
+                        </Accordion>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex items-center space-x-2 p-2 border rounded-md cursor-pointer hover:bg-muted"
+                     :class="{'border-primary bg-primary/5': analyticsLevel === LEVEL_OFF}"
+                     @click="setAnalyticsLevel(LEVEL_OFF)">
+                  <div class="flex-1">
+                    <div class="font-semibold text-base">Zero Usage Statistics</div>
+                    <div class="text-sm text-muted-foreground mt-1">Opt-out completely. We respect your privacy, and no telemetry requests will be sent from your browser. However, without anonymous telemetry, it may take us longer to discover broken statement formats, fix parsing bugs, and improve parser quality and performance.</div>
+                  </div>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Button variant="outline" size="icon" @click="toggleDark()" title="Toggle Theme">
             <Sun v-if="isDark" class="h-[1.2rem] w-[1.2rem] text-foreground" />
             <Moon v-else class="h-[1.2rem] w-[1.2rem] text-foreground" />
             <span class="sr-only">Toggle theme</span>
