@@ -560,19 +560,35 @@ const camsGroupedAssets = computed(() => {
                 <div class="flex items-center space-x-2 p-2 border rounded-md cursor-pointer hover:bg-muted" 
                      :class="{'border-primary bg-primary/5': analyticsLevel === LEVEL_ANONYMOUS}"
                      @click="setAnalyticsLevel(LEVEL_ANONYMOUS)">
-                  <div class="flex-1">
-                    <div class="font-semibold text-base flex items-center">
-                      Anonymous Usage Statistics 
-                      <span class="bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-md text-[10px] uppercase font-bold ml-2 tracking-wide">Recommended</span>
-                    </div>
-                    <div class="text-sm text-muted-foreground mt-2">
-                      <p>Help us improve parser quality and performance, and catch broken statement formats by sharing anonymous telemetry. <strong>No personal or financial data is collected.</strong> No file contents, transaction descriptions, financial values, or account numbers are ever included.</p>
-                      
-                      <div class="mt-3" @click.stop>
-                        <Accordion type="single" collapsible class="w-full">
-                          <AccordionItem value="payload" class="border-b-0">
-                            <AccordionTrigger class="text-sm py-1 hover:no-underline hover:text-primary">View exact payload details</AccordionTrigger>
-                            <AccordionContent>
+                  <div class="flex-1 w-full">
+                    <Accordion type="single" collapsible class="w-full">
+                      <AccordionItem value="payload" class="border-b-0">
+                        
+                        <div class="flex items-center justify-between w-full">
+                          <div class="font-semibold text-base flex items-center">
+                            Anonymous Usage Statistics 
+                            <span class="bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-md text-[10px] uppercase font-bold ml-2 tracking-wide">Recommended</span>
+                          </div>
+                          
+                          <div @click.stop>
+                            <AccordionTrigger class="group hover:no-underline p-0 data-[state=open]:border-b-0">
+                              <span class="sr-only">View exact payload details</span>
+                              <template #icon>
+                                <div class="flex items-center gap-1.5 text-xs font-mono bg-primary/10 text-primary pl-2.5 pr-2 py-1.5 rounded shrink-0 ml-2 hover:bg-primary/20 transition-colors">
+                                  <span>Payload</span>
+                                  <ChevronDown class="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                                </div>
+                              </template>
+                            </AccordionTrigger>
+                          </div>
+                        </div>
+
+                        <div class="text-sm text-muted-foreground mt-2">
+                          <p>Help us improve parser quality and performance, and catch broken statement formats by sharing anonymous telemetry. <strong>No personal or financial data is collected.</strong> No file contents, transaction descriptions, financial values, or account numbers are ever included.</p>
+                        </div>
+                        
+                        <div class="mt-3" @click.stop>
+                          <AccordionContent>
                               <div class="max-h-[300px] overflow-y-auto pr-2">
                                 <div class="rounded-md border overflow-hidden bg-background">
                                   <table class="w-full text-left text-sm">
@@ -671,12 +687,11 @@ const camsGroupedAssets = computed(() => {
                                 </div>
                               </div>
                             </AccordionContent>
-                          </AccordionItem>
-                        </Accordion>
-                      </div>
+                          </div>
+                        </AccordionItem>
+                      </Accordion>
                     </div>
                   </div>
-                </div>
                 <div class="flex items-center space-x-2 p-2 border rounded-md cursor-pointer hover:bg-muted"
                      :class="{'border-primary bg-primary/5': analyticsLevel === LEVEL_OFF}"
                      @click="setAnalyticsLevel(LEVEL_OFF)">
