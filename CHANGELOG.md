@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-08-09
+
 ### Added
 - **Web App:** Added a privacy-first Analytics Consent modal with 3 tracking levels (Off, Page View, Parser Usage).
 
