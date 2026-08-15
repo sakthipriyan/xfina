@@ -664,7 +664,13 @@ pub fn parse_cas_lines(
             total_invested: Decimal::ZERO,
             current_value: Decimal::ZERO,
         };
-        for (amc, summary) in portfolio_summary.iter() {
+        // Iterate in a deterministic (sorted) order: HashMap iteration order is
+        // randomized per process, which would otherwise make the emitted check
+        // order - and therefore the serialized JSON - nondeterministic across runs.
+        let mut sorted_summary: Vec<(&String, &ValidationData)> =
+            portfolio_summary.iter().collect();
+        sorted_summary.sort_by(|a, b| a.0.cmp(b.0));
+        for (amc, summary) in sorted_summary {
             if amc == "TOTAL_PORTFOLIO" {
                 continue;
             }

@@ -1,5 +1,22 @@
+use serde_json::Value;
 use std::fs;
+use xfina::error::XfinaError;
 use xfina::mutual_funds::cams::parse_cams_pdf;
+
+/// A passwords.json entry can be a single password or an ordered list of
+/// candidates (e.g. CAMS started stamping PDFs with a new password partway
+/// through our test corpus, so both the old and new password need to be
+/// tried). Missing/absent entries yield no candidates.
+fn password_candidates(value: Option<&Value>) -> Vec<String> {
+    match value {
+        Some(Value::String(s)) => vec![s.clone()],
+        Some(Value::Array(arr)) => arr
+            .iter()
+            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .collect(),
+        _ => Vec::new(),
+    }
+}
 
 #[test]
 fn test_cams_parser() {
@@ -18,8 +35,7 @@ fn test_cams_parser() {
 
     let passwords_str = fs::read_to_string(format!("{}/passwords.json", cams_dir))
         .unwrap_or_else(|_| "{}".to_string());
-    let passwords: std::collections::HashMap<String, String> =
-        serde_json::from_str(&passwords_str).unwrap_or_default();
+    let passwords: Value = serde_json::from_str(&passwords_str).unwrap_or(Value::Null);
 
     let paths = fs::read_dir(format!("{}/raw", cams_dir)).unwrap();
 
@@ -31,15 +47,54 @@ fn test_cams_parser() {
                 let bytes = fs::read(&path).unwrap();
                 let file_name = path.file_stem().unwrap().to_str().unwrap();
                 let file_name_with_ext = path.file_name().unwrap().to_str().unwrap();
-                let password = passwords
-                    .get(file_name_with_ext)
-                    .or_else(|| passwords.get("default"))
-                    .map(|s| s.as_str());
 
-                let req = xfina::models::request::ParseRequest::new(&bytes)
-                    .with_password(password)
-                    .with_filename(Some(file_name));
-                let parsed = parse_cams_pdf(req).expect("Failed to parse CAMS PDF");
+                // A file-specific entry replaces the default candidates entirely;
+                // otherwise fall back to trying every default candidate in order.
+                let file_candidates = password_candidates(passwords.get(file_name_with_ext));
+                let candidates = if !file_candidates.is_empty() {
+                    file_candidates
+                } else {
+                    password_candidates(passwords.get("default"))
+                };
+                // No candidates at all just means "try unencrypted".
+                let attempts: Vec<Option<String>> = if candidates.is_empty() {
+                    vec![None]
+                } else {
+                    candidates.into_iter().map(Some).collect()
+                };
+
+                let mut parsed = None;
+                let mut last_err = None;
+                for attempt in &attempts {
+                    let req = xfina::models::request::ParseRequest::new(&bytes)
+                        .with_password(attempt.as_deref())
+                        .with_filename(Some(file_name));
+                    match parse_cams_pdf(req) {
+                        Ok(p) => {
+                            parsed = Some(p);
+                            break;
+                        }
+                        Err(e) => {
+                            let is_password_issue = matches!(
+                                e,
+                                XfinaError::IncorrectPassword | XfinaError::PasswordRequired
+                            );
+                            last_err = Some(e);
+                            if !is_password_issue {
+                                // A real parse failure - no point trying other passwords.
+                                break;
+                            }
+                        }
+                    }
+                }
+                let parsed = parsed.unwrap_or_else(|| {
+                    panic!(
+                        "Failed to parse CAMS PDF {} after trying {} password candidate(s): {:?}",
+                        file_name,
+                        attempts.len(),
+                        last_err
+                    )
+                });
 
                 let xfina_json = serialize_result(&parsed, parsed.data.to_xfina_json()).unwrap();
                 let rebit_json = serialize_result(&parsed, parsed.data.to_rebit_json()).unwrap();

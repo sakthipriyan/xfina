@@ -56,6 +56,18 @@ impl OutputDev for SpatialOutputDev {
         font_size: f64,
         char: &str,
     ) -> Result<(), OutputError> {
+        // CAMS stamps a document-generation watermark (e.g. "CAMSCASWS-<id>
+        // Version:V3.5 Live-1018") as vertical text rotated 90 degrees along the
+        // page margin: its glyphs have an off-diagonal transform (m11/m22 ~ 0,
+        // m12/m21 ~ ±1) instead of the near-identity matrix upright text has. Left
+        // in, a stray glyph occasionally lands within the y-tolerance of an
+        // unrelated content line (e.g. an AMC heading) and silently fuses onto it,
+        // corrupting text-based matches. Drop non-upright glyphs before they ever
+        // reach line grouping.
+        if trm.m12.abs() > 0.5 || trm.m21.abs() > 0.5 {
+            return Ok(());
+        }
+
         let position = trm.post_transform(&self.flip_ctm);
         let x = position.m31;
         let y = position.m32;
@@ -91,11 +103,9 @@ pub fn extract_spatial_pages(
     let mut doc = Document::load_mem(bytes).map_err(|e| format!("Failed to load PDF: {:?}", e))?;
     if let Some(pw) = password {
         doc.decrypt(pw)
-            .map_err(|e| format!("Failed to decrypt: {:?}", e))?;
+            .map_err(|_| crate::error::XfinaError::IncorrectPassword)?;
     } else if doc.is_encrypted() {
-        return Err(crate::error::XfinaError::from(
-            "PDF is encrypted, password required".to_string(),
-        ));
+        return Err(crate::error::XfinaError::PasswordRequired);
     }
 
     let mut out = SpatialOutputDev::new();
