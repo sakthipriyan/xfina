@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-08-15
+
 ### Fixed
 - **Parsers (CAMS):** Fixed summary-level validation false failures on statements where CAMS' vertical document-generation watermark (rotated 90°, stamped along the page margin) coincidentally landed within the y-tolerance of an AMC heading line, fusing a stray character onto it and causing that AMC's holdings to be silently misattributed to the previous AMC. Non-upright glyphs are now dropped during character extraction so they can never fuse onto content lines, regardless of which line they happen to land near.
 - **Parsers (CAMS):** Fixed nondeterministic ordering of `summary_level` validation checks (backed by a `HashMap`, whose iteration order is randomized per process) by sorting by AMC name before emitting checks, so serialized output is stable across runs — the same class of issue already fixed for the IBKR parser in 0.2.0.
