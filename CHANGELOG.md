@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-27
+
 ### Added
 - **Parsers:** Added a new parser for Axis Bank credit card statements (`credit_cards/axis.rs`).
 - **Web App:** Integrated the Axis Bank credit card parser in the UI.
