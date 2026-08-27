@@ -66,7 +66,7 @@ thiserror = "2.0.19"
 
 [features]
 default = ["all"]
-all = ["ba-hdfc", "ba-icici", "ba-sbi", "ba-bob", "ba-axis", "cc-hdfc", "cc-icici", "mf-cams", "is-ibkr"]
+all = ["ba-hdfc", "ba-icici", "ba-sbi", "ba-bob", "ba-axis", "cc-hdfc", "cc-icici", "cc-axis", "mf-cams", "is-ibkr"]
 cli = ["clap", "anyhow", "all"]
 
 # Bank Accounts
@@ -79,6 +79,7 @@ ba-axis = ["calamine", "chrono", "regex", "rust_decimal"]
 # Credit Cards
 cc-hdfc = ["chrono", "regex", "rust_decimal", "num-traits"]
 cc-icici = ["calamine", "chrono", "regex", "rust_decimal", "num-traits"]
+cc-axis = ["calamine", "chrono", "regex", "rust_decimal", "num-traits"]
 
 # Mutual Funds & International Stocks
 mf-cams = ["pdf-extract", "regex", "chrono", "rust_decimal"]

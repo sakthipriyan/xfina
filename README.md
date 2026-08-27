@@ -39,7 +39,7 @@ By building Xfina in **Rust**, we achieve:
 | 🏦 Bank Account | HDFC Bank | XLS | **Production Ready** | Full support |
 | 🏦 Bank Account | ICICI Bank | XLS | **Production Ready** | Full support |
 | 🏦 Bank Account | State Bank of India | PDF (password protected) | **Production Ready** | Full support |
-| 💳 Credit Card | Axis Bank | - | **TODO** | Waiting for the statement to be generated |
+| 💳 Credit Card | Axis Bank | XLSX | **Production Ready** | Statement period derived from transactions; Axis prints no statement date |
 | 💳 Credit Card | HDFC Bank | CSV | **Production Ready** | Full support incl. add-on cardholders, reward points |
 | 💳 Credit Card | ICICI Bank | XLS | **Production Ready** | Tested card without any add-on cards |
 | 📈 Mutual Funds | CAMS | PDF (password protected) | **Production Ready** | Combined Account Statement (CAS) |
@@ -99,7 +99,7 @@ xfina/
 ├── src/                  # Unified xfina Rust crate
 │   ├── models/           # Shared data models (ReBIT / AA standard compatible)
 │   ├── bank_accounts/    # Bank Account parsers (HDFC, ICICI, SBI, BoB, Axis)
-│   ├── credit_cards/     # Credit Card parsers (HDFC, ICICI)
+│   ├── credit_cards/     # Credit Card parsers (HDFC, ICICI, Axis)
 │   ├── mutual_funds/     # Mutual Fund parsers (CAMS)
 │   ├── intl_stocks/      # International Broker parsers (IBKR)
 │   └── main.rs           # Terminal command-line interface (CLI)
@@ -236,7 +236,7 @@ Tagged releases (`v0.1.3`) → Deploys a permanent, versioned snapshot (`/0.1/`)
 
 | Institution / Provider | Bank Account | Credit Card | Mutual Funds | Intl Brokers |
 |---|:---:|:---:|:---:|:---:|
-| Axis Bank | ✅ | ⏳ | | |
+| Axis Bank | ✅ | ✅ | | |
 | Bank of Baroda | ✅ | | | |
 | CAMS | | | ✅ | |
 | HDFC Bank | ✅ | ✅ | | |
@@ -248,7 +248,6 @@ Tagged releases (`v0.1.3`) → Deploys a permanent, versioned snapshot (`/0.1/`)
 ### Upcoming
 - [ ] CSV / JSON export full support
 - [ ] KFinTech combined statement parser
-- [ ] Axis Credit Card parser
 
 ## License
 

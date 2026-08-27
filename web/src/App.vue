@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
-import init, { parse_ibkr, parse_cams, parse_hdfc_cc, parse_icici_cc, parse_hdfc_ba, parse_icici_ba, parse_sbi_ba, parse_bob_ba, parse_axis_ba } from 'xfina-wasm';
+import init, { parse_ibkr, parse_cams, parse_hdfc_cc, parse_icici_cc, parse_axis_cc, parse_hdfc_ba, parse_icici_ba, parse_sbi_ba, parse_bob_ba, parse_axis_ba } from 'xfina-wasm';
 import { Sun, Moon, Github, HelpCircle, ChevronDown, Loader2, ArrowUp, ArrowDown, GitCommit, CheckCircle2, AlertTriangle, XCircle, MinusCircle, Activity } from 'lucide-vue-next';
 
 // Shadcn components
@@ -118,7 +118,7 @@ const getFileFormat = computed(() => {
         return 'PDF';
     }
     if (selectedCategory.value === 'Credit Cards') {
-        if (selectedSource.value === 'ICICI') return 'Excel';
+        if (selectedSource.value === 'ICICI' || selectedSource.value === 'Axis') return 'Excel';
         return 'CSV';
     }
     if (selectedCategory.value === 'Intl Brokers') return 'CSV';
@@ -132,7 +132,7 @@ const getAcceptString = computed(() => {
         return '.pdf';
     }
     if (selectedCategory.value === 'Credit Cards') {
-        if (selectedSource.value === 'ICICI') return '.xls,.xlsx';
+        if (selectedSource.value === 'ICICI' || selectedSource.value === 'Axis') return '.xls,.xlsx';
         return '.csv';
     }
     return '*';
@@ -250,8 +250,15 @@ const onFileSelect = async (event) => {
             const parsed = JSON.parse(jsonString);
             ccStatement.value = parsed.data;
             validationReport.value = parsed.validation;
+        } else if (selectedSource.value === 'Axis') {
+            const arrayBuffer = await file.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+            jsonString = parse_axis_cc(uint8Array, null, file.name, modTime, null);
+            const parsed = JSON.parse(jsonString);
+            ccStatement.value = parsed.data;
+            validationReport.value = parsed.validation;
         }
-        
+
 
 
         const end = performance.now();
@@ -288,6 +295,7 @@ const onFileSelect = async (event) => {
         } else if (selectedCategory.value === 'Credit Cards') {
             if (selectedSource.value === 'HDFC') parserName = 'hdfc_cc';
             else if (selectedSource.value === 'ICICI') parserName = 'icici_cc';
+            else if (selectedSource.value === 'Axis') parserName = 'axis_cc';
         } else if (selectedCategory.value === 'Mutual Funds') {
             if (selectedSource.value === 'CAS') parserName = 'cas';
             else if (selectedSource.value === 'CAMS') parserName = 'cams';
@@ -311,6 +319,7 @@ const onFileSelect = async (event) => {
         } else if (selectedCategory.value === 'Credit Cards') {
             if (selectedSource.value === 'HDFC') parserName = 'hdfc_cc';
             else if (selectedSource.value === 'ICICI') parserName = 'icici_cc';
+            else if (selectedSource.value === 'Axis') parserName = 'axis_cc';
         } else if (selectedCategory.value === 'Mutual Funds') {
             if (selectedSource.value === 'CAS') parserName = 'cas';
             else if (selectedSource.value === 'CAMS') parserName = 'cams';
@@ -764,6 +773,7 @@ const camsGroupedAssets = computed(() => {
              <div class="space-y-2" v-if="selectedCategory === 'Credit Cards'">
                <Label>Bank</Label>
                <div class="flex flex-wrap gap-4">
+                 <Button :variant="selectedSource === 'Axis' ? 'default' : 'outline'" @click="setSource('Axis')">Axis Bank</Button>
                  <Button :variant="selectedSource === 'HDFC' ? 'default' : 'outline'" @click="setSource('HDFC')">HDFC Bank</Button>
                  <Button :variant="selectedSource === 'ICICI' ? 'default' : 'outline'" @click="setSource('ICICI')">ICICI Bank</Button>
                </div>

@@ -268,6 +268,15 @@ fn main() -> Result<()> {
                     };
                     serialize_result(&res, json)?
                 }
+                (Category::CreditCard, Institution::Axis) => {
+                    let res = xfina::credit_cards::axis::parse_axis_statement(req.clone())?;
+                    let json = if is_rebit {
+                        res.data.to_rebit_json()
+                    } else {
+                        res.data.to_xfina_json()
+                    };
+                    serialize_result(&res, json)?
+                }
                 (Category::MutualFund, Institution::Cams) => {
                     let res = xfina::mutual_funds::cams::parse_cams_pdf(req.clone())?;
                     let json = if is_rebit {

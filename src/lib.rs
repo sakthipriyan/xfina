@@ -30,7 +30,7 @@
 //!
 //! - [`models`]: Shared data models (ReBIT / Sahamati AA standard compatible)
 //! - [`bank_accounts`]: Parsers for savings and current accounts (HDFC, ICICI, SBI, BOB, Axis)
-//! - [`credit_cards`]: Parsers for credit card statements (HDFC, ICICI)
+//! - [`credit_cards`]: Parsers for credit card statements (HDFC, ICICI, Axis)
 //! - [`mutual_funds`]: Parsers for mutual fund statements (CAMS CAS)
 //! - [`intl_stocks`]: Parsers for international broker statements (IBKR)
 
@@ -49,6 +49,8 @@ pub mod intl_stocks {
 }
 
 pub mod credit_cards {
+    #[cfg(feature = "cc-axis")]
+    pub mod axis;
     #[cfg(feature = "cc-hdfc")]
     pub mod hdfc;
     #[cfg(feature = "cc-icici")]

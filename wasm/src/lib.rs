@@ -55,6 +55,10 @@ create_wasm_binding!(
     xfina::credit_cards::icici::parse_icici_statement
 );
 create_wasm_binding!(
+    parse_axis_cc,
+    xfina::credit_cards::axis::parse_axis_statement
+);
+create_wasm_binding!(
     parse_hdfc_ba,
     xfina::bank_accounts::hdfc::parse_hdfc_bank_statement
 );

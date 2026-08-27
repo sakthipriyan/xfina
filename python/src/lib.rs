@@ -44,6 +44,10 @@ create_py_binding!(
     ::xfina::credit_cards::icici::parse_icici_statement
 );
 create_py_binding!(
+    parse_axis_cc,
+    ::xfina::credit_cards::axis::parse_axis_statement
+);
+create_py_binding!(
     parse_hdfc_ba,
     ::xfina::bank_accounts::hdfc::parse_hdfc_bank_statement
 );
@@ -68,6 +72,7 @@ fn xfina(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(parse_cams, m)?)?;
     m.add_function(wrap_pyfunction!(parse_hdfc_cc, m)?)?;
     m.add_function(wrap_pyfunction!(parse_icici_cc, m)?)?;
+    m.add_function(wrap_pyfunction!(parse_axis_cc, m)?)?;
     m.add_function(wrap_pyfunction!(parse_hdfc_ba, m)?)?;
     m.add_function(wrap_pyfunction!(parse_icici_ba, m)?)?;
     m.add_function(wrap_pyfunction!(parse_sbi_ba, m)?)?;
