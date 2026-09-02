@@ -45,6 +45,8 @@ pub struct XfinaCreditCardAccount {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CcXfinaSummary {
+    /// Card variant printed on the statement, e.g. `"Neo"`.
+    pub card_product: Option<String>,
     #[serde(with = "rust_decimal::serde::float_option", default)]
     pub opening_balance: Option<Decimal>,
     #[serde(with = "rust_decimal::serde::float_option", default)]

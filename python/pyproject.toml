@@ -8,7 +8,14 @@ requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
-    "Programming Language :: Python :: Implementation :: PyPy",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: Apache Software License",
+    "Topic :: Office/Business :: Financial",
 ]
 dynamic = ["version"]
 description = "Python bindings for xfina financial parsers"
@@ -16,4 +23,5 @@ readme = "README.md"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
+# One abi3 wheel per OS/arch covers CPython 3.8+, instead of one per version.
 module-name = "xfina"

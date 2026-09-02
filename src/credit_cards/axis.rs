@@ -126,6 +126,7 @@ pub fn parse_axis_statement(
                 card_no = num.trim().to_string();
             }
             card_type = detect_card_type(title);
+            xfina_summary.card_product = detect_card_product(title);
 
             let mut name_block = col0.lines().map(|l| l.trim()).filter(|l| !l.is_empty());
             if let Some(name) = name_block.next() {
@@ -299,6 +300,28 @@ fn detect_card_type(title: &str) -> CardType {
     } else {
         CardType::Others
     }
+}
+
+/// Card variants Axis co-brands with an issuer network or its own name, both of
+/// which are noise once the network lands in [`CardType`].
+const CARD_TITLE_NOISE: [&str; 6] = ["axis", "bank", "rupay", "visa", "master", "mastercard"];
+
+/// Pulls the card variant out of the statement title, e.g.
+/// `"Neo Rupay Credit card Monthly Statement"` -> `"Neo"`.
+fn detect_card_product(title: &str) -> Option<String> {
+    let heading = title.lines().next()?.trim();
+    // `to_ascii_lowercase` keeps byte offsets aligned with `heading`.
+    let end = heading
+        .to_ascii_lowercase()
+        .find("credit card")
+        .unwrap_or(heading.len());
+    let product = heading[..end]
+        .split_whitespace()
+        .filter(|word| !CARD_TITLE_NOISE.contains(&word.to_ascii_lowercase().as_str()))
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    (!product.is_empty()).then_some(product)
 }
 
 /// `"₹ 1,23,456.78"` -> `123456.78`. Also normalizes Axis's `"₹ -0.00"` to zero.

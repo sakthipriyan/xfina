@@ -86,6 +86,43 @@ pub fn mask_account_number(acc: &str) -> String {
     format!("{}{}{}", first, middle, last)
 }
 
+/// Honorifics that Indian statements print ahead of an account holder's name.
+const HONORIFICS: [&str; 9] = [
+    "MR", "MRS", "MS", "MISS", "M/S", "DR", "SHRI", "SMT", "PROF",
+];
+
+/// Strips a leading honorific ("MR", "Mrs.", "M/S" ...) off a holder name and
+/// collapses the whitespace it leaves behind. Returns `None` when the text does
+/// not start with one, so callers can also use this to spot the name line in a
+/// statement header.
+pub fn strip_honorific(name: &str) -> Option<String> {
+    let name = name.trim();
+    // `to_ascii_uppercase` keeps byte offsets aligned with `name`.
+    let upper = name.to_ascii_uppercase();
+    for honorific in HONORIFICS {
+        let Some(rest) = upper.strip_prefix(honorific) else {
+            continue;
+        };
+        let rest = rest.strip_prefix('.').unwrap_or(rest);
+        // Only a whole token counts as a title: "MRIDULA" is a name, "MR." is not.
+        if !rest.is_empty() && !rest.starts_with(char::is_whitespace) {
+            continue;
+        }
+        return Some(collapse_whitespace(&name[name.len() - rest.len()..]));
+    }
+    None
+}
+
+/// Cleans up a holder name: drops any leading honorific and squeezes the
+/// padding statements use to align the header columns.
+pub fn normalize_person_name(name: &str) -> String {
+    strip_honorific(name).unwrap_or_else(|| collapse_whitespace(name))
+}
+
+fn collapse_whitespace(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 pub mod date_utils;
 pub mod serializer;
 pub mod validation;

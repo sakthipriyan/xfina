@@ -3,10 +3,10 @@ use crate::models::deposit::{
     DepositAccount, FiType, Holder, Holders, HoldersType, HoldingNominee, Profile, Summary,
     Transaction, TransactionMode, TransactionType, Transactions, XfinaDepositAccount, XfinaSummary,
 };
-use crate::models::mask_account_number;
 use crate::models::validation::{
     check_row_balances, ParseResult, SummaryCheck, SummarySource, ValidationReport,
 };
+use crate::models::{mask_account_number, strip_honorific};
 use chrono::{NaiveDate, TimeZone, Utc};
 use regex::Regex;
 use rust_decimal::Decimal;
@@ -258,9 +258,9 @@ pub fn parse_sbi_bank_statement<'a>(
                     in_address = false;
                 }
 
-                if text.starts_with("Mr.") || text.starts_with("Mrs.") {
+                if let Some(stripped) = strip_honorific(text) {
                     if account_name.is_empty() && x0 < 300.0 {
-                        account_name = text.to_string();
+                        account_name = stripped;
                         // Assume customer address follows name on the left side
                         in_address = true;
                     }

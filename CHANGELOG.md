@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-02
+
+### Added
+- **Parsers (Axis CC):** The card variant printed in the statement title (e.g. `Neo`) is now extracted into `summary.xfina.cardProduct`.
+- **Web App:** Credit card statement details now show the card variant as `Product`, mirroring the bank account view.
+
+### Fixed
+- **Python wheels:** the PyPI job built a single wheel on `ubuntu-latest` with
+  CPython 3.11, so only that exact combination could `pip install xfina`
+  without a Rust toolchain — 0.2.4 shipped nothing but a
+  `manylinux_2_34_x86_64` CPython 3.11 wheel. Fixed on three fronts, mirroring
+  [sakthipriyan/xfingine](https://github.com/sakthipriyan/xfingine):
+  - The extension now builds against the **stable ABI** (`pyo3/abi3-py38`), so
+    one wheel per OS/arch covers CPython 3.8+ instead of needing one per
+    version — turning a ~25-build matrix into 5.
+  - Wheels are built for **linux x86_64 / aarch64, macOS x86_64 / arm64, and
+    windows x64** via `PyO3/maturin-action`, which cross-compiles properly. A
+    plain `maturin build` only ever targets the runner's own platform, which
+    was the root cause. Both macOS wheels build on `macos-latest` (Apple
+    Silicon), since GitHub has retired the `macos-13` Intel runner.
+  - An **sdist** is built and uploaded as its own job, giving pip a source
+    fallback on any platform without a prebuilt wheel.
+- **Python metadata:** `pyproject.toml` advertised PyPy support that an abi3
+  CPython extension cannot provide. Replaced with explicit CPython 3.8–3.13
+  classifiers, so the metadata matches what is actually shipped.
+- **CI:** bumped `actions/checkout` and `actions/setup-node` to v7 to move off
+  the deprecated Node 20 runtime; the new wheel jobs use `actions/upload-artifact`
+  v7 and `actions/download-artifact` v8. The `actions/setup-python` call site is
+  gone — `maturin-action` provides the interpreter.
+- **Parsers (HDFC BA):** Holder names starting with `MRS` were mangled into `S <name>` because the honorific was stripped by a plain substring replace. Honorifics are now removed as whole leading tokens.
+- **Parsers (SBI BA):** The honorific (`Mrs.`, `Mr.` ...) is now stripped from the holder name instead of being kept as part of it, and the column padding statements use is collapsed.
+
 ## [0.3.0] - 2026-08-27
 
 ### Added

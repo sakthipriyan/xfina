@@ -922,6 +922,7 @@ const camsGroupedAssets = computed(() => {
           statementType="Credit Card"
           :accountNumber="ccStatement.maskedAccNumber || ''"
           :statementDetails="[
+            ...(ccStatement.summary?.xfina?.cardProduct ? [{ label: 'Product', value: ccStatement.summary.xfina.cardProduct }] : []),
             ...(ccStatement.transactions?.startDate ? [{ label: 'From', value: formatDate(ccStatement.transactions.startDate), derived: ccStatement.transactions?.xfina?.startDateDerived }] : []),
             ...(ccStatement.transactions?.endDate ? [{ label: 'To', value: formatDate(ccStatement.transactions.endDate), derived: ccStatement.transactions?.xfina?.endDateDerived }] : []),
             ...(ccStatement.xfina?.generatedDate ? [{ label: 'Generated', value: formatDateTime(ccStatement.xfina.generatedDate, 'xfina.generatedDate', ccStatement.xfina?.dateOnlyPaths), derived: ccStatement.xfina?.generatedDateDerived }] : []),

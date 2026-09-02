@@ -2,8 +2,8 @@ use crate::models::deposit::{
     DepositAccount, FiType, Holder, Holders, HoldersType, HoldingNominee, Profile, Summary,
     Transaction, TransactionMode, TransactionType, Transactions, XfinaDepositAccount, XfinaSummary,
 };
-use crate::models::mask_account_number;
 use crate::models::validation::{check_row_balances, ParseResult, SummaryCheck, ValidationReport};
+use crate::models::{mask_account_number, normalize_person_name};
 use calamine::{open_workbook_auto_from_rs, Reader};
 use chrono::{FixedOffset, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use regex::Regex;
@@ -96,21 +96,15 @@ pub fn parse_hdfc_xls<'a>(
 
             // Customer Name
             if row_idx == 5 && !row_vec[0].is_empty() {
-                name = row_vec[0]
-                    .replace("MR", "")
-                    .replace("MS", "")
-                    .trim()
-                    .to_string();
+                name = normalize_person_name(&row_vec[0]);
             }
 
-            // Address logic: usually left side from rows 5 to 10
-            if (5..=10).contains(&row_idx) {
+            // Address logic: the left side of rows 6 to 10, right below the name.
+            if (6..=10).contains(&row_idx) {
                 let col0 = row_vec[0].trim();
                 if !col0.is_empty()
                     && !col0.contains("JOINT HOLDERS")
                     && !col0.contains("Nomination")
-                    && !col0.contains("MR")
-                    && !col0.contains("MS")
                 {
                     address_lines.push(col0.to_string());
                 }
