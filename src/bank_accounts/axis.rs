@@ -180,7 +180,7 @@ pub fn parse_axis_xls<'a>(
                 continue; // Ignore empty lines inside transaction block if any
             }
 
-            // ["1", "01-07-2026", "-", "SB:000011112222:Int.Pd:01-04-2026 to 30-06-2026", " ", "               100.00", "            5000.00", "014"]
+            // ["1", "01-07-2026", "-", "SB:000011112222:Int.Pd:01-04-2026 to 30-06-2026", " ", "               100.00", "             5000.00", "014"]
             if row_vec.len() >= 7 {
                 let date_str = &row_vec[1];
                 let ref_num = &row_vec[2];

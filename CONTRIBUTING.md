@@ -39,6 +39,8 @@ Integration tests are mandatory for all parsers to ensure that future changes do
 
 1. Create a new integration test in the `tests/` directory (e.g., `tests/bank_accounts_newbank_integration.rs`).
 2. You will need sample financial statements (e.g., PDFs, Excel files, CSVs). Since these contain PII, **DO NOT commit test data to this repository.**
+
+   This extends past the files themselves. This repository is public, so no value taken from a real statement belongs in source, comments, doc examples, `CHANGELOG.md`, commit messages, or a PR or issue description — no holder names, no account or card numbers even when masked, no real balances or amounts, no narrations, addresses or contact details. Invent values that keep the shape and drop the content, and describe a bug structurally rather than by quoting the statement that found it. `AGENTS.md` has the full rule and examples.
 3. Test data is expected to reside in a sibling directory: `../xfina-test-data/`.
 4. When writing your test, follow this strict snapshot pattern to ensure tests run reliably in CI and can be easily updated locally:
 

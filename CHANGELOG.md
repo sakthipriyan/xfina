@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Every row implies the balance it started from (`printed - delta`), which makes the day a walk that uses each row exactly once — an Eulerian path, found in O(n) with Hierholzer's algorithm rather than by trying permutations. A day is rewritten only when a walk consumes all of its rows, and rows never move across dates, so the outcome is either a day that chains exactly or the statement's own order untouched. When a day is reordered, `transactions.xfina.reordered` says so and the web app labels the transaction list.
 
   Across the ICICI corpus this turns 2 statements from `warning` into `passed` (2 rows moved in each) and leaves the other 4 byte-identical; in every case the set of transactions and both balances are unchanged.
+- **Privacy:** Parser comments carried sample rows copied verbatim from real statements — an account number and holder name in the ICICI bank parser, an account number and balances in the Axis bank parser, and a real payment amount in the Axis credit card parser. All replaced with invented values of the same shape. This repository is public; the statements it is developed against are not.
+
+### Added
+- **Docs:** `AGENTS.md` opens with a top-priority rule against putting anything derived from a real statement into this repository or its commits, PRs and issues, with the substitutions to use instead. `CONTRIBUTING.md` points at it from the existing "do not commit test data" note.
 
 ## [0.4.0] - 2026-09-02
 

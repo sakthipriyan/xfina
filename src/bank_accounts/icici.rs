@@ -115,7 +115,7 @@ pub fn parse_icici_xls<'a>(
             }
 
             // Parse a transaction line
-            // ["1", "05-Jun-2026", "05-Jun-2026", "", "NEFT-...", "0.00", "10000.00", "5000.00"]
+            // ["1", "05-Jun-2026", "05-Jun-2026", "", "NEFT-...", "0.00", "1000.00", "5000.00"]
             if row_vec.len() >= 8 {
                 if row_vec[1].is_empty() {
                     continue;
