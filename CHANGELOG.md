@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Parsers (ICICI BA):** ICICI shuffles a day's rows relative to the balance column, so a strict running-balance check failed on rows that were not themselves wrong — an inward remittance printed after the debit it funded, for instance. Each day is now put back into the order its printed balances describe before any balance is derived from row order. Closes #53.
+
+  Every row implies the balance it started from (`printed - delta`), which makes the day a walk that uses each row exactly once — an Eulerian path, found in O(n) with Hierholzer's algorithm rather than by trying permutations. A day is rewritten only when a walk consumes all of its rows, and rows never move across dates, so the outcome is either a day that chains exactly or the statement's own order untouched. When a day is reordered, `transactions.xfina.reordered` says so and the web app labels the transaction list.
+
+  Across the ICICI corpus this turns 2 statements from `warning` into `passed` (2 rows moved in each) and leaves the other 4 byte-identical; in every case the set of transactions and both balances are unchanged.
+
 ## [0.4.0] - 2026-09-02
 
 ### Added

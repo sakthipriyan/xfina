@@ -1417,7 +1417,12 @@ const camsGroupedAssets = computed(() => {
         <Accordion type="single" collapsible class="w-full">
           <AccordionItem value="transactions" class="border rounded-lg bg-card text-card-foreground shadow-sm overflow-hidden" :disabled="!bankStatement.transactions?.transaction?.length">
             <AccordionTrigger class="group hover:no-underline px-4 py-4 data-[state=open]:border-b border-border">
-              <span class="font-medium text-foreground text-lg text-left w-full pr-4">Transactions</span>
+              <span class="font-medium text-foreground text-lg text-left w-full pr-4">
+                Transactions
+                <span v-if="bankStatement.transactions?.xfina?.reordered" class="ml-2 text-xs font-normal text-muted-foreground" title="This bank prints some days out of order. Those days were put back into the order their running balances describe; no amounts were changed.">
+                  reordered to match balances
+                </span>
+              </span>
               <template #icon>
                 <div class="flex items-center gap-1.5 text-xs font-mono bg-primary/10 text-primary pl-2.5 pr-2 py-1.5 rounded shrink-0 ml-2">
                   <span>{{ bankStatement.transactions?.transaction?.length || 0 }} {{ bankStatement.transactions?.transaction?.length === 1 ? 'Txn' : 'Txns' }}</span>

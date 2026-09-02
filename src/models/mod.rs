@@ -125,6 +125,7 @@ fn collapse_whitespace(text: &str) -> String {
 
 pub mod date_utils;
 pub mod serializer;
+pub mod txn_order;
 pub mod validation;
 pub use validation::{
     check_row_balances, ParseResult, RowCheckFailure, RowValidation, SummaryCheck, SummarySource,

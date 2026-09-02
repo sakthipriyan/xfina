@@ -244,7 +244,11 @@ pub struct XfinaSummary {
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct XfinaTransactions {}
+pub struct XfinaTransactions {
+    /// Set when same-day rows had to be reordered to match the balance column.
+    /// See [`crate::models::txn_order`].
+    pub reordered: Option<bool>,
+}
 
 // -----------------------------------------------------------------------------
 // Implementations

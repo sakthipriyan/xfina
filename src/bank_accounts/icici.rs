@@ -1,8 +1,10 @@
 use crate::models::deposit::{
     DepositAccount, FiType, Holder, Holders, HoldersType, Profile, Summary, Transaction,
     TransactionMode, TransactionType, Transactions, XfinaDepositAccount, XfinaSummary,
+    XfinaTransactions,
 };
 use crate::models::mask_account_number;
+use crate::models::txn_order::reorder_same_day_transactions;
 use crate::models::validation::{check_row_balances, ParseResult, SummaryCheck, ValidationReport};
 use calamine::{open_workbook_auto_from_rs, Reader};
 use chrono::{NaiveDate, TimeZone, Utc};
@@ -187,6 +189,11 @@ pub fn parse_icici_xls<'a>(
         }
     }
 
+    // ICICI shuffles a day's rows relative to the balance column, so put each
+    // day back into the order its printed balances describe before anything
+    // downstream derives a balance from row order. See sakthipriyan/xfina#53.
+    let reordered = reorder_same_day_transactions(&mut parsed_transactions);
+
     let mut summary = Summary::default();
 
     // Set opening and closing balance
@@ -221,6 +228,11 @@ pub fn parse_icici_xls<'a>(
     }
 
     transactions_obj.transaction = parsed_transactions;
+    if reordered {
+        transactions_obj.xfina = Some(XfinaTransactions {
+            reordered: Some(true),
+        });
+    }
 
     let profile = Profile {
         holders: Holders {
