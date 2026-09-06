@@ -1,8 +1,9 @@
-name: Deploy Beta
+name: Publish Unreleased
 
-# Every merge to main republishes the docs site at /unreleased, which is what
-# beta means here: main and nothing else. A tagged release publishes its own
-# versioned directory instead, from the tag.
+# gh-pages holds /unreleased next to /v0.4 and the rest: version directories
+# side by side, not environments. Every merge to main republishes /unreleased;
+# Publish republishes a tag's own directory. Deploy is reserved for xsteer,
+# the one project with a runtime of its own to deploy into.
 on:
   push:
     branches:
@@ -17,7 +18,7 @@ permissions:
 
 jobs:
   deploy_docs_unreleased:
-    name: Deploy Unreleased Docs
+    name: Publish Unreleased Docs
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
