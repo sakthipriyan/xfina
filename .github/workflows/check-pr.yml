@@ -99,26 +99,56 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # The same shape as the Library gate: the job reports either way, it
+      # just does nothing when nothing the site is built from has changed. A
+      # workflow-only pull request should not pay for a Rust and npm build.
+      - name: Check changes
+        id: check_changes
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          BASE=origin/${{ github.base_ref }}
+
+          # The site is built from web/, and from the wasm crate web/ imports,
+          # which is built from src/ and the workspace manifests. Cargo.lock is
+          # included because a dependency bump can land there alone.
+          WEB_CHANGED=$(git diff --name-only $BASE...HEAD -- web/ wasm/ src/ Cargo.toml Cargo.lock | grep -v -i '\.md$' || true)
+
+          if [ -n "$WEB_CHANGED" ]; then
+            echo "Site inputs changed:"
+            echo "$WEB_CHANGED"
+            echo "run_web=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Nothing the site is built from changed; skipping the build."
+            echo "run_web=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: dtolnay/rust-toolchain@stable
+        if: steps.check_changes.outputs.run_web == 'true'
         with:
           targets: wasm32-unknown-unknown
 
       - uses: Swatinem/rust-cache@v2
+        if: steps.check_changes.outputs.run_web == 'true'
 
       - name: Install wasm-pack
+        if: steps.check_changes.outputs.run_web == 'true'
         run: |
           if ! command -v wasm-pack &> /dev/null; then
             curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
           fi
 
       - uses: actions/setup-node@v7
+        if: steps.check_changes.outputs.run_web == 'true'
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
 
       - name: Build the wasm package
+        if: steps.check_changes.outputs.run_web == 'true'
         working-directory: wasm
         run: wasm-pack build --target web
 
@@ -126,6 +156,7 @@ jobs:
       # so a lockfile that has drifted fails here instead of being silently
       # rewritten on the runner.
       - name: Build the site
+        if: steps.check_changes.outputs.run_web == 'true'
         working-directory: web
         run: |
           npm ci
