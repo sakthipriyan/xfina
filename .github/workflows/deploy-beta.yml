@@ -1,5 +1,8 @@
-name: Deploy Unreleased Docs
+name: Deploy Beta
 
+# Every merge to main republishes the docs site at /unreleased, which is what
+# beta means here: main and nothing else. A tagged release publishes its own
+# versioned directory instead, from the tag.
 on:
   push:
     branches:
