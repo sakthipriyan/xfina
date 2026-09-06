@@ -77,6 +77,10 @@ jobs:
         if: steps.check_changes.outputs.run_tests == 'true'
         run: cargo test --workspace --all-features
 
+      # One line per publishing target: the crate is covered by the tests above,
+      # xfina-wasm ships to npm, and xfina-py ships to PyPI. The Web job builds
+      # the wasm crate again through wasm-pack, but that is the site's concern
+      # -- it would stop covering npm the moment the site changed shape.
       - name: Build WASM
         if: steps.check_changes.outputs.run_tests == 'true'
         run: cargo build --target wasm32-unknown-unknown -p xfina-wasm
