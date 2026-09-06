@@ -1,4 +1,4 @@
-name: Multi-Ecosystem Publish
+name: Publish
 
 on:
   push:

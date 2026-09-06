@@ -1,4 +1,4 @@
-name: PR Checks
+name: Check PR
 
 on:
   pull_request:
@@ -9,36 +9,48 @@ env:
 
 jobs:
   test:
-    name: Approve PR
+    name: Library
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      
-      - name: Check Changes and Changelog
+
+      - name: Check changes and changelog
         id: check_changes
-        if: github.event_name == 'pull_request'
         run: |
           git fetch origin ${{ github.base_ref }}
-          
-          # Define the core paths that require a changelog update (excluding markdown files like README.md)
-          CORE_CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- src/ python/ wasm/ tests/ Cargo.toml | grep -v -i '\.md$' || true)
-          
-          if [ -n "$CORE_CHANGED" ]; then
-            echo "The following core files were modified:"
-            echo "$CORE_CHANGED"
+          BASE=origin/${{ github.base_ref }}
+
+          # Code worth compiling and testing. xtask is release tooling: it is
+          # Rust in the workspace, so it has to build and lint, but nothing it
+          # does reaches a published artifact.
+          TEST_CHANGED=$(git diff --name-only $BASE...HEAD -- src/ python/ wasm/ tests/ xtask/ Cargo.toml | grep -v -i '\.md$' || true)
+
+          # Changes a consumer of the crate, wheel or package can observe.
+          # tests/ and xtask/ are deliberately absent: they change nothing that
+          # ships, so they are not notable under Keep a Changelog.
+          RELEASE_CHANGED=$(git diff --name-only $BASE...HEAD -- src/ python/ wasm/ Cargo.toml | grep -v -i '\.md$' || true)
+
+          if [ -n "$RELEASE_CHANGED" ]; then
+            echo "User-facing files modified:"
+            echo "$RELEASE_CHANGED"
             echo "----------------------------------------"
-            
-            # Check if CHANGELOG.md is in the diff
-            if ! git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -q "^CHANGELOG.md$"; then
-              echo "::error::Core files were modified but CHANGELOG.md was not updated. Please document your changes."
+
+            if ! git diff --name-only $BASE...HEAD | grep -q "^CHANGELOG.md$"; then
+              echo "::error::User-facing files were modified but CHANGELOG.md was not updated. Please document your changes."
               exit 1
             fi
             echo "Success: CHANGELOG.md was updated!"
+          else
+            echo "No user-facing files modified. Changelog entry not required."
+          fi
+
+          if [ -n "$TEST_CHANGED" ]; then
+            echo "Code changed; running the full check."
             echo "run_tests=true" >> "$GITHUB_OUTPUT"
           else
-            echo "No core files modified. Changelog update not strictly required."
+            echo "No code changed; skipping build and tests."
             echo "run_tests=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -46,6 +58,7 @@ jobs:
         if: steps.check_changes.outputs.run_tests == 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
+          components: rustfmt, clippy
           targets: wasm32-unknown-unknown
 
       - name: Cache cargo registry and build
@@ -63,7 +76,11 @@ jobs:
       - name: Run tests
         if: steps.check_changes.outputs.run_tests == 'true'
         run: cargo test --workspace --all-features
-        
+
       - name: Build WASM
         if: steps.check_changes.outputs.run_tests == 'true'
         run: cargo build --target wasm32-unknown-unknown -p xfina-wasm
+
+      - name: Build Python bindings
+        if: steps.check_changes.outputs.run_tests == 'true'
+        run: cargo check -p xfina-py
