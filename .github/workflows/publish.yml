@@ -209,9 +209,25 @@ jobs:
 
   deploy_docs_tag:
     name: Deploy Tagged Docs
-    if: github.event_name == 'push' || inputs.deploy_docs != false
+    # npm is a build dependency, not just ordering: the tagged build runs
+    # `npm install xfina-wasm@<version>`, so the package must exist first.
+    # crates.io and PyPI are here for a different reason -- the versioned docs
+    # are the public statement that this release exists, and they should not
+    # make it while a registry is missing it. check_branch drops out; all
+    # three require it already.
+    needs: [crates_io, npm, pypi_publish]
+    # The condition has to distinguish failed from skipped. A dispatch with
+    # publish_crates false skips that job deliberately, and `needs` on a
+    # skipped job would skip this one too -- so the rule is "no registry
+    # failed", not "every registry ran". !cancelled() lets this evaluate at
+    # all once a need is skipped.
+    if: >-
+      !cancelled()
+      && (github.event_name == 'push' || inputs.deploy_docs != false)
+      && needs.crates_io.result != 'failure'
+      && needs.npm.result != 'failure'
+      && needs.pypi_publish.result != 'failure'
     runs-on: ubuntu-latest
-    needs: [check_branch, npm]
     steps:
       - uses: actions/checkout@v7
         with:
