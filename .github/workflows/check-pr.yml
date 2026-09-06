@@ -1,0 +1,132 @@
+name: Check PR
+
+on:
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Library
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check changes and changelog
+        id: check_changes
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          BASE=origin/${{ github.base_ref }}
+
+          # Code worth compiling and testing. xtask is release tooling: it is
+          # Rust in the workspace, so it has to build and lint, but nothing it
+          # does reaches a published artifact.
+          TEST_CHANGED=$(git diff --name-only $BASE...HEAD -- src/ python/ wasm/ tests/ xtask/ Cargo.toml | grep -v -i '\.md$' || true)
+
+          # Changes a consumer of the crate, wheel or package can observe.
+          # tests/ and xtask/ are deliberately absent: they change nothing that
+          # ships, so they are not notable under Keep a Changelog.
+          RELEASE_CHANGED=$(git diff --name-only $BASE...HEAD -- src/ python/ wasm/ Cargo.toml | grep -v -i '\.md$' || true)
+
+          if [ -n "$RELEASE_CHANGED" ]; then
+            echo "User-facing files modified:"
+            echo "$RELEASE_CHANGED"
+            echo "----------------------------------------"
+
+            if ! git diff --name-only $BASE...HEAD | grep -q "^CHANGELOG.md$"; then
+              echo "::error::User-facing files were modified but CHANGELOG.md was not updated. Please document your changes."
+              exit 1
+            fi
+            echo "Success: CHANGELOG.md was updated!"
+          else
+            echo "No user-facing files modified. Changelog entry not required."
+          fi
+
+          if [ -n "$TEST_CHANGED" ]; then
+            echo "Code changed; running the full check."
+            echo "run_tests=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No code changed; skipping build and tests."
+            echo "run_tests=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Rust
+        if: steps.check_changes.outputs.run_tests == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo registry and build
+        if: steps.check_changes.outputs.run_tests == 'true'
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        if: steps.check_changes.outputs.run_tests == 'true'
+        run: cargo fmt --check
+
+      - name: Check for warnings
+        if: steps.check_changes.outputs.run_tests == 'true'
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Run tests
+        if: steps.check_changes.outputs.run_tests == 'true'
+        run: cargo test --workspace --all-features
+
+      # One line per publishing target: the crate is covered by the tests above,
+      # xfina-wasm ships to npm, and xfina-py ships to PyPI. The Web job builds
+      # the wasm crate again through wasm-pack, but that is the site's concern
+      # -- it would stop covering npm the moment the site changed shape.
+      - name: Build WASM
+        if: steps.check_changes.outputs.run_tests == 'true'
+        run: cargo build --target wasm32-unknown-unknown -p xfina-wasm
+
+      - name: Build Python bindings
+        if: steps.check_changes.outputs.run_tests == 'true'
+        run: cargo check -p xfina-py
+
+  # web/ imports xfina-wasm, aliased by vite to ../wasm/pkg, so the site cannot
+  # build until wasm-pack has produced it. These are the same steps
+  # deploy-site runs, minus the gh-pages push -- and that deploy fires on every
+  # merge to main, so without this a broken web change is caught by a failed
+  # production deploy or not at all.
+  web:
+    name: Web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install wasm-pack
+        run: |
+          if ! command -v wasm-pack &> /dev/null; then
+            curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+          fi
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build the wasm package
+        working-directory: wasm
+        run: wasm-pack build --target web
+
+      # npm ci rather than the deploy's npm install: it honours the lockfile,
+      # so a lockfile that has drifted fails here instead of being silently
+      # rewritten on the runner.
+      - name: Build the site
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
