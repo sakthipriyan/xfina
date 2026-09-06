@@ -84,3 +84,45 @@ jobs:
       - name: Build Python bindings
         if: steps.check_changes.outputs.run_tests == 'true'
         run: cargo check -p xfina-py
+
+  # web/ imports xfina-wasm, aliased by vite to ../wasm/pkg, so the site cannot
+  # build until wasm-pack has produced it. These are the same steps
+  # deploy-site runs, minus the gh-pages push -- and that deploy fires on every
+  # merge to main, so without this a broken web change is caught by a failed
+  # production deploy or not at all.
+  web:
+    name: Web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install wasm-pack
+        run: |
+          if ! command -v wasm-pack &> /dev/null; then
+            curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+          fi
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build the wasm package
+        working-directory: wasm
+        run: wasm-pack build --target web
+
+      # npm ci rather than the deploy's npm install: it honours the lockfile,
+      # so a lockfile that has drifted fails here instead of being silently
+      # rewritten on the runner.
+      - name: Build the site
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
