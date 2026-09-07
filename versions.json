@@ -1,29 +1,15 @@
 {
-  "latest": {
-    "minor": "0.4",
-    "patch": "0.4.1"
-  },
-  "unreleased": true,
   "series": [
     {
       "minor": "0.4",
       "latestPatch": "0.4.1",
-      "path": "/0.4/"
+      "path": "/0.4/",
+      "commit": "346206c3a2a09435e9771329a4d6256bdcf087a4"
     },
     {
-      "minor": "0.3",
-      "latestPatch": "0.3.0",
-      "path": "/0.3/"
-    },
-    {
-      "minor": "0.2",
-      "latestPatch": "0.2.4",
-      "path": "/0.2/"
-    },
-    {
-      "minor": "0.1",
-      "latestPatch": "0.1.4",
-      "path": "/0.1/"
+      "minor": "unreleased",
+      "path": "/unreleased/",
+      "commit": "b6ae88327e7ffadb2371cf171b85a8b8d2b61e28"
     }
   ]
 }
