@@ -25,12 +25,12 @@ jobs:
           # Code worth compiling and testing. xtask is release tooling: it is
           # Rust in the workspace, so it has to build and lint, but nothing it
           # does reaches a published artifact.
-          TEST_CHANGED=$(git diff --name-only $BASE...HEAD -- src/ python/ wasm/ tests/ xtask/ Cargo.toml | grep -v -i '\.md$' || true)
+          TEST_CHANGED=$(git diff --name-only $BASE...HEAD -- src/ python/ wasm/ tests/ xtask/ Cargo.toml Cargo.lock | grep -v -i '\.md$' || true)
 
           # Changes a consumer of the crate, wheel or package can observe.
           # tests/ and xtask/ are deliberately absent: they change nothing that
           # ships, so they are not notable under Keep a Changelog.
-          RELEASE_CHANGED=$(git diff --name-only $BASE...HEAD -- src/ python/ wasm/ Cargo.toml | grep -v -i '\.md$' || true)
+          RELEASE_CHANGED=$(git diff --name-only $BASE...HEAD -- src/ python/ wasm/ Cargo.toml Cargo.lock | grep -v -i '\.md$' || true)
 
           if [ -n "$RELEASE_CHANGED" ]; then
             echo "User-facing files modified:"
