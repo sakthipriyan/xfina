@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Web App / Docs:** The commit badge in the header linked to a commit that does not exist on every published site except `/unreleased/`. The hash was baked in by Vite from whatever `HEAD` the deploy ran on, and for the tagged builds that was a pre-squash branch commit the merge discarded — `/0.4/` and the root mirror pointed at `a8a9d75`. The tagged deploy now resolves the tag itself (`git rev-list -n 1 v<version>`), which names a commit that survives the merge, and passes it to the build.
+
+### Changed
+- **Docs:** `versions.json` is now a single ordered `series` list — released versions newest first, the unreleased build last — instead of a list plus separate `latest` and `unreleased` keys repeating parts of it. Each entry records the `commit` its directory was built from, and the web app reads the badge from there, falling back to the hash Vite baked in for local development. A wrong commit id is now corrected in one place, without rebuilding the site. The unreleased entry is keyed `minor: "unreleased"` — the same string the version dropdown already selects by — rather than carrying a flag that would restate what its key already says.
+
 ## [0.4.1] - 2026-09-02
 
 ### Fixed

@@ -68,39 +68,45 @@ const uploadedFile = ref(null);
 
 const versionsData = ref(null);
 const appVersion = import.meta.env.VITE_APP_VERSION || 'Unreleased';
-const activeMinor = appVersion !== 'Unreleased' ? appVersion.split('.').slice(0, 2).join('.') : null;
+// Every entry in versions.json is keyed by `minor`, and the unreleased build
+// uses this literal -- so one string names this site in the registry and
+// selects it in the dropdown. Released series are always X.Y, so nothing else
+// can claim it.
+const UNRELEASED = 'unreleased';
+const isUnreleased = (series) => series.minor === UNRELEASED;
+const activeMinor = appVersion !== 'Unreleased' ? appVersion.split('.').slice(0, 2).join('.') : UNRELEASED;
 const isLocalhost = ref(false);
-const commitHash = __COMMIT_HASH__;
-const cleanCommitHash = commitHash ? commitHash.replace('*', '') : '';
-const shortCommitHash = cleanCommitHash ? cleanCommitHash.substring(0, 7) : '';
 
-const selectedDropdownValue = computed(() => {
-    if (appVersion === 'Unreleased') return 'unreleased';
-    if (versionsData.value && versionsData.value.latest && activeMinor === versionsData.value.latest.minor) {
-        return 'latest';
-    }
-    return activeMinor;
-});
+const allSeries = computed(() => versionsData.value?.series ?? []);
+// The list is ordered -- releases newest first, unreleased last -- but match on
+// the key rather than the index, so a half-written registry cannot end up
+// labelling the unreleased build as the latest release.
+const latestSeries = computed(() => allSeries.value.find(s => !isUnreleased(s)) ?? null);
+const unreleasedSeries = computed(() => allSeries.value.find(isUnreleased) ?? null);
+const pastSeries = computed(() =>
+    allSeries.value.filter(s => !isUnreleased(s) && s !== latestSeries.value)
+);
+const currentSeries = computed(() => allSeries.value.find(s => s.minor === activeMinor) ?? null);
 
-const pastSeries = computed(() => {
-    if (!versionsData.value) return [];
-    if (!versionsData.value.latest) return versionsData.value.series;
-    return versionsData.value.series.filter(s => s.minor !== versionsData.value.latest.minor);
-});
+// versions.json is what the published sites go by: it names the commit each
+// directory was built from, and correcting it there fixes the badge without a
+// rebuild. The hash vite bakes in at build time is the fallback for local dev,
+// where there is no versions.json to fetch.
+const buildCommitHash = __COMMIT_HASH__;
+const cleanCommitHash = computed(() =>
+    (currentSeries.value?.commit || buildCommitHash || '').replace('*', '')
+);
+const shortCommitHash = computed(() => cleanCommitHash.value.substring(0, 7));
+
+const selectedDropdownValue = computed(() => activeMinor);
 
 const onVersionChange = (val) => {
-    if (!versionsData.value || val === selectedDropdownValue.value) return;
-    
-    if (val === 'latest') {
-        window.location.href = '/';
-    } else if (val === 'unreleased') {
-        window.location.href = '/unreleased/';
-    } else {
-        const series = versionsData.value.series.find(s => s.minor === val);
-        if (series) {
-            window.location.href = series.path;
-        }
-    }
+    if (val === activeMinor) return;
+    const target = allSeries.value.find(s => s.minor === val);
+    if (!target) return;
+    // The newest release is mirrored at the root, and that is the URL to hand
+    // out for it -- not the versioned path it is also served from.
+    window.location.href = target === latestSeries.value ? '/' : target.path;
 };
 
 const selectedCategory = ref('Mutual Funds');
@@ -502,10 +508,10 @@ const camsGroupedAssets = computed(() => {
                   <SelectContent v-if="versionsData">
                     <SelectGroup>
                       <SelectItem 
-                        v-if="versionsData.latest" 
-                        value="latest"
+                        v-if="latestSeries" 
+                        :value="latestSeries.minor"
                       >
-                        {{ versionsData.latest.minor }}.x (Latest)
+                        {{ latestSeries.minor }}.x (Latest)
                       </SelectItem>
                       <SelectItem 
                         v-for="series in pastSeries" 
@@ -515,8 +521,8 @@ const camsGroupedAssets = computed(() => {
                         {{ series.minor }}.x
                       </SelectItem>
                       <SelectItem 
-                        v-if="versionsData.unreleased" 
-                        value="unreleased"
+                        v-if="unreleasedSeries" 
+                        :value="unreleasedSeries.minor"
                       >
                         Unreleased
                       </SelectItem>
