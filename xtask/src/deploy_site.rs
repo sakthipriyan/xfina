@@ -4,25 +4,56 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{exit, Command};
 
+/// The directory the build of `main` is published to, and the key that names it
+/// in the registry and the version dropdown. Released series are always `X.Y`,
+/// so the two namespaces cannot collide.
+const UNRELEASED: &str = "unreleased";
+
+/// Every directory published on gh-pages, in the order the version dropdown
+/// shows them: released series newest first, then the unreleased build last.
+/// Position carries the meaning that separate `latest` and `unreleased` keys
+/// used to -- `series[0]` is the latest release -- so there is one list to fix
+/// when something in it is wrong.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct VersionRegistry {
-    latest: Option<VersionInfo>,
-    unreleased: bool,
     series: Vec<SeriesInfo>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-struct VersionInfo {
+struct SeriesInfo {
+    /// Identifies the entry, and is the value the version dropdown selects by.
+    /// The unreleased build uses the literal `unreleased`, so one string names
+    /// a site in both places.
     minor: String,
-    patch: String,
+    /// Absent on the unreleased entry, which has no patch version.
+    #[serde(
+        rename = "latestPatch",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    latest_patch: Option<String>,
+    path: String,
+    /// The commit this directory was built from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    commit: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-struct SeriesInfo {
-    minor: String,
-    #[serde(rename = "latestPatch")]
-    latest_patch: String,
-    path: String,
+impl SeriesInfo {
+    /// `minor` is what identifies an entry, so it is also what says whether the
+    /// entry is the unreleased build. A separate flag would be a second copy of
+    /// the same fact, free to disagree with it.
+    fn is_unreleased(&self) -> bool {
+        self.minor == UNRELEASED
+    }
+}
+
+/// Released series newest first, the unreleased entry pinned last.
+fn sort_series(registry: &mut VersionRegistry) {
+    registry.series.sort_by(|a, b| {
+        a.is_unreleased()
+            .cmp(&b.is_unreleased())
+            .then_with(|| b.minor.cmp(&a.minor))
+    });
 }
 
 pub fn run(args: &[String]) {
@@ -96,18 +127,27 @@ pub fn run(args: &[String]) {
     let versions_path = worktree_dir.join("versions.json");
     let mut registry: VersionRegistry = if versions_path.exists() {
         let content = fs::read_to_string(&versions_path).unwrap();
-        serde_json::from_str(&content).unwrap_or_else(|_| VersionRegistry {
-            latest: None,
-            unreleased: false,
-            series: vec![],
-        })
+        serde_json::from_str(&content).unwrap_or_else(|_| VersionRegistry { series: vec![] })
     } else {
-        VersionRegistry {
-            latest: None,
-            unreleased: false,
-            series: vec![],
-        }
+        VersionRegistry { series: vec![] }
     };
+
+    // The commit the built directory came from. The web app's header badge
+    // links to it, so it has to be one that outlives the build: a tag resolves
+    // to the commit the tag names, which survives a squash-merge, rather than
+    // whatever HEAD the runner happened to be sitting on.
+    let source_commit = if is_unreleased {
+        resolve_commit(&workspace_root, "HEAD")
+    } else {
+        resolve_commit(&workspace_root, &format!("v{}", tag_version))
+            .or_else(|| resolve_commit(&workspace_root, "HEAD"))
+    };
+    match &source_commit {
+        Some(commit) => println!("Source commit: {}", commit),
+        None => eprintln!(
+            "Warning: could not resolve the source commit; the registry will not record one."
+        ),
+    }
 
     if is_unreleased {
         println!("Building Unreleased version...");
@@ -122,6 +162,9 @@ pub fn run(args: &[String]) {
             .args(["run", "build"])
             .env("VITE_APP_VERSION", "Unreleased")
             .env("VITE_DOMAIN_BASE", "/");
+        if let Some(commit) = &source_commit {
+            build_cmd.env("VITE_COMMIT_HASH", commit);
+        }
         run_cmd_obj(&mut build_cmd);
 
         let target_dir = worktree_dir.join("unreleased");
@@ -136,7 +179,15 @@ pub fn run(args: &[String]) {
             &["-r", "web/dist", "gh-pages-worktree/unreleased"],
         );
 
-        registry.unreleased = true;
+        upsert_series(
+            &mut registry,
+            SeriesInfo {
+                minor: UNRELEASED.to_string(),
+                latest_patch: None,
+                path: format!("/{}/", UNRELEASED),
+                commit: source_commit.clone(),
+            },
+        );
     } else {
         println!("Building Tagged version: {}...", tag_version);
         let parts: Vec<&str> = tag_version.split('.').collect();
@@ -158,6 +209,9 @@ pub fn run(args: &[String]) {
             .args(["run", "build"])
             .env("VITE_APP_VERSION", &tag_version)
             .env("VITE_DOMAIN_BASE", "/");
+        if let Some(commit) = &source_commit {
+            build_cmd.env("VITE_COMMIT_HASH", commit);
+        }
         run_cmd_obj(&mut build_cmd);
 
         let target_dir = worktree_dir.join(&minor_version);
@@ -175,41 +229,24 @@ pub fn run(args: &[String]) {
             ],
         );
 
-        // Update registry
-        let mut found = false;
-        for series in &mut registry.series {
-            if series.minor == minor_version {
-                series.latest_patch = tag_version.clone();
-                found = true;
-                break;
-            }
-        }
-        if !found {
-            registry.series.push(SeriesInfo {
+        upsert_series(
+            &mut registry,
+            SeriesInfo {
                 minor: minor_version.clone(),
-                latest_patch: tag_version.clone(),
+                latest_patch: Some(tag_version.clone()),
                 path: format!("/{}/", minor_version),
-            });
-            // Sort descending by minor version
-            registry.series.sort_by(|a, b| b.minor.cmp(&a.minor));
-        }
+                commit: source_commit.clone(),
+            },
+        );
 
-        // Determine if this is the newest minor series
-        let is_latest = match &registry.latest {
-            Some(latest) => {
-                // simple lexicographic compare works for x.y since they are padded/small,
-                // but better to parse. For now, string cmp works for 0.1 vs 0.2
-                minor_version >= latest.minor
-            }
-            None => true,
-        };
+        // The newest release is whatever sorts to the front, so the list says
+        // which series the root mirrors rather than a separate key repeating it.
+        let is_latest = registry
+            .series
+            .first()
+            .is_some_and(|series| series.minor == minor_version);
 
         if is_latest {
-            registry.latest = Some(VersionInfo {
-                minor: minor_version.clone(),
-                patch: tag_version.clone(),
-            });
-
             // Mirror to root
             let index_path = worktree_dir.join("index.html");
             let assets_dir = worktree_dir.join("assets");
@@ -266,6 +303,37 @@ pub fn run(args: &[String]) {
         .status();
 }
 
+/// Replace the entry for `entry.minor`, or add it, then restore the ordering.
+fn upsert_series(registry: &mut VersionRegistry, entry: SeriesInfo) {
+    match registry
+        .series
+        .iter_mut()
+        .find(|series| series.minor == entry.minor)
+    {
+        Some(existing) => *existing = entry,
+        None => registry.series.push(entry),
+    }
+    sort_series(registry);
+}
+
+/// Resolve a revision to its full commit SHA, or `None` if git cannot.
+fn resolve_commit(dir: &Path, rev: &str) -> Option<String> {
+    let output = Command::new("git")
+        .current_dir(dir)
+        .args(["rev-list", "-n", "1", rev])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let sha = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if sha.is_empty() {
+        None
+    } else {
+        Some(sha)
+    }
+}
+
 fn run_cmd(dir: &Path, cmd: &str, args: &[&str]) {
     println!("> {} {}", cmd, args.join(" "));
     let status = Command::new(cmd)
@@ -286,5 +354,114 @@ fn run_cmd_obj(cmd: &mut Command) {
     if !status.success() {
         eprintln!("Command failed!");
         exit(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn released(minor: &str, patch: &str, commit: &str) -> SeriesInfo {
+        SeriesInfo {
+            minor: minor.to_string(),
+            latest_patch: Some(patch.to_string()),
+            path: format!("/{}/", minor),
+            commit: Some(commit.to_string()),
+        }
+    }
+
+    fn unreleased(commit: &str) -> SeriesInfo {
+        SeriesInfo {
+            minor: UNRELEASED.to_string(),
+            latest_patch: None,
+            path: format!("/{}/", UNRELEASED),
+            commit: Some(commit.to_string()),
+        }
+    }
+
+    // The whole point of the flat list: position is the meaning. `series[0]` is
+    // the latest release, so the tagged deploy reads it to decide whether to
+    // mirror the build to the root.
+    #[test]
+    fn latest_release_sorts_first_and_unreleased_last() {
+        let mut registry = VersionRegistry {
+            series: vec![unreleased("aaa"), released("0.2", "0.2.4", "bbb")],
+        };
+
+        upsert_series(&mut registry, released("0.4", "0.4.1", "ccc"));
+        upsert_series(&mut registry, released("0.3", "0.3.0", "ddd"));
+
+        let order: Vec<&str> = registry.series.iter().map(|s| s.minor.as_str()).collect();
+        assert_eq!(order, ["0.4", "0.3", "0.2", UNRELEASED]);
+    }
+
+    // A tag on an existing series replaces that entry rather than adding a
+    // second one, and the unreleased entry is upserted the same way on every
+    // merge to main.
+    #[test]
+    fn upsert_replaces_an_existing_entry() {
+        let mut registry = VersionRegistry {
+            series: vec![released("0.4", "0.4.0", "old"), unreleased("stale")],
+        };
+
+        upsert_series(&mut registry, released("0.4", "0.4.1", "new"));
+        upsert_series(&mut registry, unreleased("fresh"));
+
+        assert_eq!(registry.series.len(), 2);
+        assert_eq!(registry.series[0].latest_patch.as_deref(), Some("0.4.1"));
+        assert_eq!(registry.series[0].commit.as_deref(), Some("new"));
+        assert_eq!(registry.series[1].commit.as_deref(), Some("fresh"));
+    }
+
+    // Each entry carries only what applies to it: a released series has a patch
+    // version, the unreleased build has none, and nothing states in a second
+    // field what `minor` already says.
+    #[test]
+    fn entries_carry_only_what_applies() {
+        let json = serde_json::to_string(&VersionRegistry {
+            series: vec![released("0.4", "0.4.1", "ccc"), unreleased("aaa")],
+        })
+        .unwrap();
+
+        assert!(json.contains(r#""latestPatch":"0.4.1""#), "{json}");
+        assert_eq!(json.matches("latestPatch").count(), 1, "{json}");
+        assert_eq!(json.matches(UNRELEASED).count(), 2, "{json}");
+    }
+
+    // A parse failure is silent -- `run` falls back to an empty registry and
+    // the next deploy writes it out, dropping every entry -- so this is the
+    // check that the file on gh-pages and these structs agree.
+    #[test]
+    fn registry_round_trips() {
+        let source = r#"{
+            "series": [
+                {
+                    "minor": "0.4",
+                    "latestPatch": "0.4.1",
+                    "path": "/0.4/",
+                    "commit": "346206c3a2a09435e9771329a4d6256bdcf087a4"
+                },
+                {
+                    "minor": "unreleased",
+                    "path": "/unreleased/",
+                    "commit": "b6ae88327e7ffadb2371cf171b85a8b8d2b61e28"
+                }
+            ]
+        }"#;
+
+        let registry: VersionRegistry = serde_json::from_str(source).unwrap();
+        assert_eq!(registry.series.len(), 2);
+        assert!(!registry.series[0].is_unreleased());
+        assert_eq!(
+            registry.series[0].commit.as_deref(),
+            Some("346206c3a2a09435e9771329a4d6256bdcf087a4")
+        );
+        assert!(registry.series[1].is_unreleased());
+        assert_eq!(registry.series[1].latest_patch, None);
+
+        let reread: VersionRegistry =
+            serde_json::from_str(&serde_json::to_string(&registry).unwrap()).unwrap();
+        assert_eq!(reread.series[1].commit, registry.series[1].commit);
+        assert!(reread.series[1].is_unreleased());
     }
 }
