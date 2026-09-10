@@ -69,8 +69,55 @@ UPDATE_EXPECTED=1 cargo test
 1. Ensure your code passes all tests (`cargo test`).
 2. Ensure your code is properly formatted (`cargo fmt`).
 3. If modifying WASM interfaces, rebuild the WASM bundle (`cd wasm && wasm-pack build --target web`).
-4. Update the `README.md` and `task.md` if applicable.
+4. Update the `README.md` if applicable.
 5. Submit a pull request to the `main` branch.
+
+Add your entry to `CHANGELOG.md` under `## [Unreleased]`. CI enforces this for
+any change a consumer of the crate, wheel or package can observe — it is the
+record of what shipped, and writing it while the change is fresh is the point.
+
+Two branches open at once will conflict over that block. Resolving it is
+usually seconds, and it is the price of having the entry written by whoever
+made the change — `prepare-release` moves the block into the release, it will
+not write it for you.
+
+## Releasing
+
+A release is one pull request and one tag.
+
+```bash
+# on the branch that carries the release, as its last commit
+cargo xtask prepare-release minor        # or patch / major / an explicit 0.5.0
+```
+
+That bumps the workspace version, drafts the changelog section from the commits
+since the last tag, and commits both. Edit the draft, `git commit --amend`, and
+open the pull request as usual — the release rides along with the change it
+describes, so there is no separate release PR to review.
+
+Several changes can share a release: merge the earlier branches normally and run
+`prepare-release` on the last one, or on a small branch of its own
+(`prepare-release minor --branch` cuts `release/vX.Y.Z` for you, for shipping
+what is already on `main`).
+
+```bash
+# after it is merged
+cargo xtask tag-release
+```
+
+Pushing the tag is what publishes. Because there is no separate release PR to
+review, this is the only checkpoint left, so it refuses unless `main` is clean,
+in sync with `origin/main`, and actually declares the version in `CHANGELOG.md`;
+it warns if code landed after the release was prepared and is therefore missing
+from the notes.
+
+Bump `minor` for anything breaking or feature-shaped and `patch` for fixes —
+this is 0.x, so breaking changes do not need a major.
+
+One caution: do not merge to `main` while a release is running. The tagged docs
+job and `Publish Unreleased` both push `gh-pages`, and although each retries on
+a rejected push, a release that fails at the docs step has already published to
+three registries.
 
 ## License
 
