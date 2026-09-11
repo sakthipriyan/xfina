@@ -1,3 +1,5 @@
+#![cfg(feature = "ba-sbi")]
+
 use std::fs;
 use std::path::Path;
 use xfina::bank_accounts::sbi::parse_sbi_bank_statement;
@@ -41,8 +43,12 @@ fn test_sbi_pdf_parser() {
             )
             .unwrap();
 
-            let xfina_json = serialize_result(&statement, statement.data.to_xfina_json()).unwrap();
-            let rebit_json = serialize_result(&statement, statement.data.to_rebit_json()).unwrap();
+            let xfina_json = statement
+                .to_json_string(xfina::models::Schema::Xfina, true)
+                .unwrap();
+            let rebit_json = statement
+                .to_json_string(xfina::models::Schema::Rebit, true)
+                .unwrap();
 
             let xfina_path = xfina_dir.join(path.with_extension("json").file_name().unwrap());
             let rebit_path = rebit_dir.join(path.with_extension("json").file_name().unwrap());
@@ -72,15 +78,4 @@ fn test_sbi_pdf_parser() {
             }
         }
     }
-}
-
-fn serialize_result<T: serde::Serialize>(
-    stmt: &xfina::models::validation::ParseResult<T>,
-    data_json: serde_json::Value,
-) -> Result<String, serde_json::Error> {
-    let mut root = serde_json::to_value(stmt)?;
-    if let Some(obj) = root.as_object_mut() {
-        obj.insert("data".to_string(), data_json);
-    }
-    serde_json::to_string_pretty(&root)
 }

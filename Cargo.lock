@@ -1231,6 +1231,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-wasm-bindgen"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8302e169f0eddcc139c70f139d19d6467353af16f9fce27e8c30158036a1e16b"
+dependencies = [
+ "js-sys",
+ "serde",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "serde_core"
 version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1687,7 +1698,7 @@ dependencies = [
 
 [[package]]
 name = "xfina"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "calamine",
@@ -1707,7 +1718,7 @@ dependencies = [
 
 [[package]]
 name = "xfina-py"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "pyo3",
  "pythonize",
@@ -1717,9 +1728,10 @@ dependencies = [
 
 [[package]]
 name = "xfina-wasm"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "serde",
+ "serde-wasm-bindgen",
  "serde_json",
  "wasm-bindgen",
  "xfina",
@@ -1727,7 +1739,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "serde",
  "serde_json",

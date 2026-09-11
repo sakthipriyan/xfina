@@ -4,32 +4,27 @@ use crate::models::deposit::{
 };
 use crate::models::validation::{check_row_balances, ParseResult, SummaryCheck, ValidationReport};
 use crate::models::{mask_account_number, normalize_person_name};
-use calamine::{open_workbook_auto_from_rs, Reader};
 use chrono::{FixedOffset, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use regex::Regex;
 use rust_decimal::Decimal;
-use std::io::Cursor;
 
+use crate::decode::Decoded;
 use crate::models::request::ParseRequest;
 
-pub fn parse_hdfc_xls<'a>(
-    input: ParseRequest<'a>,
+pub fn parse_hdfc_xls(
+    input: ParseRequest<'_>,
 ) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
-    let bytes = input.content;
-    let cursor = Cursor::new(bytes);
-    let mut workbook = open_workbook_auto_from_rs(cursor)
-        .map_err(|e| format!("Failed to open workbook: {}", e))?;
+    let decoded = Decoded::new(&input);
+    parse_decoded(&decoded, &input)
+}
 
-    let sheet_names = workbook.sheet_names().to_vec();
-    if sheet_names.is_empty() {
-        return Err(crate::error::XfinaError::from(
-            "No sheets found in workbook".to_string(),
-        ));
-    }
-
-    let sheet = workbook
-        .worksheet_range(&sheet_names[0])
-        .map_err(|e| format!("Error reading sheet: {}", e))?;
+/// Parses from an already-decoded input, so detection can probe and
+/// parse against one read of the file.
+pub(crate) fn parse_decoded(
+    decoded: &Decoded<'_>,
+    _input: &ParseRequest<'_>,
+) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
+    let sheet = decoded.sheets()?.first()?;
 
     let mut stmt = DepositAccount {
         r#type: FiType::Deposit,
@@ -473,4 +468,21 @@ pub fn parse_hdfc_bank_statement<'a>(
     input: ParseRequest<'a>,
 ) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
     parse_hdfc_xls(input)
+}
+
+/// Markers on an HDFC bank statement export: the bank's own name block and
+/// the reference-number column heading it uses.
+pub(crate) fn probe(dec: &crate::decode::Decoded<'_>) -> crate::detect::Claim {
+    use crate::detect::{probe::any_marker, Claim};
+    let Ok(sheets) = dec.sheets() else {
+        return Claim::NO;
+    };
+    let head = sheets.head_text(40);
+    if any_marker(&head, &["HDFC BANK LTD", "CHQ./REF.NO."]) {
+        return Claim::strong("hdfc-bank-header");
+    }
+    if any_marker(&head, &["A/C OPEN DATE", "ACCOUNT BRANCH :"]) {
+        return Claim::weak("hdfc-bank-fields");
+    }
+    Claim::NO
 }

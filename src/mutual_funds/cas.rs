@@ -281,6 +281,8 @@ pub fn parse_cas_lines(
                         .map(|dt| dt.with_timezone(&chrono::Utc));
                     if let Some(ref mut xfina) = account.xfina {
                         xfina.generated_date = utc_dt;
+                        // From the filename, not the statement body.
+                        xfina.generated_date_derived = Some(true);
                     }
                 }
             }

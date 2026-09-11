@@ -6,30 +6,30 @@ use crate::models::credit_card::{
 use crate::models::date_utils;
 use crate::models::deposit::TransactionType;
 use crate::models::validation::{ParseResult, SummaryCheck, ValidationReport};
-use calamine::{open_workbook_from_rs, Reader, Xlsx};
 use chrono::{DateTime, NaiveDate, Utc};
 use regex::Regex;
 use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::Decimal;
 use std::collections::HashMap;
-use std::io::Cursor;
 
+use crate::decode::Decoded;
 use crate::models::request::ParseRequest;
 
-pub fn parse_icici_statement<'a>(
-    input: ParseRequest<'a>,
+pub fn parse_icici_statement(
+    input: ParseRequest<'_>,
 ) -> Result<ParseResult<CreditCardAccount>, crate::error::XfinaError> {
-    let bytes = input.content;
-    let filename = input.filename;
-    let cursor = Cursor::new(bytes);
-    let mut workbook: Xlsx<_> =
-        open_workbook_from_rs(cursor).map_err(|e| format!("Failed to open workbook: {}", e))?;
+    let decoded = Decoded::new(&input);
+    parse_decoded(&decoded, &input)
+}
 
-    let sheet_names = workbook.sheet_names().to_owned();
-    let first_sheet = sheet_names.first().ok_or("No sheets found in workbook")?;
-    let range = workbook
-        .worksheet_range(first_sheet)
-        .map_err(|e| format!("Failed to get worksheet: {}", e))?;
+/// Parses from an already-decoded input, so detection can probe and
+/// parse against one read of the file.
+pub(crate) fn parse_decoded(
+    decoded: &Decoded<'_>,
+    input: &ParseRequest<'_>,
+) -> Result<ParseResult<CreditCardAccount>, crate::error::XfinaError> {
+    let filename = input.filename;
+    let range = decoded.sheets()?.first()?;
 
     let mut stmt = CreditCardAccount {
         r#type: "credit_card".to_string(),
@@ -58,6 +58,8 @@ pub fn parse_icici_statement<'a>(
                             .single()
                             .map(|dt| dt.with_timezone(&Utc));
                     date_only_paths.push("xfina.generatedDate".to_string());
+                    // From the filename, not the statement.
+                    xfina_account.generated_date_derived = Some(true);
                 }
             }
         }
@@ -492,4 +494,25 @@ fn parse_partial_date(val: &str, stmt_date: NaiveDate) -> Option<DateTime<Utc>> 
         }
     }
     None
+}
+
+/// An ICICI card statement names the bank and its own summary fields.
+pub(crate) fn probe(dec: &crate::decode::Decoded<'_>) -> crate::detect::Claim {
+    use crate::detect::{probe::any_marker, Claim};
+    let Ok(sheets) = dec.sheets() else {
+        return Claim::NO;
+    };
+    let head = sheets.head_text(60);
+    if head.contains("ICICI BANK")
+        && any_marker(
+            &head,
+            &["CARD HOLDER NAME", "TOTAL CREDIT LIMIT", "PAYMENT DUE DATE"],
+        )
+    {
+        return Claim::strong("icici-card-summary");
+    }
+    if any_marker(&head, &["CARD HOLDER NAME", "TOTAL CREDIT LIMIT"]) {
+        return Claim::weak("icici-card-fields");
+    }
+    Claim::NO
 }

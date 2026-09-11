@@ -1,135 +1,83 @@
-use pdf_extract::{Document, MediaBox, OutputDev, OutputError, Transform};
+//! CAMS PDF reading. The spatial extraction lives in the shared decode layer;
+//! what is specific to CAMS is which glyphs it must ignore.
 
-#[derive(Debug, Clone)]
-pub struct CharItem {
-    pub text: String,
-    pub x0: f64,
-    pub y0: f64,
-    pub x1: f64,
-    pub y1: f64,
-}
-
-pub struct SpatialOutputDev {
-    pub pages: Vec<Vec<CharItem>>,
-    current_page: Vec<CharItem>,
-    flip_ctm: Transform,
-}
-
-impl Default for SpatialOutputDev {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl SpatialOutputDev {
-    pub fn new() -> Self {
-        Self {
-            pages: Vec::new(),
-            current_page: Vec::new(),
-            flip_ctm: Transform::default(),
-        }
-    }
-}
-
-impl OutputDev for SpatialOutputDev {
-    fn begin_page(
-        &mut self,
-        _page_num: u32,
-        media_box: &MediaBox,
-        _: Option<(f64, f64, f64, f64)>,
-    ) -> Result<(), OutputError> {
-        self.current_page.clear();
-        self.flip_ctm = Transform::row_major(1., 0., 0., -1., 0., media_box.ury - media_box.lly);
-        Ok(())
-    }
-
-    fn end_page(&mut self) -> Result<(), OutputError> {
-        self.pages.push(self.current_page.clone());
-        Ok(())
-    }
-
-    fn output_character(
-        &mut self,
-        trm: &Transform,
-        width: f64,
-        _spacing: f64,
-        font_size: f64,
-        char: &str,
-    ) -> Result<(), OutputError> {
-        // CAMS stamps a document-generation watermark (e.g. "CAMSCASWS-<id>
-        // Version:V3.5 Live-1018") as vertical text rotated 90 degrees along the
-        // page margin: its glyphs have an off-diagonal transform (m11/m22 ~ 0,
-        // m12/m21 ~ ±1) instead of the near-identity matrix upright text has. Left
-        // in, a stray glyph occasionally lands within the y-tolerance of an
-        // unrelated content line (e.g. an AMC heading) and silently fuses onto it,
-        // corrupting text-based matches. Drop non-upright glyphs before they ever
-        // reach line grouping.
-        if trm.m12.abs() > 0.5 || trm.m21.abs() > 0.5 {
-            return Ok(());
-        }
-
-        let position = trm.post_transform(&self.flip_ctm);
-        let x = position.m31;
-        let y = position.m32;
-
-        let scaled_w = trm.m11 * width * font_size;
-        let scaled_h = trm.m22 * font_size;
-
-        self.current_page.push(CharItem {
-            text: char.to_string(),
-            x0: x,
-            y0: y,
-            x1: x + scaled_w.abs(),
-            y1: y + scaled_h.abs(),
-        });
-        Ok(())
-    }
-
-    fn begin_word(&mut self) -> Result<(), OutputError> {
-        Ok(())
-    }
-    fn end_word(&mut self) -> Result<(), OutputError> {
-        Ok(())
-    }
-    fn end_line(&mut self) -> Result<(), OutputError> {
-        Ok(())
-    }
-}
-
-pub fn extract_spatial_pages(
-    bytes: &[u8],
-    password: Option<&str>,
-) -> Result<Vec<Vec<CharItem>>, crate::error::XfinaError> {
-    let mut doc = Document::load_mem(bytes).map_err(|e| format!("Failed to load PDF: {:?}", e))?;
-    if let Some(pw) = password {
-        doc.decrypt(pw)
-            .map_err(|_| crate::error::XfinaError::IncorrectPassword)?;
-    } else if doc.is_encrypted() {
-        return Err(crate::error::XfinaError::PasswordRequired);
-    }
-
-    let mut out = SpatialOutputDev::new();
-    pdf_extract::output_doc(&doc, &mut out).map_err(|e| format!("Extraction failed: {:?}", e))?;
-    Ok(out.pages)
-}
+pub use crate::decode::pdf::CharItem;
+use crate::decode::Decoded;
 
 use crate::models::validation::ParseResult;
 
 use crate::models::request::ParseRequest;
 
-pub fn parse_cams_pdf<'a>(
-    input: ParseRequest<'a>,
+pub fn parse_cams_pdf(
+    input: ParseRequest<'_>,
 ) -> Result<ParseResult<crate::models::MutualFundsAccount>, crate::error::XfinaError> {
-    let bytes = input.content;
-    let password = input.password;
+    let decoded = Decoded::new(&input);
+    parse_decoded(&decoded, &input)
+}
+
+/// Parses from an already-decoded input, so detection can probe and
+/// parse against one read of the file.
+pub(crate) fn parse_decoded(
+    decoded: &Decoded<'_>,
+    input: &ParseRequest<'_>,
+) -> Result<ParseResult<crate::models::MutualFundsAccount>, crate::error::XfinaError> {
     let filename = input.filename;
-    let pages = extract_spatial_pages(bytes, password)?;
+    let pages = decoded.pdf()?.pages()?;
+
+    // A CAS names its registrar and its folios. A PDF with neither is not one,
+    // and would otherwise come back as an account with no folios at all.
+    if !has_cas_markers(pages) {
+        return Err(crate::error::XfinaError::InvalidFormat(
+            "Not a mutual fund consolidated account statement".to_string(),
+        ));
+    }
 
     let mut all_pages_lines = Vec::new();
     for page in pages {
-        let lines = super::layout::group_into_lines(&page, 2.0); // 2.0 pt tolerance
+        // CAMS stamps a document-generation watermark down the page margin as
+        // vertical text. Left in, one of its glyphs occasionally lands within
+        // the y-tolerance of an unrelated content line and fuses onto it,
+        // corrupting text matches -- an AMC heading being the case that bit.
+        // Everything rotated goes before lines are grouped.
+        let upright: Vec<CharItem> = page.iter().filter(|c| c.upright).cloned().collect();
+        let lines = super::layout::group_into_lines(&upright, 2.0); // 2.0 pt tolerance
         all_pages_lines.push(lines);
     }
 
     super::cas::parse_cas_lines(all_pages_lines, filename)
+}
+
+/// Markers a consolidated account statement carries on its opening pages --
+/// the registrar that produced it, or the folio structure it is built around.
+fn has_cas_markers(pages: &[Vec<CharItem>]) -> bool {
+    const MARKERS: [&str; 5] = [
+        "CAMS",
+        "KFINTECH",
+        "KARVY",
+        "CONSOLIDATED ACCOUNT STATEMENT",
+        "FOLIO NO",
+    ];
+    let text: String = pages
+        .iter()
+        .take(2)
+        .flat_map(|page| page.iter().map(|c| c.text.as_str()))
+        .collect::<String>()
+        .to_uppercase();
+    MARKERS.iter().any(|m| text.contains(m))
+}
+
+/// A consolidated account statement names its registrar and its folios.
+pub(crate) fn probe(dec: &crate::decode::Decoded<'_>) -> crate::detect::Claim {
+    use crate::detect::{probe::any_marker, Claim};
+    let Ok(doc) = dec.pdf() else {
+        return Claim::NO;
+    };
+    let text = doc.page1_text().to_uppercase();
+    if any_marker(&text, &["CONSOLIDATED ACCOUNT STATEMENT", "CAMSCASWS"]) {
+        return Claim::strong("cas-title");
+    }
+    if any_marker(&text, &["CAMS", "KFINTECH", "KARVY"]) && text.contains("FOLIO") {
+        return Claim::weak("cas-registrar");
+    }
+    Claim::NO
 }

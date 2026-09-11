@@ -7,11 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-- **Web App / Docs:** The commit badge in the header linked to a commit that does not exist on every published site except `/unreleased/`. The hash was baked in by Vite from whatever `HEAD` the deploy ran on, and for the tagged builds that was a pre-squash branch commit the merge discarded — `/0.4/` and the root mirror pointed at `a8a9d75`. The tagged deploy now resolves the tag itself (`git rev-list -n 1 v<version>`), which names a commit that survives the merge, and passes it to the build.
+## [0.5.0] - 2026-09-11
+
+### Added
+
+- **One entry point that works out what a file is.** `xfina::parse` takes bytes
+  and a filename and returns the parsed account together with the format it
+  detected, the category, the institution and the evidence. `detect` answers the
+  same question without parsing, and `formats` lists what a build can read.
+  Closes #64 and #65.
+- **`xfina detect` and `xfina formats`** on the CLI.
+- **`generatedDateDerived`** on all four account extensions, set when the
+  statement date came from the filename or the file's modification time rather
+  than the statement itself. The web UI has rendered this as an "est." badge
+  since it was written; nothing had ever set it.
+- `modified_timestamp` is now the last resort for a statement's generated date.
+  It was accepted by every surface and read by nothing.
 
 ### Changed
+
 - **Docs:** `versions.json` is now a single ordered `series` list — released versions newest first, the unreleased build last — instead of a list plus separate `latest` and `unreleased` keys repeating parts of it. Each entry records the `commit` its directory was built from, and the web app reads the badge from there, falling back to the hash Vite baked in for local development. A wrong commit id is now corrected in one place, without rebuilding the site. The unreleased entry is keyed `minor: "unreleased"` — the same string the version dropdown already selects by — rather than carrying a flag that would restate what its key already says.
+
+- **Breaking — bindings.** The ten per-parser exports are gone from both the
+  WASM and Python packages, replaced by `parse`, `detect`, `formats` and
+  `version`. The WASM functions take an options object and return a plain
+  object; failures arrive as `{ error: { kind, ... } }` rather than a thrown
+  string, so a caller can tell "needs a password" from "cannot read this".
+  Python raises `XfinaParseError`, carrying the same information as attributes.
+- **Breaking — web.** The category and institution pickers are gone. One drop
+  zone takes any number of statements at once; each is read on its own and
+  appears as a card under a heading for its kind of account, saying which
+  account it is and whose name is on it. Files that need a password collect in
+  an "Action required" section, where each is unlocked individually or
+  dropped. The supported formats are listed from `formats()` rather than
+  hardcoded, so the list cannot drift from what the build actually reads --
+  each with the extension the institution actually uses, whether it arrives
+  locked, a link to where it is downloaded from and the trail to reach it.
+- **Breaking — CLI.** `xfina parse <category> <institution> <file>` is now
+  `xfina parse <FILE> [--as <format>]`, and `-f/--format` is `--schema`, which
+  frees "format" to mean the parser rather than the output shape.
+- **Breaking — Rust.** `ParseRequest` gains a `format` field. The ten per-format
+  functions are unchanged and still public.
+- Wrong-format failures return `InvalidFormat` instead of `ParseError`, so a
+  file in the wrong container is distinguishable from a damaged one.
+- `XfinaError` gains `kind()`, `UnrecognizedFormat` and `FormatNotEnabled`.
+- The SBI PDF path reports a missing or wrong password as `PasswordRequired` /
+  `IncorrectPassword` rather than a `ParseError` string.
+- A statement's generated date now prefers what the institution printed over
+  what the filename says. This changes SBI's precedence, which was inverted.
+
+### Fixed
+
+- **Web App / Docs:** The commit badge in the header linked to a commit that does not exist on every published site except `/unreleased/`. The hash was baked in by Vite from whatever `HEAD` the deploy ran on, and for the tagged builds that was a pre-squash branch commit the merge discarded — `/0.4/` and the root mirror pointed at `a8a9d75`. The tagged deploy now resolves the tag itself (`git rev-list -n 1 v<version>`), which names a commit that survives the merge, and passes it to the build.
+
+- **Parsers no longer claim files they cannot read.** IBKR returned a populated
+  account with placeholder values for arbitrary text; HDFC credit cards, SBI and
+  CAMS did the same for content they did not recognise. Each now checks for its
+  own structural marker first.
+- Each input is decoded once however many parsers examine it. The two copies of
+  the PDF spatial extractor are now one.
+
+### Internal
+
+- `Schema { Xfina, Rebit }` and one serializer replace twelve copies of the same
+  envelope-building helper.
+- `chrono` and `rust_decimal` are no longer optional; `src/models` always needed
+  them, so `--no-default-features` never compiled.
+- CI builds the empty feature set and each parser feature alone.
 
 ## [0.4.1] - 2026-09-02
 

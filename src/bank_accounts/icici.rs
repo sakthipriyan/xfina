@@ -6,27 +6,28 @@ use crate::models::deposit::{
 use crate::models::mask_account_number;
 use crate::models::txn_order::reorder_same_day_transactions;
 use crate::models::validation::{check_row_balances, ParseResult, SummaryCheck, ValidationReport};
-use calamine::{open_workbook_auto_from_rs, Reader};
 use chrono::{NaiveDate, TimeZone, Utc};
 use regex::Regex;
 use rust_decimal::Decimal;
-use std::io::Cursor;
 
+use crate::decode::Decoded;
 use crate::models::request::ParseRequest;
 
-pub fn parse_icici_xls<'a>(
-    input: ParseRequest<'a>,
+pub fn parse_icici_xls(
+    input: ParseRequest<'_>,
 ) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
-    let bytes = input.content;
-    let filename = input.filename;
-    let cursor = Cursor::new(bytes);
-    let mut workbook = open_workbook_auto_from_rs(cursor)
-        .map_err(|e| format!("Failed to open Excel workbook: {}", e))?;
+    let decoded = Decoded::new(&input);
+    parse_decoded(&decoded, &input)
+}
 
-    let range = workbook
-        .worksheet_range_at(0)
-        .ok_or("No worksheet found")?
-        .map_err(|e| format!("Error reading worksheet: {}", e))?;
+/// Parses from an already-decoded input, so detection can probe and
+/// parse against one read of the file.
+pub(crate) fn parse_decoded(
+    decoded: &Decoded<'_>,
+    input: &ParseRequest<'_>,
+) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
+    let filename = input.filename;
+    let range = decoded.sheets()?.first()?;
 
     let mut statement = DepositAccount {
         r#type: FiType::Deposit,
@@ -54,6 +55,8 @@ pub fn parse_icici_xls<'a>(
                             .single()
                             .map(|dt| dt.with_timezone(&Utc));
                     date_only_paths.push("xfina.generatedDate".to_string());
+                    // From the filename, not the statement.
+                    xfina_account.generated_date_derived = Some(true);
                 }
             }
         }
@@ -310,4 +313,23 @@ pub fn parse_icici_bank_statement<'a>(
     input: ParseRequest<'a>,
 ) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
     parse_icici_xls(input)
+}
+
+/// ICICI titles its export and names its own amount columns.
+pub(crate) fn probe(dec: &crate::decode::Decoded<'_>) -> crate::detect::Claim {
+    use crate::detect::{probe::any_marker, Claim};
+    let Ok(sheets) = dec.sheets() else {
+        return Claim::NO;
+    };
+    let head = sheets.head_text(40);
+    if any_marker(
+        &head,
+        &["DETAILED STATEMENT", "LEGENDS USED IN ACCOUNT STATEMENT"],
+    ) {
+        return Claim::strong("icici-bank-title");
+    }
+    if any_marker(&head, &["DEPOSIT AMOUNT", "WITHDRAWAL AMOUNT"]) && head.contains("S NO.") {
+        return Claim::weak("icici-bank-columns");
+    }
+    Claim::NO
 }

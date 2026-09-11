@@ -59,3 +59,23 @@ pub fn transform_to_rebit(val: &mut Value, date_only_paths: &[String], current_p
         _ => {}
     }
 }
+
+/// Renders any account model into the requested [`Schema`].
+///
+/// This is the single place the two transforms above are applied; the
+/// `to_xfina_json` / `to_rebit_json` methods on each account type and
+/// [`crate::models::account::AccountModel`] all funnel through here.
+pub fn render<T: serde::Serialize + ?Sized>(
+    value: &T,
+    schema: crate::models::schema::Schema,
+    date_only_paths: &[String],
+) -> Value {
+    let mut val = serde_json::to_value(value).unwrap();
+    match schema {
+        crate::models::schema::Schema::Xfina => transform_to_xfina(&mut val),
+        crate::models::schema::Schema::Rebit => {
+            transform_to_rebit(&mut val, date_only_paths, String::new())
+        }
+    }
+    val
+}

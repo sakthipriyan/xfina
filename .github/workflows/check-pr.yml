@@ -77,6 +77,21 @@ jobs:
         if: steps.check_changes.outputs.run_tests == 'true'
         run: cargo test --workspace --all-features
 
+      # --all-features is the only shape the matrix above exercises, so a
+      # parser feature that has drifted out of sync -- a #[cfg] that names the
+      # wrong flag, a helper that is only reachable with a sibling parser
+      # enabled -- compiles there and nowhere else. Every published subset gets
+      # built here instead: none of them, then each one on its own.
+      - name: Check feature subsets
+        if: steps.check_changes.outputs.run_tests == 'true'
+        run: |
+          cargo clippy -p xfina --no-default-features --all-targets -- -D warnings
+          for f in ba-hdfc ba-icici ba-sbi ba-bob ba-axis cc-hdfc cc-icici cc-axis mf-cams is-ibkr; do
+            echo "::group::feature $f"
+            cargo clippy -p xfina --no-default-features --features "$f" --all-targets -- -D warnings
+            echo "::endgroup::"
+          done
+
       # One line per publishing target: the crate is covered by the tests above,
       # xfina-wasm ships to npm, and xfina-py ships to PyPI. The Web job builds
       # the wasm crate again through wasm-pack, but that is the site's concern

@@ -165,34 +165,22 @@ xfina = "0.2"
 ```
 
 ```rust
-use xfina::bank_accounts::hdfc::parse_hdfc_bank_statement;
-use xfina::models::request::ParseRequest;
+use xfina::{parse, ParseRequest, Schema};
 
-fn main() {
-    let filename = "hdfc_statement.xls";
-    let bytes = std::fs::read(filename).unwrap();
-    
-    // Extract file modified timestamp (Unix epoch seconds)
-    let modified_ts = std::fs::metadata(filename)
-        .and_then(|m| m.modified())
-        .ok()
-        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|d| d.as_secs() as i64);
-    
-    // Create a ParseRequest and provide metadata to improve parsing accuracy
-    let req = ParseRequest::new(&bytes)
-        .with_filename(filename)
-        .with_modified_timestamp(modified_ts);
+fn main() -> Result<(), xfina::error::XfinaError> {
+    let bytes = std::fs::read("statement.xls").unwrap();
 
-    // Parse the statement
-    let result = parse_hdfc_bank_statement(req).unwrap();
-    
-    // The result contains both the validation report and the financial data
-    println!("Validation status: {:?}", result.validation.overall);
+    // Hand over the file; xfina works out which parser it needs.
+    let statement = parse(
+        ParseRequest::new(&bytes).with_filename(Some("statement.xls")),
+    )?;
 
-    // Convert the data to JSON (choose either strict ReBIT or extended Xfina format)
-    let json_data = result.data.to_xfina_json();
-    println!("{}", serde_json::to_string_pretty(&json_data).unwrap());
+    println!("{} ({})", statement.institution(), statement.format);
+    println!("{}", statement.to_json_string(Schema::Xfina, true)?);
+
+    // To skip detection, pin the format:
+    //   ParseRequest::new(&bytes).with_format(Format::from_id("ba-hdfc"))
+    Ok(())
 }
 ```
 

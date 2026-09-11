@@ -1,3 +1,5 @@
+#![cfg(feature = "cc-hdfc")]
+
 use std::fs;
 use std::path::Path;
 use xfina::credit_cards::hdfc::parse_hdfc_statement;
@@ -55,12 +57,12 @@ fn test_hdfc_credit_cards() {
                     .join("rebit")
                     .join(format!("{}.json", file_name));
 
-                let xfina_json =
-                    serialize_result(&parsed_statement, parsed_statement.data.to_xfina_json())
-                        .unwrap();
-                let rebit_json =
-                    serialize_result(&parsed_statement, parsed_statement.data.to_rebit_json())
-                        .unwrap();
+                let xfina_json = parsed_statement
+                    .to_json_string(xfina::models::Schema::Xfina, true)
+                    .unwrap();
+                let rebit_json = parsed_statement
+                    .to_json_string(xfina::models::Schema::Rebit, true)
+                    .unwrap();
 
                 let update_expected =
                     std::env::var("UPDATE_EXPECTED").unwrap_or_else(|_| "0".to_string());
@@ -93,15 +95,4 @@ fn test_hdfc_credit_cards() {
             }
         }
     }
-}
-
-fn serialize_result<T: serde::Serialize>(
-    stmt: &xfina::models::validation::ParseResult<T>,
-    data_json: serde_json::Value,
-) -> Result<String, serde_json::Error> {
-    let mut root = serde_json::to_value(stmt)?;
-    if let Some(obj) = root.as_object_mut() {
-        obj.insert("data".to_string(), data_json);
-    }
-    serde_json::to_string_pretty(&root)
 }
