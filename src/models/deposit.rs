@@ -93,20 +93,11 @@ pub struct DepositAccount {
 
 impl DepositAccount {
     pub fn to_xfina_json(&self) -> serde_json::Value {
-        let mut val = serde_json::to_value(self).unwrap();
-        crate::models::serializer::transform_to_xfina(&mut val);
-        val
+        crate::models::AccountModel::to_json(self, crate::models::Schema::Xfina)
     }
 
     pub fn to_rebit_json(&self) -> serde_json::Value {
-        let mut val = serde_json::to_value(self).unwrap();
-        let paths = self
-            .xfina
-            .as_ref()
-            .and_then(|x| x.date_only_paths.clone())
-            .unwrap_or_default();
-        crate::models::serializer::transform_to_rebit(&mut val, &paths, "".to_string());
-        val
+        crate::models::AccountModel::to_json(self, crate::models::Schema::Rebit)
     }
 }
 
@@ -229,6 +220,13 @@ pub struct XfinaHolder {
 pub struct XfinaDepositAccount {
     pub institution_name: Option<String>,
     pub generated_date: Option<DateTime<Utc>>,
+    /// Set when `generated_date` did not come from the statement itself --
+    /// taken from the filename, or from the file's modification time.
+    ///
+    /// The UI renders this as an "est." badge beside the date. Left `None`
+    /// when the institution printed the date, so a content-derived statement
+    /// serializes exactly as it always has.
+    pub generated_date_derived: Option<bool>,
     pub date_only_paths: Option<Vec<String>>,
 }
 

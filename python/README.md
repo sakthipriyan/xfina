@@ -22,98 +22,49 @@ pip install xfina
 
 ## Quick Start
 
-The Python bindings expose the exact same parsing functions as the Rust core. To keep the core parsing logic as pure functions without side-effects (like file I/O), the library requires raw bytes to be passed in rather than file paths.
+The Python bindings expose the same entry point as the Rust core. To keep the core parsing logic as pure functions without side-effects (like file I/O), the library requires raw bytes to be passed in rather than file paths.
 
 ### Parsing a Credit Card Statement
 
 ```python
 import xfina
-import os
 
-filename = "icici_cc_statement.xls"
+with open("statement.xls", "rb") as fh:
+    data = fh.read()
 
-with open(filename, "rb") as f:
-    file_bytes = f.read()
+# Hand over the bytes; the format is worked out from the content.
+statement = xfina.parse(data, filename="statement.xls")
 
-result = xfina.parse_icici_cc(
-    file_bytes, 
-    filename=filename,
-    modified_timestamp=int(os.path.getmtime(filename))
-)
+statement["format"]       # "ba-hdfc"
+statement["category"]     # "bank_account"
+statement["institution"]  # "HDFC Bank"
+statement["detection"]    # how it was identified, plus the file's metadata
+statement["validation"]   # the two-level validation report
+statement["data"]         # the account, in the requested schema
 
-print(f"Validation Status: {result['validation']['overall']}")
+# ReBIT output, or a pinned format that skips detection:
+xfina.parse(data, schema="rebit")
+xfina.parse(data, **{"as": "ba-hdfc"})
 ```
 
-### Parsing a Bank Statement (Excel)
+Failures raise `xfina.XfinaParseError`, which is where this differs from the
+JS binding: exceptions are the idiom here, so the same information arrives as
+attributes rather than in an error envelope.
 
 ```python
-import xfina
-import os
-
-filename = "hdfc_statement.xls"
-modified_ts = int(os.path.getmtime(filename))
-
-# Read the file as raw bytes
-with open(filename, "rb") as f:
-    file_bytes = f.read()
-
-# Parse it! Providing the filename and modified timestamp helps improve parsing accuracy
-result = xfina.parse_hdfc_ba(
-    file_bytes, 
-    password=None, 
-    filename=filename,
-    modified_timestamp=modified_ts,
-    format="xfina"
-)
-
-# The returned dictionary contains both the validation report and the financial data
-print(f"Validation Status: {result['validation']['overall']}")
-print(f"Account Name: {result['data']['profile']['holders']['holder'][0]['name']}")
+try:
+    xfina.parse(data, filename=name)
+except xfina.XfinaParseError as e:
+    if e.kind == "password_required":
+        prompt_for_password(e.format)   # the format the filename suggested
 ```
 
-### Parsing a CAMS Mutual Fund Statement (PDF)
+## The four functions
 
-```python
-import xfina
-import json
+| Function | Purpose |
+|---|---|
+| `parse(bytes, password=None, filename=None, modified_timestamp=None, **{"as": None}, schema=None)` | Identify and parse a statement. |
+| `detect(bytes, password=None, filename=None, modified_timestamp=None)` | Identify a statement without parsing it. |
+| `formats()` | Every format this build knows, with `id`, `category`, `institution`, `containers` and `enabled`. |
+| `version()` | The version of the parsers actually running. |
 
-with open("cams_cas.pdf", "rb") as f:
-    file_bytes = f.read()
-
-# Pass the password to decrypt the PDF
-mf_data = xfina.parse_cams(file_bytes, password="PAN1234567")
-
-# It returns a standard Python dictionary. You can easily dump it to JSON:
-with open("output.json", "w") as f:
-    json.dump(mf_data, f, indent=2)
-```
-
-### Parsing an IBKR Statement (CSV)
-
-```python
-import xfina
-
-# All parsers now uniformly expect raw bytes, even for CSVs
-with open("ibkr_activity.csv", "rb") as f:
-    file_bytes = f.read()
-
-result = xfina.parse_ibkr(file_bytes, format="rebit")
-```
-
-## Available Parsers
-
-All parsers return a structured Python dictionary that mirrors the ReBIT JSON schema. Each parser accepts an optional `format` parameter which defaults to `"xfina"`, but can be `"rebit"` for strict AA schema compliance without our extended data fields.
-
-| Category | Institution | Format | Python Function | Input Type |
-|---|---|---|---|---|
-| Bank Account | HDFC | `.xls` | `parse_hdfc_ba(bytes, **kwargs)` | `bytes` |
-| Bank Account | ICICI | `.xls` | `parse_icici_ba(bytes, **kwargs)` | `bytes` |
-| Bank Account | SBI | PDF | `parse_sbi_ba(bytes, **kwargs)` | `bytes` |
-| Bank Account | BOB | `.xls` | `parse_bob_ba(bytes, **kwargs)` | `bytes` |
-| Bank Account | Axis | `.xls` | `parse_axis_ba(bytes, **kwargs)` | `bytes` |
-| Credit Card | HDFC | CSV | `parse_hdfc_cc(bytes, **kwargs)` | `bytes` |
-| Credit Card | ICICI | `.xls` | `parse_icici_cc(bytes, **kwargs)` | `bytes` |
-| Mutual Funds | CAMS | PDF | `parse_cams(bytes, **kwargs)` | `bytes` |
-| Intl Stocks | IBKR | CSV | `parse_ibkr(bytes, **kwargs)` | `bytes` |
-
-*Note: All Python functions accept the following optional keyword arguments: `password`, `filename`, `modified_timestamp`, and `format`.*

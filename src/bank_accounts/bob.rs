@@ -5,26 +5,27 @@ use crate::models::deposit::{
 };
 use crate::models::mask_account_number;
 use crate::models::validation::{check_row_balances, ParseResult, ValidationReport};
-use calamine::{open_workbook_auto_from_rs, Reader};
 use chrono::{FixedOffset, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use regex::Regex;
 use rust_decimal::Decimal;
-use std::io::Cursor;
 
+use crate::decode::Decoded;
 use crate::models::request::ParseRequest;
 
-pub fn parse_bob_xls<'a>(
-    input: ParseRequest<'a>,
+pub fn parse_bob_xls(
+    input: ParseRequest<'_>,
 ) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
-    let bytes = input.content;
-    let cursor = Cursor::new(bytes);
-    let mut workbook = open_workbook_auto_from_rs(cursor)
-        .map_err(|e| format!("Failed to open workbook: {:?}", e))?;
-    let sheet_names = workbook.sheet_names().to_owned();
-    let sheet_name = sheet_names.first().ok_or("No sheets found in workbook")?;
-    let sheet = workbook
-        .worksheet_range(sheet_name)
-        .map_err(|e| format!("Failed to read sheet: {:?}", e))?;
+    let decoded = Decoded::new(&input);
+    parse_decoded(&decoded, &input)
+}
+
+/// Parses from an already-decoded input, so detection can probe and
+/// parse against one read of the file.
+pub(crate) fn parse_decoded(
+    decoded: &Decoded<'_>,
+    _input: &ParseRequest<'_>,
+) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
+    let sheet = decoded.sheets()?.first()?;
 
     let mut statement = DepositAccount {
         r#type: FiType::Deposit,
@@ -450,4 +451,23 @@ pub fn parse_bob_xls<'a>(
         data: statement,
         validation,
     })
+}
+
+/// Bank of Baroda labels its header fields and heads its table "TRAN DATE".
+pub(crate) fn probe(dec: &crate::decode::Decoded<'_>) -> crate::detect::Claim {
+    use crate::detect::{probe::any_marker, Claim};
+    let Ok(sheets) = dec.sheets() else {
+        return Claim::NO;
+    };
+    let head = sheets.head_text(40);
+    if any_marker(&head, &["STATEMENT OF TRANSACTIONS IN", "BANK OF BARODA"]) {
+        return Claim::strong("bob-statement-title");
+    }
+    if head.contains("TRAN DATE") && any_marker(&head, &["HOLDER NAME", "ACCOUNT NO"]) {
+        return Claim::strong("bob-header");
+    }
+    if any_marker(&head, &["THIS IS COMPUTER-GENERATED", "MICR CODE"]) {
+        return Claim::weak("bob-fields");
+    }
+    Claim::NO
 }

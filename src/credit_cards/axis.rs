@@ -1,3 +1,4 @@
+use crate::decode::Decoded;
 use crate::models::credit_card::{
     CardType, CcCard, CcCards, CcHolder, CcHolders, CcProfile, CcSummary, CcTransaction,
     CcTransactions, CcXfinaSummary, CcXfinaTransaction, CcXfinaTransactions, CreditCardAccount,
@@ -6,13 +7,11 @@ use crate::models::credit_card::{
 use crate::models::deposit::TransactionType;
 use crate::models::request::ParseRequest;
 use crate::models::validation::{ParseResult, SummaryCheck, ValidationReport};
-use calamine::{open_workbook_from_rs, Reader, Xlsx};
 use chrono::{DateTime, NaiveDate, Utc};
 use regex::Regex;
 use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::Decimal;
 use std::collections::HashMap;
-use std::io::Cursor;
 
 /// Parses an Axis Bank credit card monthly statement (`.xlsx` export from the
 /// Axis mobile app / net banking portal).
@@ -28,15 +27,17 @@ use std::io::Cursor;
 pub fn parse_axis_statement(
     input: ParseRequest<'_>,
 ) -> Result<ParseResult<CreditCardAccount>, crate::error::XfinaError> {
-    let cursor = Cursor::new(input.content);
-    let mut workbook: Xlsx<_> =
-        open_workbook_from_rs(cursor).map_err(|e| format!("Failed to open workbook: {}", e))?;
+    let decoded = Decoded::new(&input);
+    parse_decoded(&decoded, &input)
+}
 
-    let sheet_names = workbook.sheet_names().to_owned();
-    let first_sheet = sheet_names.first().ok_or("No sheets found in workbook")?;
-    let range = workbook
-        .worksheet_range(first_sheet)
-        .map_err(|e| format!("Failed to get worksheet: {}", e))?;
+/// Parses from an already-decoded input, so detection can probe and
+/// parse against one read of the file.
+pub(crate) fn parse_decoded(
+    decoded: &Decoded<'_>,
+    input: &ParseRequest<'_>,
+) -> Result<ParseResult<CreditCardAccount>, crate::error::XfinaError> {
+    let range = decoded.sheets()?.first()?;
 
     let mut stmt = CreditCardAccount {
         r#type: "credit_card".to_string(),
@@ -56,6 +57,8 @@ pub fn parse_axis_statement(
 
     if let Some(generated) = filename_date(input.filename) {
         xfina_account.generated_date = Some(generated);
+        // Axis prints no statement date; this comes from the filename.
+        xfina_account.generated_date_derived = Some(true);
         date_only_paths.insert(0, "xfina.generatedDate".to_string());
     }
 
@@ -400,4 +403,20 @@ fn normalize_address(address: &str) -> String {
         .filter(|p| !p.is_empty())
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+/// The Axis card export titles its own month selector and card number field.
+pub(crate) fn probe(dec: &crate::decode::Decoded<'_>) -> crate::detect::Claim {
+    use crate::detect::{probe::any_marker, Claim};
+    let Ok(sheets) = dec.sheets() else {
+        return Claim::NO;
+    };
+    let head = sheets.head_text(60);
+    if any_marker(&head, &["SELECTED STATEMENT MONTH", "CREDIT CARD NUMBER:"]) {
+        return Claim::strong("axis-card-header");
+    }
+    if head.contains("PAYMENT SUMMARY") && head.contains("DEBIT/CREDIT") {
+        return Claim::weak("axis-card-columns");
+    }
+    Claim::NO
 }

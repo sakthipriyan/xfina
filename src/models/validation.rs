@@ -27,6 +27,7 @@ use std::str::FromStr;
 ///
 /// let req = ParseRequest::new(&bytes);
 /// let result = parse_hdfc_bank_statement(req).unwrap();
+/// // Or `xfina::parse(req)` to have the format worked out for you.
 ///
 /// match result.validation.overall {
 ///     ValidationStatus::Passed  => println!("✓ All checks passed"),
@@ -46,6 +47,34 @@ pub struct ParseResult<T> {
     pub data: T,
     /// Two-level validation report computed after parsing completes.
     pub validation: ValidationReport,
+}
+
+impl<T: crate::models::AccountModel> ParseResult<T> {
+    /// Renders the `{ data, validation }` envelope every parser produces.
+    ///
+    /// `data` is re-rendered through the requested [`Schema`]; `validation` is
+    /// serialized as-is. This replaces the copy of this logic that each caller
+    /// used to keep for itself.
+    pub fn to_json(&self, schema: crate::models::Schema) -> serde_json::Value {
+        let mut root = serde_json::to_value(self).unwrap();
+        if let Some(obj) = root.as_object_mut() {
+            obj.insert("data".to_string(), self.data.to_json(schema));
+        }
+        root
+    }
+
+    pub fn to_json_string(
+        &self,
+        schema: crate::models::Schema,
+        pretty: bool,
+    ) -> Result<String, serde_json::Error> {
+        let value = self.to_json(schema);
+        if pretty {
+            serde_json::to_string_pretty(&value)
+        } else {
+            serde_json::to_string(&value)
+        }
+    }
 }
 
 // -----------------------------------------------------------------------------

@@ -1,19 +1,9 @@
 use anyhow::{bail, Context, Result};
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
 use std::fs;
 use std::path::PathBuf;
-use xfina::models::validation::ParseResult;
-
-fn serialize_result<T: serde::Serialize>(
-    stmt: &ParseResult<T>,
-    data_json: serde_json::Value,
-) -> Result<String> {
-    let mut root = serde_json::to_value(stmt)?;
-    if let Some(obj) = root.as_object_mut() {
-        obj.insert("data".to_string(), data_json);
-    }
-    serde_json::to_string_pretty(&root).map_err(Into::into)
-}
+use xfina::detect::Format;
+use xfina::models::Schema;
 
 #[derive(Parser, Debug)]
 #[command(name = "xfina", about = "CLI to parse financial statements", version)]
@@ -24,18 +14,18 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// Parse a financial statement into JSON
+    /// Parse a financial statement into JSON, detecting its format
     Parse {
-        /// The category of the financial statement
-        #[arg(value_enum)]
-        category: Category,
-
-        /// The institution that generated the statement
-        #[arg(value_enum)]
-        institution: Institution,
-
         /// The input file to parse
         file: PathBuf,
+
+        /// Parse as this format instead of detecting one (see `xfina formats`)
+        #[arg(long = "as", value_name = "FORMAT", value_parser = parse_format)]
+        format: Option<Format>,
+
+        /// Output schema
+        #[arg(long, value_enum, default_value = "xfina")]
+        schema: SchemaArg,
 
         /// Password for encrypted PDFs (if required)
         #[arg(short, long)]
@@ -44,11 +34,18 @@ enum Commands {
         /// Optional output file path (defaults to <input_file_stem>.json in the same directory)
         #[arg(short, long)]
         output: Option<PathBuf>,
-
-        /// Optional format (rebit or xfina)
-        #[arg(short, long, default_value = "xfina")]
-        format: String,
     },
+    /// Report what a file is, without parsing it
+    Detect {
+        /// The input file to identify
+        file: PathBuf,
+
+        /// Password for encrypted PDFs (if required)
+        #[arg(short, long)]
+        password: Option<String>,
+    },
+    /// List the formats this build can read
+    Formats,
     /// Dump raw text from a PDF or XLS file for development
     Dump {
         /// The input file to dump
@@ -64,23 +61,43 @@ enum Commands {
     },
 }
 
-#[derive(ValueEnum, Clone, Debug)]
-enum Category {
-    BankAccount,
-    CreditCard,
-    MutualFund,
-    IntlStocks,
+#[derive(clap::ValueEnum, Clone, Copy, Debug)]
+enum SchemaArg {
+    Xfina,
+    Rebit,
 }
 
-#[derive(ValueEnum, Clone, Debug)]
-enum Institution {
-    Hdfc,
-    Icici,
-    Sbi,
-    Bob,
-    Axis,
-    Cams,
-    Ibkr,
+impl From<SchemaArg> for Schema {
+    fn from(s: SchemaArg) -> Self {
+        match s {
+            SchemaArg::Xfina => Schema::Xfina,
+            SchemaArg::Rebit => Schema::Rebit,
+        }
+    }
+}
+
+/// Accepts any format id from the registry, so the list of valid values comes
+/// from the one table rather than a second copy here.
+fn parse_format(value: &str) -> Result<Format, String> {
+    Format::from_id(value).ok_or_else(|| {
+        let known: Vec<&str> = xfina::formats().iter().map(|f| f.id).collect();
+        format!(
+            "unknown format '{}'; known formats: {}",
+            value,
+            known.join(", ")
+        )
+    })
+}
+
+/// Builds the request every subcommand shares.
+fn read_request(file: &PathBuf) -> Result<(Vec<u8>, Option<i64>)> {
+    let bytes = fs::read(file).with_context(|| format!("Failed to read file: {:?}", file))?;
+    let modified = fs::metadata(file)
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs() as i64);
+    Ok((bytes, modified))
 }
 
 fn dump_file(file: &PathBuf, password: Option<&str>, output: Option<&PathBuf>) -> Result<()> {
@@ -165,6 +182,29 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::Formats => {
+            for info in xfina::formats() {
+                let locked = if info.password_protected {
+                    " locked"
+                } else {
+                    ""
+                };
+                let built = if info.enabled { "" } else { "  (not built)" };
+                println!(
+                    "{:10}  {:14}  {:22}  {:5}{}{}",
+                    info.id,
+                    info.category.as_str(),
+                    info.institution,
+                    info.extension,
+                    locked,
+                    built
+                );
+                // Where the file comes from, indented under its format. Getting
+                // hold of the statement is the hard part; reading it is not.
+                println!("{:12}{}", "", info.download_url);
+                println!("{:12}{}", "", info.download_path);
+            }
+        }
         Commands::Dump {
             file,
             password,
@@ -172,134 +212,44 @@ fn main() -> Result<()> {
         } => {
             dump_file(&file, password.as_deref(), output.as_ref())?;
         }
+        Commands::Detect { file, password } => {
+            let (bytes, modified) = read_request(&file)?;
+            let request = xfina::ParseRequest::new(&bytes)
+                .with_password(password.as_deref())
+                .with_filename(file.file_name().and_then(|s| s.to_str()))
+                .with_modified_timestamp(modified);
+            let detection = xfina::detect(&request)?;
+            println!("{}", serde_json::to_string_pretty(&detection)?);
+        }
         Commands::Parse {
-            category,
-            institution,
             file,
+            format,
+            schema,
             password,
             output,
-            format,
         } => {
-            let file_bytes =
-                fs::read(&file).with_context(|| format!("Failed to read file: {:?}", file))?;
-
-            let file_name = file.file_stem().and_then(|s| s.to_str());
-
+            let (bytes, modified) = read_request(&file)?;
             let output_path = output.unwrap_or_else(|| {
                 let mut path = file.clone();
                 path.set_extension("json");
                 path
             });
 
-            let is_rebit = format.to_lowercase() == "rebit";
-
-            let modified_timestamp = std::fs::metadata(&file)
-                .ok()
-                .and_then(|m| m.modified().ok())
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                .map(|d| d.as_secs() as i64);
-
-            let req = xfina::models::request::ParseRequest::new(&file_bytes)
+            let request = xfina::ParseRequest::new(&bytes)
                 .with_password(password.as_deref())
-                .with_filename(file_name)
-                .with_modified_timestamp(modified_timestamp);
+                .with_filename(file.file_name().and_then(|s| s.to_str()))
+                .with_modified_timestamp(modified)
+                .with_format(format);
 
-            let json_output = match (category, institution) {
-                (Category::BankAccount, Institution::Hdfc) => {
-                    let res = xfina::bank_accounts::hdfc::parse_hdfc_bank_statement(req.clone())?;
-                    let json = if is_rebit {
-                        res.data.to_rebit_json()
-                    } else {
-                        res.data.to_xfina_json()
-                    };
-                    serialize_result(&res, json)?
-                }
-                (Category::BankAccount, Institution::Icici) => {
-                    let res = xfina::bank_accounts::icici::parse_icici_bank_statement(req.clone())?;
-                    let json = if is_rebit {
-                        res.data.to_rebit_json()
-                    } else {
-                        res.data.to_xfina_json()
-                    };
-                    serialize_result(&res, json)?
-                }
-                (Category::BankAccount, Institution::Sbi) => {
-                    let res = xfina::bank_accounts::sbi::parse_sbi_bank_statement(req.clone())?;
-                    let json = if is_rebit {
-                        res.data.to_rebit_json()
-                    } else {
-                        res.data.to_xfina_json()
-                    };
-                    serialize_result(&res, json)?
-                }
-                (Category::BankAccount, Institution::Bob) => {
-                    let res = xfina::bank_accounts::bob::parse_bob_xls(req.clone())?;
-                    let json = if is_rebit {
-                        res.data.to_rebit_json()
-                    } else {
-                        res.data.to_xfina_json()
-                    };
-                    serialize_result(&res, json)?
-                }
-                (Category::BankAccount, Institution::Axis) => {
-                    let res = xfina::bank_accounts::axis::parse_axis_bank_statement(req.clone())?;
-                    let json = if is_rebit {
-                        res.data.to_rebit_json()
-                    } else {
-                        res.data.to_xfina_json()
-                    };
-                    serialize_result(&res, json)?
-                }
-                (Category::CreditCard, Institution::Hdfc) => {
-                    let res = xfina::credit_cards::hdfc::parse_hdfc_statement(req.clone())?;
-                    let json = if is_rebit {
-                        res.data.to_rebit_json()
-                    } else {
-                        res.data.to_xfina_json()
-                    };
-                    serialize_result(&res, json)?
-                }
-                (Category::CreditCard, Institution::Icici) => {
-                    let res = xfina::credit_cards::icici::parse_icici_statement(req.clone())?;
-                    let json = if is_rebit {
-                        res.data.to_rebit_json()
-                    } else {
-                        res.data.to_xfina_json()
-                    };
-                    serialize_result(&res, json)?
-                }
-                (Category::CreditCard, Institution::Axis) => {
-                    let res = xfina::credit_cards::axis::parse_axis_statement(req.clone())?;
-                    let json = if is_rebit {
-                        res.data.to_rebit_json()
-                    } else {
-                        res.data.to_xfina_json()
-                    };
-                    serialize_result(&res, json)?
-                }
-                (Category::MutualFund, Institution::Cams) => {
-                    let res = xfina::mutual_funds::cams::parse_cams_pdf(req.clone())?;
-                    let json = if is_rebit {
-                        res.data.to_rebit_json()
-                    } else {
-                        res.data.to_xfina_json()
-                    };
-                    serialize_result(&res, json)?
-                }
-                (Category::IntlStocks, Institution::Ibkr) => {
-                    let res = xfina::intl_stocks::ibkr::parse_ibkr_csv(req.clone())?;
-                    let json = if is_rebit {
-                        res.data.to_rebit_json()
-                    } else {
-                        res.data.to_xfina_json()
-                    };
-                    serialize_result(&res, json)?
-                }
-                _ => bail!("Unsupported combination of category and institution"),
-            };
-
-            fs::write(&output_path, json_output)?;
-            println!("Successfully parsed to {:?}", output_path);
+            let statement = xfina::parse(request)?;
+            let json = statement.to_json_string(schema.into(), true)?;
+            fs::write(&output_path, json)?;
+            println!(
+                "Parsed {} ({}) to {:?}",
+                statement.institution(),
+                statement.format,
+                output_path
+            );
         }
     }
 

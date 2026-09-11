@@ -20,7 +20,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.4.1"
+version = "0.5.0"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/sakthipriyan/xfina"
@@ -35,6 +35,7 @@ serde = { version = "1.0", features = ["derive"] }
 pdf-extract = "0.7"
 csv = "1.3"
 wasm-bindgen = "0.2"
+serde-wasm-bindgen = "0.6"
 serde_json = "1.0"
 regex = "1.10"
 chrono = { version = "0.4", features = ["serde"] }
@@ -51,11 +52,12 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serde_with = { workspace = true }
 regex = { workspace = true, optional = true }
-chrono = { workspace = true, optional = true }
+# Required by src/models, which is compiled in every configuration.
+chrono = { workspace = true }
 pdf-extract = { workspace = true, optional = true }
 csv = { workspace = true, optional = true }
 calamine = { workspace = true, optional = true }
-rust_decimal = { workspace = true, optional = true }
+rust_decimal = { workspace = true }
 num-traits = { workspace = true, optional = true }
 chrono-tz = { workspace = true, optional = true }
 
@@ -69,21 +71,27 @@ default = ["all"]
 all = ["ba-hdfc", "ba-icici", "ba-sbi", "ba-bob", "ba-axis", "cc-hdfc", "cc-icici", "cc-axis", "mf-cams", "is-ibkr"]
 cli = ["clap", "anyhow", "all"]
 
+# Decoding capabilities, shared by the parsers that need them. A parser
+# feature asks for a capability rather than a crate, so the decode layer can
+# be gated on "can this build read a spreadsheet at all?".
+_spreadsheet = ["calamine"]
+_pdf = ["pdf-extract"]
+
 # Bank Accounts
-ba-hdfc = ["calamine", "chrono", "regex", "rust_decimal"]
-ba-icici = ["calamine", "chrono", "regex", "rust_decimal"]
-ba-sbi = ["pdf-extract", "chrono", "regex", "rust_decimal"]
-ba-bob = ["calamine", "chrono", "regex", "rust_decimal"]
-ba-axis = ["calamine", "chrono", "regex", "rust_decimal"]
+ba-hdfc = ["_spreadsheet", "regex"]
+ba-icici = ["_spreadsheet", "regex"]
+ba-sbi = ["_pdf", "regex"]
+ba-bob = ["_spreadsheet", "regex"]
+ba-axis = ["_spreadsheet", "regex"]
 
 # Credit Cards
-cc-hdfc = ["chrono", "regex", "rust_decimal", "num-traits"]
-cc-icici = ["calamine", "chrono", "regex", "rust_decimal", "num-traits"]
-cc-axis = ["calamine", "chrono", "regex", "rust_decimal", "num-traits"]
+cc-hdfc = ["regex", "num-traits"]
+cc-icici = ["_spreadsheet", "regex", "num-traits"]
+cc-axis = ["_spreadsheet", "regex", "num-traits"]
 
 # Mutual Funds & International Stocks
-mf-cams = ["pdf-extract", "regex", "chrono", "rust_decimal"]
-is-ibkr = ["csv", "chrono", "chrono-tz", "rust_decimal"]
+mf-cams = ["_pdf", "regex"]
+is-ibkr = ["csv", "chrono-tz"]
 
 [dev-dependencies]
 serde_json = { workspace = true }

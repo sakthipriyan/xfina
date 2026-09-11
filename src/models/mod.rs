@@ -123,6 +123,18 @@ fn collapse_whitespace(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+pub mod account;
+pub use account::{Account, AccountModel};
+
+pub mod generated_date;
+pub use generated_date::HasGeneratedDate;
+
+pub mod schema;
+pub use schema::Schema;
+
+pub mod statement;
+pub use statement::{Candidate, Confidence, Detection, FileInfo, Statement};
+
 pub mod date_utils;
 pub mod serializer;
 pub mod txn_order;

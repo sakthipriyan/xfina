@@ -24,14 +24,43 @@ Xfina’s core parsing logic lives in the `xfina` crate, organized by domain:
 
 1. **Create the Parser**: Create a new module in the appropriate directory (e.g., `bank-accounts/newbank.rs`).
 2. **Implement Error Handling**: All parsers must return `Result<T, crate::error::XfinaError>`. Use `?` for early returns.
-3. **Map to Models**: Parse the raw data directly into the shared models in `src/models/`. These models are designed to map closely to the Sahamati AA / ReBIT specifications.
-4. **Feature Flag**: Add your parser to `Cargo.toml` as a new feature flag and include it in the `all` feature list.
-5. **Update Targets**: 
-   - Export your parser in `src/lib.rs`
-   - Add it to the CLI in `src/main.rs`
-   - Add WASM bindings in `wasm/src/lib.rs`
-   - Add Python bindings in `python/src/lib.rs`
-   - Add UI support in `web/src/App.vue`
+
+   Return `XfinaError::InvalidFormat` for anything that fails *before* a single
+   account field is read — a container that will not open, a UTF-8 error, a
+   missing marker. That is what tells detection "not mine, try the next one".
+   Reserve `ParseError` for "this **is** my format and it is damaged". Getting
+   this wrong makes a wrong guess look like a corrupt file, and
+   `tests/format_rejection.rs` will fail you for it.
+
+3. **Refuse files that are not yours**: check for a structural marker your
+   institution always prints before parsing on. A parser that returns `Ok` with
+   a placeholder account for arbitrary input will claim every file detection
+   offers it.
+
+4. **Map to Models**: Parse the raw data directly into the shared models in `src/models/`. These models are designed to map closely to the Sahamati AA / ReBIT specifications.
+
+5. **Split for the shared decode**: expose `parse_decoded(&Decoded, &ParseRequest)`
+   alongside your public entry point, and take your content from the `Decoded`
+   rather than opening the bytes yourself. Detection probes and parses against
+   one read of the file.
+
+6. **Add a `probe`**: `pub(crate) fn probe(&Decoded) -> Claim`, next to your
+   parser. Match on institution boilerplate — column headings, field labels —
+   never on anything specific to an account. `Claim::reason` is a fixed reason
+   code by design, so matched text can never leak into a detection result.
+
+7. **Feature Flag**: Add your parser to `Cargo.toml` as a new feature flag and include it in the `all` feature list. The flag name is also the format's id, so pick it in the `ba-`/`cc-`/`mf-`/`is-` style.
+
+8. **Add one row to the registry**: `src/detect/registry.rs`. The `Format`
+   variant, its metadata, the parse and probe dispatch, the CLI's `--as`
+   values, the ids on the wire and the web app's picker are all generated from
+   that table — there is nothing to update in `src/main.rs`, the bindings or
+   `web/src/App.vue`.
+
+9. **Add a filename hint** in `src/detect/hint.rs` if the institution names its
+   downloads predictably. Hints only reorder the candidates; content always
+   decides, so a hint that misses costs one extra probe and a hint that fires
+   wrongly costs nothing.
 
 ### Testing Requirements
 

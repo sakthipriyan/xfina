@@ -1,8 +1,8 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
-import init, { parse_ibkr, parse_cams, parse_hdfc_cc, parse_icici_cc, parse_axis_cc, parse_hdfc_ba, parse_icici_ba, parse_sbi_ba, parse_bob_ba, parse_axis_ba } from 'xfina-wasm';
-import { Sun, Moon, Github, HelpCircle, ChevronDown, Loader2, ArrowUp, ArrowDown, GitCommit, CheckCircle2, AlertTriangle, XCircle, MinusCircle, Activity } from 'lucide-vue-next';
+import init, { parse, formats, version as wasmVersion } from 'xfina-wasm';
+import { Sun, Moon, Github, HelpCircle, ChevronDown, Loader2, ArrowUp, ArrowDown, GitCommit, CheckCircle2, AlertTriangle, XCircle, MinusCircle, Activity, Upload, Lock, X, ExternalLink } from 'lucide-vue-next';
 
 // Shadcn components
 import { Button } from '@/components/ui/button';
@@ -45,26 +45,52 @@ onMounted(() => {
 
 const wasmLoaded = ref(false);
 const error = ref(null);
-const mfStatement = ref(null);
-const ccStatement = ref(null);
-const bankStatement = ref(null);
-const equityStatement = ref(null);
-const validationReport = ref(null);
-const isProcessing = ref(false);
-const totalTxns = computed(() => {
-    if (selectedCategory.value === 'Bank Accounts' && bankStatement.value) {
-        return bankStatement.value.transactions?.transaction?.length || 0;
-    } else if (selectedCategory.value === 'Credit Cards' && ccStatement.value) {
-        return ccStatement.value.transactions?.transaction?.length || 0;
-    } else if (selectedCategory.value === 'Mutual Funds' && mfStatement.value) {
-        return mfStatement.value.transactions?.transaction?.length || 0;
-    } else if (selectedCategory.value === 'Intl Brokers' && equityStatement.value) {
-        return equityStatement.value.transactions?.transaction?.length || 0;
-    }
-    return 0;
-});
-const parseTime = ref(null);
-const uploadedFile = ref(null);
+const availableFormats = ref([]);
+const parserVersion = ref(null);
+
+/**
+ * Everything dropped in, and where each file got to.
+ *
+ * A statement says which institution issued it and what kind of account it is,
+ * so there is nothing to pick before importing. What a file cannot answer is
+ * its own password, and that is the only question left to ask.
+ *
+ * status: pending -> reading -> parsed | locked | failed
+ */
+const files = ref([]);
+const activeId = ref(null);
+const dropping = ref(false);
+let nextId = 0;
+// Whatever arrives next takes the view. Set when files are dropped or a locked
+// one is opened, and cleared by the first of them that parses -- so importing
+// a folder settles on its first readable statement instead of flicking through
+// every one as they are read.
+let focusNext = false;
+
+const locked = computed(() => files.value.filter(f => f.status === 'locked'));
+const failed = computed(() => files.value.filter(f => f.status === 'failed'));
+const ready = computed(() => files.value.filter(f => f.status === 'parsed'));
+const isProcessing = computed(() => files.value.some(f => f.status === 'reading' || f.status === 'pending'));
+const readCount = computed(() => files.value.filter(f => f.status !== 'pending' && f.status !== 'reading').length);
+
+const active = computed(() => ready.value.find(f => f.id === activeId.value) ?? ready.value[0] ?? null);
+
+// Every view reads the selected file's parse. Switching tabs is a re-render,
+// not a re-parse: each file is read once, when it arrives.
+const result = computed(() => active.value?.response ?? null);
+const validationReport = computed(() => result.value?.validation ?? null);
+const fileInfo = computed(() => result.value?.detection?.file ?? null);
+const parseTime = computed(() => active.value?.parseTime ?? null);
+
+const totalTxns = computed(() => result.value?.data?.transactions?.transaction?.length || 0);
+
+const statementOf = (category) =>
+    computed(() => (result.value?.category === category ? result.value.data : null));
+const bankStatement = statementOf('bank_account');
+const ccStatement = statementOf('credit_card');
+const mfStatement = statementOf('mutual_funds');
+const equityStatement = statementOf('intl_stocks');
+
 
 const versionsData = ref(null);
 const appVersion = import.meta.env.VITE_APP_VERSION || 'Unreleased';
@@ -109,75 +135,25 @@ const onVersionChange = (val) => {
     window.location.href = target === latestSeries.value ? '/' : target.path;
 };
 
-const selectedCategory = ref('Mutual Funds');
-const selectedSource = ref('CAMS');
-const password = ref('');
-
-const requiresPassword = computed(() => {
-    return selectedCategory.value === 'Mutual Funds' || (selectedCategory.value === 'Bank Accounts' && selectedSource.value === 'SBI');
-});
-
-const getFileFormat = computed(() => {
-    if (selectedCategory.value === 'Mutual Funds') return 'PDF';
-    if (selectedCategory.value === 'Bank Accounts') {
-        if (selectedSource.value === 'HDFC' || selectedSource.value === 'ICICI' || selectedSource.value === 'BoB' || selectedSource.value === 'Axis') return 'Excel';
-        return 'PDF';
-    }
-    if (selectedCategory.value === 'Credit Cards') {
-        if (selectedSource.value === 'ICICI' || selectedSource.value === 'Axis') return 'Excel';
-        return 'CSV';
-    }
-    if (selectedCategory.value === 'Intl Brokers') return 'CSV';
-    return 'File';
-});
-
-const getAcceptString = computed(() => {
-    if (selectedCategory.value === 'Mutual Funds') return '.pdf';
-    if (selectedCategory.value === 'Bank Accounts') {
-        if (selectedSource.value === 'HDFC' || selectedSource.value === 'ICICI' || selectedSource.value === 'BoB' || selectedSource.value === 'Axis') return '.xls,.xlsx';
-        return '.pdf';
-    }
-    if (selectedCategory.value === 'Credit Cards') {
-        if (selectedSource.value === 'ICICI' || selectedSource.value === 'Axis') return '.xls,.xlsx';
-        return '.csv';
-    }
-    return '*';
-});
-
-const clearState = () => {
-    mfStatement.value = null;
-    ccStatement.value = null;
-    bankStatement.value = null;
-    equityStatement.value = null;
-    validationReport.value = null;
-    error.value = null;
-    parseTime.value = null;
-    uploadedFile.value = null;
-};
-
-const setSource = (src) => {
-    selectedSource.value = src;
-    clearState();
-};
-
-const setCategory = (cat) => {
-    selectedCategory.value = cat;
-    clearState();
-    if (cat === 'Mutual Funds') selectedSource.value = 'CAMS';
-    else if (cat === 'Intl Brokers') selectedSource.value = 'IBKR';
-    else if (cat === 'Credit Cards') selectedSource.value = 'HDFC';
-    else if (cat === 'Bank Accounts') selectedSource.value = 'HDFC';
-};
-
 onMounted(async () => {
     try {
         await init();
         wasmLoaded.value = true;
+        // The accept string comes from the library, so adding a parser does not
+        // mean editing this file.
+        availableFormats.value = formats();
+        // The version of the parsers actually running, which is not necessarily
+        // the version of the page that loaded them.
+        parserVersion.value = wasmVersion();
     } catch (e) {
         error.value = "Failed to load WebAssembly module: " + e;
     }
 
-    // Fetch versions.json
+    isLocalhost.value = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+
+    // The published-version dropdown. Absolute, not relative: only the site
+    // root carries versions.json, and a versioned build served from /0.4/
+    // would otherwise ask for /0.4/versions.json, which does not exist.
     try {
         const res = await fetch("/versions.json");
         if (res.ok) {
@@ -188,162 +164,231 @@ onMounted(async () => {
     }
 });
 
-const onFileSelect = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    uploadedFile.value = file;
+// The extensions institutions actually use, straight from the library.
+const getAcceptString = computed(() => {
+    const extensions = new Set(
+        availableFormats.value.filter(f => f.enabled).map(f => `.${f.extension}`)
+    );
+    return extensions.size ? [...extensions].join(',') : '*';
+});
 
-    error.value = null;
-    mfStatement.value = null;
-    ccStatement.value = null;
-    bankStatement.value = null;
-    equityStatement.value = null;
-    validationReport.value = null;
-    isProcessing.value = true;
-    parseTime.value = null;
-    
-    // Yield to the event loop so the "Parsing..." UI can render
-    await new Promise(resolve => setTimeout(resolve, 10));
+/** Takes a drop or a pick, ignoring files already in the list. */
+const accept = (list) => {
+    for (const file of list) {
+        // Dropping the same folder twice is an ordinary slip, and one statement
+        // in the list twice is confusing.
+        if (files.value.some(f => f.name === file.name && f.size === file.size)) continue;
+        files.value.push({
+            id: nextId++,
+            file,
+            name: file.name,
+            size: file.size,
+            status: 'pending',
+            password: '',
+            response: null,
+            parseTime: null,
+            error: null,
+        });
+    }
+    if (files.value.some(f => f.status === 'pending')) focusNext = true;
+    drain();
+};
 
+const onPick = (event) => {
+    accept(event.target.files ?? []);
+    event.target.value = '';
+};
+
+const onDrop = (event) => {
+    dropping.value = false;
+    accept(event.dataTransfer?.files ?? []);
+};
+
+/**
+ * One file at a time.
+ *
+ * A consolidated account statement takes seconds to read. Running six at once
+ * would freeze the page and say nothing about which file is slow.
+ */
+const drain = async () => {
+    if (files.value.some(f => f.status === 'reading')) return;
+    const next = files.value.find(f => f.status === 'pending');
+    if (!next) return;
+    await read(next);
+    await drain();
+};
+
+const read = async (entry) => {
+    entry.status = 'reading';
+    entry.error = null;
+    // Yield so the row can render as "Reading..." before the parser blocks.
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    const start = performance.now();
     try {
-        let jsonString;
-        const start = performance.now();
-        
-        const modTime = file.lastModified ? BigInt(Math.floor(file.lastModified / 1000)) : null;
-        
-        if (selectedCategory.value === 'Bank Accounts') {
-            const arrayBuffer = await file.arrayBuffer();
-            const uint8Array = new Uint8Array(arrayBuffer);
-            if (selectedSource.value === 'HDFC') {
-                jsonString = parse_hdfc_ba(uint8Array, null, file.name, modTime, null);
-            } else if (selectedSource.value === 'ICICI') {
-                jsonString = parse_icici_ba(uint8Array, null, file.name, modTime, null);
-            } else if (selectedSource.value === 'SBI') {
-                jsonString = parse_sbi_ba(uint8Array, password.value ? password.value : null, file.name, modTime, null);
-            } else if (selectedSource.value === 'BoB') {
-                jsonString = parse_bob_ba(uint8Array, null, file.name, modTime, null);
-            } else if (selectedSource.value === 'Axis') {
-                jsonString = parse_axis_ba(uint8Array, null, file.name, modTime, null);
-            }
-            const parsed = JSON.parse(jsonString);
-            bankStatement.value = parsed.data;
-            validationReport.value = parsed.validation;
-        } else if (selectedSource.value === 'IBKR') {
-            const arrayBuffer = await file.arrayBuffer();
-            const uint8Array = new Uint8Array(arrayBuffer);
-            jsonString = parse_ibkr(uint8Array, null, file.name, modTime, null);
-            const parsed = JSON.parse(jsonString);
-            equityStatement.value = parsed.data;
-            validationReport.value = parsed.validation;
-        } else if (selectedSource.value === 'CAMS') {
-            const arrayBuffer = await file.arrayBuffer();
-            const uint8Array = new Uint8Array(arrayBuffer);
-            jsonString = parse_cams(uint8Array, password.value ? password.value : null, file.name, modTime, null);
-            const parsed = JSON.parse(jsonString);
-            mfStatement.value = parsed.data;
-            validationReport.value = parsed.validation;
-        } else if (selectedSource.value === 'HDFC') {
-            const arrayBuffer = await file.arrayBuffer();
-            const uint8Array = new Uint8Array(arrayBuffer);
-            jsonString = parse_hdfc_cc(uint8Array, null, file.name, modTime, null);
-            const parsed = JSON.parse(jsonString);
-            ccStatement.value = parsed.data;
-            validationReport.value = parsed.validation;
-        } else if (selectedSource.value === 'ICICI') {
-            const arrayBuffer = await file.arrayBuffer();
-            const uint8Array = new Uint8Array(arrayBuffer);
-            jsonString = parse_icici_cc(uint8Array, null, file.name, modTime, null);
-            const parsed = JSON.parse(jsonString);
-            ccStatement.value = parsed.data;
-            validationReport.value = parsed.validation;
-        } else if (selectedSource.value === 'Axis') {
-            const arrayBuffer = await file.arrayBuffer();
-            const uint8Array = new Uint8Array(arrayBuffer);
-            jsonString = parse_axis_cc(uint8Array, null, file.name, modTime, null);
-            const parsed = JSON.parse(jsonString);
-            ccStatement.value = parsed.data;
-            validationReport.value = parsed.validation;
+        const bytes = new Uint8Array(await entry.file.arrayBuffer());
+        const response = parse(bytes, {
+            password: entry.password || null,
+            filename: entry.name,
+            modifiedTimestamp: entry.file.lastModified
+                ? BigInt(Math.floor(entry.file.lastModified / 1000))
+                : null,
+        });
+        const elapsed = performance.now() - start;
+        entry.parseTime = (elapsed / 1000).toFixed(3);
+
+        if (response.error) {
+            entry.error = describeError(response.error);
+            // A locked file is not a failure: nothing has been read out of it
+            // yet, and a password is all it is waiting for.
+            entry.status = response.error.kind === 'password_required'
+                || response.error.kind === 'incorrect_password' ? 'locked' : 'failed';
+            trackParserEvent(response.error.filename_hint || 'unknown', false,
+                Math.round(elapsed), null, appVersion);
+            return;
         }
 
-
-
-        const end = performance.now();
-        parseTime.value = ((end - start) / 1000).toFixed(3);
-        console.log(`🚀 Rust WASM Processing Time: ${(end - start).toFixed(2)} ms`);
-        
-        // Consider it a failure unless the validation report explicitly says it passed completely
-        // (Note: Rust sets 'warning' if row-level checks fail, which we treat as a failure for analytics)
-        const isSuccess = validationReport.value?.overall === 'passed';
-
-        let validationMetrics = null;
-        if (!isSuccess && validationReport.value) {
-            validationMetrics = {};
-            
-            const txnsFailed = validationReport.value.row_level?.failed_rows?.length || 0;
-            if (txnsFailed > 0) validationMetrics.txns_failed = txnsFailed;
-
-            const declaredChecks = validationReport.value.summary_level?.declared?.checks || [];
-            const declaredFailed = declaredChecks.filter(c => !c.passed).length;
-            if (declaredFailed > 0) validationMetrics.declared_failed = declaredFailed;
-
-            const derivedChecks = validationReport.value.summary_level?.derived?.checks || [];
-            const derivedFailed = derivedChecks.filter(c => !c.passed).length;
-            if (derivedFailed > 0) validationMetrics.derived_failed = derivedFailed;
+        entry.response = response;
+        entry.status = 'parsed';
+        if (focusNext || activeId.value === null) {
+            activeId.value = entry.id;
+            focusNext = false;
         }
-
-        let parserName = 'unknown';
-        if (selectedCategory.value === 'Bank Accounts') {
-            if (selectedSource.value === 'HDFC') parserName = 'hdfc_ba';
-            else if (selectedSource.value === 'ICICI') parserName = 'icici_ba';
-            else if (selectedSource.value === 'SBI') parserName = 'sbi_ba';
-            else if (selectedSource.value === 'Bank of Baroda') parserName = 'bob_ba';
-            else if (selectedSource.value === 'Axis') parserName = 'axis_ba';
-        } else if (selectedCategory.value === 'Credit Cards') {
-            if (selectedSource.value === 'HDFC') parserName = 'hdfc_cc';
-            else if (selectedSource.value === 'ICICI') parserName = 'icici_cc';
-            else if (selectedSource.value === 'Axis') parserName = 'axis_cc';
-        } else if (selectedCategory.value === 'Mutual Funds') {
-            if (selectedSource.value === 'CAS') parserName = 'cas';
-            else if (selectedSource.value === 'CAMS') parserName = 'cams';
-        } else if (selectedCategory.value === 'Intl Stocks') {
-            if (selectedSource.value === 'Interactive Brokers') parserName = 'ibkr';
-        }
-
-        trackParserEvent(parserName, isSuccess, Math.round(end - start), validationMetrics, appVersion);
-
+        trackParserEvent(response.format, response.validation?.overall === 'passed',
+            Math.round(elapsed), validationMetrics(response.validation), appVersion);
     } catch (e) {
-        error.value = "Error parsing file: " + e;
-        const end = performance.now();
-        
-        let parserName = 'unknown';
-        if (selectedCategory.value === 'Bank Accounts') {
-            if (selectedSource.value === 'HDFC') parserName = 'hdfc_ba';
-            else if (selectedSource.value === 'ICICI') parserName = 'icici_ba';
-            else if (selectedSource.value === 'SBI') parserName = 'sbi_ba';
-            else if (selectedSource.value === 'Bank of Baroda') parserName = 'bob_ba';
-            else if (selectedSource.value === 'Axis') parserName = 'axis_ba';
-        } else if (selectedCategory.value === 'Credit Cards') {
-            if (selectedSource.value === 'HDFC') parserName = 'hdfc_cc';
-            else if (selectedSource.value === 'ICICI') parserName = 'icici_cc';
-            else if (selectedSource.value === 'Axis') parserName = 'axis_cc';
-        } else if (selectedCategory.value === 'Mutual Funds') {
-            if (selectedSource.value === 'CAS') parserName = 'cas';
-            else if (selectedSource.value === 'CAMS') parserName = 'cams';
-        } else if (selectedCategory.value === 'Intl Stocks') {
-            if (selectedSource.value === 'Interactive Brokers') parserName = 'ibkr';
-        }
-        
-        trackParserEvent(parserName, false, Math.round(end - start), null, appVersion);
-    } finally {
-        isProcessing.value = false;
+        const elapsed = performance.now() - start;
+        entry.parseTime = (elapsed / 1000).toFixed(3);
+        entry.error = String(e);
+        entry.status = 'failed';
+        trackParserEvent('unknown', false, Math.round(elapsed), null, appVersion);
     }
 };
 
-const getCurrencySymbol = () => {
-    if (selectedSource.value === 'IBKR') {
-        return '$';
+/** Re-read a locked file once its password is supplied. */
+const unlock = (entry) => {
+    entry.status = 'pending';
+    // You typed the password to read this one, so show it.
+    focusNext = true;
+    drain();
+};
+
+const remove = (entry) => {
+    files.value = files.value.filter(f => f !== entry);
+    if (activeId.value === entry.id) activeId.value = ready.value[0]?.id ?? null;
+};
+
+const clearAll = () => {
+    files.value = [];
+    activeId.value = null;
+    error.value = null;
+};
+
+const CATEGORY_LABELS = {
+    bank_account: 'Bank Account',
+    credit_card: 'Credit Card',
+    mutual_funds: 'Mutual Fund',
+    intl_stocks: 'Intl Stocks',
+};
+
+// A fixed order, not the order files happened to be dropped in: the same pile
+// should read the same way twice.
+const CATEGORY_ORDER = ['bank_account', 'credit_card', 'mutual_funds', 'intl_stocks'];
+
+/**
+ * Imported statements, under the heading each belongs to.
+ *
+ * The heading carries the kind, so a card only has to say which account it is
+ * and whose name is on it.
+ */
+const groupedReady = computed(() =>
+    CATEGORY_ORDER
+        .map(category => ({
+            category,
+            label: CATEGORY_LABELS[category],
+            entries: ready.value.filter(e => e.response?.category === category),
+        }))
+        .filter(group => group.entries.length)
+);
+
+/** Everything this build can read, under the same headings. */
+const groupedFormats = computed(() =>
+    CATEGORY_ORDER
+        .map(category => ({
+            category,
+            label: CATEGORY_LABELS[category],
+            entries: availableFormats.value.filter(f => f.category === category),
+        }))
+        .filter(group => group.entries.length)
+);
+
+
+
+/**
+ * Institution and the account's last four digits.
+ *
+ * Some issuers print no account number at all -- ICICI cards are the case that
+ * bites -- so the institution stands alone rather than trailing a dangling
+ * separator.
+ */
+const accountOf = (entry) => {
+    const institution = entry.response?.institution;
+    if (!institution) return entry.name;
+    const masked = entry.response?.data?.maskedAccNumber || '';
+    const last4 = masked.replace(/[^0-9]/g, '').slice(-4);
+    return last4 ? `${institution} - ${last4}` : institution;
+};
+
+const holderOf = (entry) =>
+    entry.response?.data?.profile?.holders?.holder?.[0]?.name || '';
+
+/**
+ * What a locked file looks like, from its name alone.
+ *
+ * Nobody has read it -- that is what locked means -- so the filename is the
+ * only evidence there is. Both halves come from the same matched pattern, so
+ * they are present or absent together.
+ */
+const hintedAs = (err) => {
+    const format = availableFormats.value.find(f => f.id === err.filename_hint);
+    if (!format) return null;
+    return { kind: CATEGORY_LABELS[format.category], institution: format.institution };
+};
+
+const article = (word) => (/^[AEIOU]/i.test(word) ? 'an' : 'a');
+
+const describeError = (err) => {
+    const hint = hintedAs(err);
+    switch (err.kind) {
+        case 'password_required':
+            return hint
+                ? `This looks like ${article(hint.kind)} ${hint.kind} statement from ${hint.institution}. Enter its password to continue.`
+                : 'This file is password protected. Enter its password to continue.';
+        case 'incorrect_password':
+            return 'That password did not open the file.';
+        case 'unrecognized_format':
+            return `We read the file, but no parser recognised it as a supported statement${err.container ? ` (${err.container})` : ''}.`;
+        default:
+            return err.message;
     }
-    return '₹'; // Default to Rupee for CAMS
+};
+
+const validationMetrics = (report) => {
+    if (!report || report.overall === 'passed') return null;
+    const metrics = {};
+    const txnsFailed = report.row_level?.failed_rows?.length || 0;
+    if (txnsFailed > 0) metrics.txns_failed = txnsFailed;
+    const declaredFailed = (report.summary_level?.declared?.checks || []).filter(c => !c.passed).length;
+    if (declaredFailed > 0) metrics.declared_failed = declaredFailed;
+    const derivedFailed = (report.summary_level?.derived?.checks || []).filter(c => !c.passed).length;
+    if (derivedFailed > 0) metrics.derived_failed = derivedFailed;
+    return Object.keys(metrics).length ? metrics : null;
+};
+
+const getCurrencySymbol = () => {
+    // International brokerage is the only category we report in dollars, and
+    // the parse tells us which category this is.
+    return result.value?.category === 'intl_stocks' ? '$' : '₹';
 };
 
 const formatCurrency = (val) => {
@@ -731,115 +776,226 @@ const camsGroupedAssets = computed(() => {
         {{ error }}
       </div>
       
-      <!-- Upload Zone -->
+      <div v-if="!wasmLoaded" class="text-muted-foreground animate-pulse">Loading WebAssembly module...</div>
+
+      <!-- Import: one drop zone, however many statements. Nothing to pick
+           first -- each file says which institution issued it and what kind of
+           account it is. -->
       <Card v-if="wasmLoaded" class="bg-card border-border shadow-sm">
         <CardHeader class="flex flex-row items-start justify-between space-y-0 pb-4">
           <div class="space-y-1.5">
-            <CardTitle>Extract Statement</CardTitle>
-            <CardDescription>Upload your statement to securely extract and view your financial data directly in the browser.</CardDescription>
+            <CardTitle class="flex items-center gap-2">
+              <span>Import statements</span>
+              <!-- The version of the parsers actually running, which is not
+                   necessarily the version of the page that loaded them. -->
+              <span
+                v-if="parserVersion"
+                class="rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-[11px] font-normal text-muted-foreground"
+                title="Parser version"
+              >{{ parserVersion }}</span>
+            </CardTitle>
+            <CardDescription>
+              Drop a whole folder in at once. Each file is read in your browser and nothing is uploaded.
+              <Dialog>
+                <DialogTrigger as-child>
+                  <button class="underline underline-offset-4 hover:text-foreground">See supported formats</button>
+                </DialogTrigger>
+                <DialogContent class="sm:max-w-3xl">
+                  <DialogHeader>
+                    <DialogTitle>Supported statements</DialogTitle>
+                    <DialogDescription>
+                      Where to download each one, and how to reach it. Read straight from this build, so the list cannot drift from what the parsers actually do.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div class="max-h-[60vh] space-y-5 overflow-y-auto py-2">
+                    <div v-for="group in groupedFormats" :key="group.category" class="space-y-2">
+                      <p class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        {{ group.label }}
+                      </p>
+                      <div class="divide-y divide-border rounded-md border border-border">
+                        <div
+                          v-for="format in group.entries"
+                          :key="format.id"
+                          class="flex items-start justify-between gap-3 px-3 py-2.5"
+                        >
+                          <div class="min-w-0">
+                            <!-- The link and the trail below it are the whole
+                                 point of this dialog: reading a statement is
+                                 easy once you have it, and finding where the
+                                 institution hides the download is not. -->
+                            <span class="flex items-baseline gap-2">
+                              <a
+                                :href="format.download_url"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="inline-flex items-center gap-1 text-sm font-medium hover:underline"
+                              >
+                                <span class="truncate">{{ format.institution }}</span>
+                                <ExternalLink class="h-3 w-3 shrink-0 text-muted-foreground" />
+                              </a>
+                              <!-- The same id the CLI takes for --as. -->
+                              <span class="shrink-0 font-mono text-[11px] text-muted-foreground">{{ format.id }}</span>
+                            </span>
+                            <p class="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                              {{ format.download_path }}
+                            </p>
+                          </div>
+                          <div class="flex shrink-0 items-center gap-2">
+                            <!-- One badge: the file type, with a lock when
+                                 nothing can be read out of it until a password
+                                 opens it. -->
+                            <span
+                              class="flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] uppercase text-muted-foreground"
+                              :title="format.password_protected ? 'Password protected' : null"
+                            >
+                              <Lock v-if="format.password_protected" class="h-3 w-3 shrink-0" />
+                              <span>{{ format.extension }}</span>
+                            </span>
+                            <span
+                              v-if="!format.enabled"
+                              class="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"
+                            >not built</span>
+                            <CheckCircle2 v-else class="h-4 w-4 text-emerald-500" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </CardDescription>
           </div>
           <div v-if="isProcessing" class="flex items-center text-sm font-medium text-muted-foreground gap-2 whitespace-nowrap mt-0.5">
-            <span>Parsing...</span>
+            <span>Reading {{ readCount }} of {{ files.length }}…</span>
             <Loader2 class="h-4 w-4 animate-spin" />
           </div>
+          <Button v-else-if="files.length" variant="ghost" size="sm" class="text-muted-foreground" @click="clearAll">Clear all</Button>
         </CardHeader>
         <CardContent>
-          <div class="flex flex-wrap gap-4 mb-6">
-            <Button 
-              :variant="selectedCategory === 'Bank Accounts' ? 'default' : 'outline'"
-              @click="setCategory('Bank Accounts')"
-            >Bank Accounts</Button>
-            <Button 
-              :variant="selectedCategory === 'Credit Cards' ? 'default' : 'outline'"
-              @click="setCategory('Credit Cards')"
-            >Credit Cards</Button>
-            <Button 
-              :variant="selectedCategory === 'Mutual Funds' ? 'default' : 'outline'"
-              @click="setCategory('Mutual Funds')"
-            >Mutual Funds</Button>
-            <Button 
-              :variant="selectedCategory === 'Intl Brokers' ? 'default' : 'outline'"
-              @click="setCategory('Intl Brokers')"
-            >Intl Brokers</Button>
+          <label
+            class="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-6 py-12 text-center transition-colors"
+            :class="dropping ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40 hover:bg-muted/30'"
+            @dragover.prevent="dropping = true"
+            @dragleave.prevent="dropping = false"
+            @drop.prevent="onDrop"
+          >
+            <Upload class="h-7 w-7 text-muted-foreground" />
+            <span class="text-sm font-semibold">Drop statements here, or click to browse</span>
+            <span class="text-xs text-muted-foreground">
+              Bank, credit card, mutual fund and brokerage statements &mdash; Excel, CSV or PDF.
+            </span>
+            <input type="file" multiple class="hidden" :accept="getAcceptString" @change="onPick" />
+          </label>
+        </CardContent>
+      </Card>
+
+      <!-- Everything still waiting on the person who dropped the files. Locked
+           files lead: nothing has been read out of them, so the filename is all
+           there is to go on until a password opens one. -->
+      <Card v-if="locked.length || failed.length" class="bg-card border-border shadow-sm">
+        <CardHeader class="pb-4">
+          <CardTitle class="text-base">
+            Action required
+            <span class="ml-1 font-normal text-muted-foreground">({{ locked.length + failed.length }})</span>
+          </CardTitle>
+          <CardDescription v-if="locked.length">
+            Some statements are password protected. Nothing can be read out of them until they are opened.
+          </CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-3">
+          <div
+            v-for="entry in locked"
+            :key="entry.id"
+            class="flex flex-col gap-3 rounded-md border border-border p-3 sm:flex-row sm:items-center"
+          >
+            <Lock class="h-4 w-4 shrink-0 text-muted-foreground" />
+            <div class="min-w-0 flex-1">
+              <p class="truncate font-mono text-xs" :title="entry.name">{{ entry.name }}</p>
+              <p class="mt-0.5 text-xs text-muted-foreground">{{ entry.error }}</p>
+            </div>
+            <form class="flex w-full gap-2 sm:w-auto" autocomplete="off" @submit.prevent="unlock(entry)">
+              <Input
+                v-model="entry.password"
+                type="password"
+                placeholder="Password"
+                class="h-9 w-full sm:w-48 bg-background"
+              />
+              <Button type="submit" size="sm" :disabled="!entry.password">Unlock</Button>
+              <!-- A password you do not have is a reason to drop the file, not
+                   to be stuck on it. -->
+              <Button type="button" variant="ghost" size="sm" class="px-2" @click="remove(entry)">
+                <X class="h-4 w-4" />
+              </Button>
+            </form>
           </div>
 
-          <div class="flex flex-col md:flex-row gap-6 items-end">
-             <div class="space-y-2" v-if="selectedCategory === 'Mutual Funds'">
-               <Label>Provider</Label>
-               <div class="flex flex-wrap gap-4">
-                 <Button :variant="selectedSource === 'CAMS' ? 'default' : 'outline'" @click="setSource('CAMS')">CAMS</Button>
-               </div>
-             </div>
-             <div class="space-y-2" v-if="selectedCategory === 'Intl Brokers'">
-               <Label>Broker</Label>
-               <div class="flex flex-wrap gap-4">
-                 <Button :variant="selectedSource === 'IBKR' ? 'default' : 'outline'" @click="setSource('IBKR')">IBKR</Button>
-               </div>
-             </div>
-             <div class="space-y-2" v-if="selectedCategory === 'Credit Cards'">
-               <Label>Bank</Label>
-               <div class="flex flex-wrap gap-4">
-                 <Button :variant="selectedSource === 'Axis' ? 'default' : 'outline'" @click="setSource('Axis')">Axis Bank</Button>
-                 <Button :variant="selectedSource === 'HDFC' ? 'default' : 'outline'" @click="setSource('HDFC')">HDFC Bank</Button>
-                 <Button :variant="selectedSource === 'ICICI' ? 'default' : 'outline'" @click="setSource('ICICI')">ICICI Bank</Button>
-               </div>
-             </div>
-             <div class="space-y-2" v-if="selectedCategory === 'Bank Accounts'">
-               <Label>Bank</Label>
-               <div class="flex flex-wrap gap-4">
-                 <Button :variant="selectedSource === 'Axis' ? 'default' : 'outline'" @click="setSource('Axis')">Axis Bank</Button>
-                 <Button :variant="selectedSource === 'BoB' ? 'default' : 'outline'" @click="setSource('BoB')">Bank of Baroda</Button>
-                 <Button :variant="selectedSource === 'HDFC' ? 'default' : 'outline'" @click="setSource('HDFC')">HDFC Bank</Button>
-                 <Button :variant="selectedSource === 'ICICI' ? 'default' : 'outline'" @click="setSource('ICICI')">ICICI Bank</Button>
-                 <Button :variant="selectedSource === 'SBI' ? 'default' : 'outline'" @click="setSource('SBI')">State Bank of India</Button>
-               </div>
-             </div>
-
-             <div class="space-y-2 w-full md:w-auto ml-auto">
-               <Label class="invisible hidden md:block">Action</Label>
-               <div v-if="requiresPassword" class="flex w-full max-w-md">
-                 <Input 
-                    type="password" 
-                    v-model="password"
-                    placeholder="Password" 
-                    class="rounded-r-none bg-background border-border focus-visible:z-10 focus-visible:ring-1 border-r-0"
-                  />
-                  <Button asChild class="rounded-l-none cursor-pointer">
-                    <label>
-                      <span>Import {{ getFileFormat }}</span>
-                      <input type="file" class="hidden" :accept="getAcceptString" @change="onFileSelect" />
-                    </label>
-                  </Button>
-               </div>
-               <div v-else class="flex w-full max-w-md">
-                  <Button asChild class="cursor-pointer w-full sm:w-auto">
-                    <label>
-                      <span>Import {{ getFileFormat }}</span>
-                      <input type="file" class="hidden" :accept="getAcceptString" @change="onFileSelect" />
-                    </label>
-                  </Button>
-               </div>
-             </div>
+          <div
+            v-for="entry in failed"
+            :key="entry.id"
+            class="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-3"
+          >
+            <XCircle class="h-4 w-4 shrink-0 text-destructive" />
+            <div class="min-w-0 flex-1">
+              <p class="truncate font-mono text-xs" :title="entry.name">{{ entry.name }}</p>
+              <p class="mt-0.5 text-xs text-muted-foreground">{{ entry.error }}</p>
+            </div>
+            <Button variant="ghost" size="sm" class="px-2" @click="remove(entry)">
+              <X class="h-4 w-4" />
+            </Button>
           </div>
         </CardContent>
       </Card>
-      <div v-else class="text-muted-foreground animate-pulse">Loading WebAssembly module...</div>
+
+      <!-- One card per statement read, grouped by the kind of account. A row
+           that scrolls sideways hides whatever did not fit, and the whole
+           point of importing a folder at once is seeing the pile. -->
+      <div v-if="ready.length > 1" class="space-y-5">
+        <div v-for="group in groupedReady" :key="group.category" class="space-y-2">
+          <p class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {{ group.label }} <span class="font-normal">({{ group.entries.length }})</span>
+          </p>
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <button
+              v-for="entry in group.entries"
+              :key="entry.id"
+              class="flex flex-col gap-0.5 rounded-lg border p-3 text-left transition-colors"
+              :class="active?.id === entry.id
+                ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                : 'border-border hover:border-primary/40 hover:bg-muted/40'"
+              @click="activeId = entry.id"
+            >
+              <span class="truncate text-sm font-semibold leading-tight" :title="accountOf(entry)">
+                {{ accountOf(entry) }}
+              </span>
+              <span
+                v-if="holderOf(entry)"
+                class="truncate text-xs leading-tight text-muted-foreground"
+                :title="holderOf(entry)"
+              >{{ holderOf(entry) }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Everything below belongs to the one statement selected above. -->
+        <hr class="border-border" />
+      </div>
+
 
       <!-- Status Bar -->
-      <div v-if="parseTime !== null && uploadedFile" class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-2">
+      <div v-if="fileInfo" class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-2">
         <Card class="bg-card text-card-foreground shadow-sm border flex flex-col justify-center p-3 px-4">
           <span class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">File Name</span>
-          <span class="font-medium text-sm truncate" :title="uploadedFile.name">{{ uploadedFile.name }}</span>
+          <span class="font-medium text-sm truncate" :title="fileInfo.name">{{ fileInfo.name }}</span>
         </Card>
         
         <Card class="bg-card text-card-foreground shadow-sm border flex items-center justify-between p-3 px-4">
           <div class="flex flex-col">
             <span class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">Size</span>
-            <span class="font-mono text-sm">{{ (uploadedFile.size / 1024).toFixed(1) }} KB</span>
+            <span class="font-mono text-sm">{{ (fileInfo.size / 1024).toFixed(1) }} KB</span>
           </div>
           <div class="flex flex-col text-right">
             <span class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">Last Modified</span>
-            <span class="font-medium text-sm">{{ formatDateTime(uploadedFile.lastModified / 1000) }}</span>
+            <span class="font-medium text-sm">{{ formatDateTime(fileInfo.modified_timestamp) }}</span>
           </div>
         </Card>
         
@@ -1109,7 +1265,7 @@ const camsGroupedAssets = computed(() => {
         <StatementHeader 
           v-if="mfStatement.profile?.holders?.holder?.length"
           :customerName="mfStatement.profile.holders.holder[0].name || 'Investor'"
-          :institutionName="selectedSource"
+          :institutionName="result?.institution || 'Mutual Funds'"
           statementType="Mutual Funds"
           :accountNumber="mfStatement.profile.holders.holder[0].pan || ''"
           :statementDetails="[

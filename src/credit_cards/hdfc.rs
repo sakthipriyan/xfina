@@ -11,13 +11,32 @@ use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::Decimal;
 use std::collections::HashMap;
 
+use crate::decode::Decoded;
 use crate::models::request::ParseRequest;
 
-pub fn parse_hdfc_statement<'a>(
-    input: ParseRequest<'a>,
+pub fn parse_hdfc_statement(
+    input: ParseRequest<'_>,
 ) -> Result<ParseResult<CreditCardAccount>, crate::error::XfinaError> {
-    let content = std::str::from_utf8(input.content)
-        .map_err(|e| crate::error::XfinaError::ParseError(format!("Invalid UTF-8: {}", e)))?;
+    let decoded = Decoded::new(&input);
+    parse_decoded(&decoded, &input)
+}
+
+/// Parses from an already-decoded input, so detection can probe and
+/// parse against one read of the file.
+pub(crate) fn parse_decoded(
+    decoded: &Decoded<'_>,
+    input: &ParseRequest<'_>,
+) -> Result<ParseResult<CreditCardAccount>, crate::error::XfinaError> {
+    let content = decoded.text()?;
+    // HDFC's card export separates every field with "~|~". Without it this is
+    // some other text file, and parsing on would yield an account with no card
+    // number and no transactions rather than an honest refusal.
+    if !content.contains("~|~") {
+        return Err(crate::error::XfinaError::InvalidFormat(
+            "Not an HDFC credit card statement: no '~|~' field separator".to_string(),
+        ));
+    }
+
     let filename = input.filename;
     let mut stmt = CreditCardAccount {
         r#type: "credit_card".to_string(),
@@ -46,6 +65,9 @@ pub fn parse_hdfc_statement<'a>(
                             .single()
                             .map(|dt| dt.with_timezone(&Utc));
                     date_only_paths.push("xfina.generatedDate".to_string());
+                    // From the filename; cleared below if the statement prints
+                    // its own Statement Date.
+                    xfina_account.generated_date_derived = Some(true);
                 }
             }
         }
@@ -132,6 +154,9 @@ pub fn parse_hdfc_statement<'a>(
                                     chrono::TimeZone::from_local_datetime(&ist_offset, &dt)
                                         .single()
                                         .map(|dt| dt.with_timezone(&Utc));
+                                // The statement printed its own date, so this
+                                // is no longer an estimate.
+                                xfina_account.generated_date_derived = None;
                                 if !date_only_paths.contains(&"xfina.generatedDate".to_string()) {
                                     date_only_paths.push("xfina.generatedDate".to_string());
                                 }
@@ -511,4 +536,13 @@ fn parse_datetime(val: &str) -> Option<DateTime<Utc>> {
             .single()
             .map(|dt| dt.with_timezone(&Utc))
     })
+}
+
+/// HDFC's card export separates every field with "~|~"; nothing else does.
+pub(crate) fn probe(dec: &crate::decode::Decoded<'_>) -> crate::detect::Claim {
+    use crate::detect::Claim;
+    if dec.probe_text().contains("~|~") {
+        return Claim::strong("hdfc-card-separator");
+    }
+    Claim::NO
 }

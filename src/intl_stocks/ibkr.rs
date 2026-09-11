@@ -51,18 +51,50 @@ fn parse_datetime(date_str: &str) -> Option<chrono::DateTime<Utc>> {
 
 use crate::models::validation::{ParseResult, SummaryCheck, ValidationReport};
 
+use crate::decode::Decoded;
 use crate::models::request::ParseRequest;
 
-pub fn parse_ibkr_csv<'a>(
-    input: ParseRequest<'a>,
+/// Section names IBKR prints in column 0 of an activity statement.
+///
+/// A statement always carries several of these; arbitrary CSV carries none.
+/// They are what lets this parser answer "not mine" instead of returning a
+/// populated-looking account for any text it is handed.
+const IBKR_SECTIONS: [&str; 10] = [
+    "Statement",
+    "Account Information",
+    "Financial Instrument Information",
+    "Open Positions",
+    "Mark-to-Market Performance Summary",
+    "Trades",
+    "Realized & Unrealized Performance Summary",
+    "Cash Report",
+    "Deposits & Withdrawals",
+    "Change in NAV",
+];
+
+/// Row kinds IBKR puts in column 1, under every section.
+const IBKR_ROW_KINDS: [&str; 5] = ["Header", "Data", "Total", "SubTotal", "Notes"];
+
+pub fn parse_ibkr_csv(
+    input: ParseRequest<'_>,
 ) -> Result<ParseResult<EquityAccount>, crate::error::XfinaError> {
-    let csv_content = std::str::from_utf8(input.content)
-        .map_err(|e| crate::error::XfinaError::ParseError(format!("Invalid UTF-8: {}", e)))?;
+    let decoded = Decoded::new(&input);
+    parse_decoded(&decoded, &input)
+}
+
+/// Parses from an already-decoded input, so detection can probe and
+/// parse against one read of the file.
+pub(crate) fn parse_decoded(
+    decoded: &Decoded<'_>,
+    _input: &ParseRequest<'_>,
+) -> Result<ParseResult<EquityAccount>, crate::error::XfinaError> {
+    let csv_content = decoded.text()?;
     let mut rdr = ReaderBuilder::new()
         .has_headers(false)
         .flexible(true)
         .from_reader(csv_content.as_bytes());
 
+    let mut saw_ibkr_section = false;
     let mut account_no = String::from("IBKR");
     let mut investor_name = String::new();
     let mut statement_start_date = None;
@@ -100,6 +132,12 @@ pub fn parse_ibkr_csv<'a>(
 
         if record.len() < 3 {
             continue;
+        }
+
+        if let (Some(section), Some(kind)) = (record.get(0), record.get(1)) {
+            if IBKR_SECTIONS.contains(&section) && IBKR_ROW_KINDS.contains(&kind) {
+                saw_ibkr_section = true;
+            }
         }
 
         match (record.get(0), record.get(1), record.get(2)) {
@@ -254,6 +292,17 @@ pub fn parse_ibkr_csv<'a>(
             }
             _ => {}
         }
+    }
+
+    // Without a single IBKR section the file is not an activity statement.
+    // Returning Ok here would hand back an account with a placeholder number,
+    // a placeholder holder and no holdings -- indistinguishable from a real
+    // but empty statement, and enough to make this parser claim every file it
+    // is offered.
+    if !saw_ibkr_section {
+        return Err(crate::error::XfinaError::InvalidFormat(
+            "Not an IBKR activity statement: no recognised section header".to_string(),
+        ));
     }
 
     let mut final_holdings = Vec::new();
@@ -483,6 +532,8 @@ pub fn parse_ibkr_csv<'a>(
     let xfina_ext = XfinaEquityAccount {
         institution_name: Some("Interactive Brokers".to_string()),
         generated_date,
+        // IBKR prints WhenGenerated in the statement itself.
+        generated_date_derived: None,
         date_only_paths: None,
     };
 
@@ -520,4 +571,25 @@ pub fn parse_ibkr_csv<'a>(
         data: account,
         validation,
     })
+}
+
+/// IBKR opens every activity statement with its own section/row-kind grid.
+pub(crate) fn probe(dec: &crate::decode::Decoded<'_>) -> crate::detect::Claim {
+    use crate::detect::Claim;
+    let text = dec.probe_text();
+    let mut sections = 0;
+    for line in text.lines().take(200) {
+        let mut fields = line.splitn(3, ',');
+        let (Some(section), Some(kind)) = (fields.next(), fields.next()) else {
+            continue;
+        };
+        if IBKR_SECTIONS.contains(&section) && IBKR_ROW_KINDS.contains(&kind) {
+            sections += 1;
+        }
+    }
+    match sections {
+        0 => Claim::NO,
+        1 => Claim::weak("ibkr-single-section"),
+        _ => Claim::strong("ibkr-section-grid"),
+    }
 }

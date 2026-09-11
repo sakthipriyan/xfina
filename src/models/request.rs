@@ -4,6 +4,12 @@ pub struct ParseRequest<'a> {
     pub password: Option<&'a str>,
     pub filename: Option<&'a str>,
     pub modified_timestamp: Option<i64>, // UNIX timestamp in seconds
+    /// Parse as this format instead of detecting one.
+    ///
+    /// Having the override ride on the request is what keeps `parse` a single
+    /// entry point: there is no separate "parse as" function for every surface
+    /// to expose and keep in step.
+    pub format: Option<crate::detect::Format>,
 }
 
 impl<'a> ParseRequest<'a> {
@@ -13,6 +19,7 @@ impl<'a> ParseRequest<'a> {
             password: None,
             filename: None,
             modified_timestamp: None,
+            format: None,
         }
     }
 
@@ -28,6 +35,12 @@ impl<'a> ParseRequest<'a> {
 
     pub fn with_modified_timestamp(mut self, timestamp: Option<i64>) -> Self {
         self.modified_timestamp = timestamp;
+        self
+    }
+
+    /// Skip detection and use this format.
+    pub fn with_format(mut self, format: Option<crate::detect::Format>) -> Self {
+        self.format = format;
         self
     }
 }

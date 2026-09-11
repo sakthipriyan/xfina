@@ -12,7 +12,8 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 wasm-bindgen.workspace = true
+serde-wasm-bindgen.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 
-xfina = { path = ".." }
+xfina = { path = "..", default-features = false, features = ["all"] }

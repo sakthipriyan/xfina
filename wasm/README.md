@@ -23,52 +23,44 @@ npm install xfina-wasm
 ## Quick Start (Browser / Vite)
 
 ```javascript
-import init, { parse_hdfc_ba, parse_cams } from 'xfina-wasm';
+import init, { parse, detect, formats, version } from "xfina-wasm";
 
-async function parseStatement(file) {
-  // Initialize the WASM module
-  await init();
+await init();
 
-  // Read the file as an ArrayBuffer, then convert to Uint8Array
-  const buffer = await file.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-  
-  // Extract file metadata to improve parsing accuracy
-  const filename = file.name;
-  const modifiedTimestamp = Math.floor(file.lastModified / 1000);
+// Hand over the bytes; the format is worked out from the content.
+const result = parse(fileBytes, {
+  filename: file.name,                 // used as an ordering hint, never as proof
+  password: null,                      // required for encrypted PDFs
+  modifiedTimestamp: 1750000000,       // last-resort statement date
+  as: null,                            // pin a format id to skip detection
+  schema: "xfina",                     // or "rebit"
+});
 
-  try {
-    // Parse the statement!
-    // Args: bytes, password, filename, modifiedTimestamp, format
-    const jsonString = parse_hdfc_ba(bytes, null, filename, modifiedTimestamp, "xfina");
-    
-    // Parse the JSON string into a JS object
-    // The returned object has two fields: `data` and `validation`
-    const result = JSON.parse(jsonString);
-    
-    console.log("Validation status:", result.validation.overall);
-    console.log("Account data:", result.data);
-  } catch (error) {
-    console.error("Failed to parse statement:", error);
+if (result.error) {
+  // Failures arrive in the envelope rather than as a thrown value, so a
+  // caller branches on `kind` instead of matching on message text.
+  if (result.error.kind === "password_required") {
+    promptForPassword(result.error.filename_hint); // e.g. "mf-cams"
   }
+} else {
+  result.format;       // "ba-hdfc"
+  result.category;     // "bank_account"
+  result.institution;  // "HDFC Bank"
+  result.detection;    // how it was identified, plus the file's own metadata
+  result.validation;   // the two-level validation report
+  result.data;         // the account, in the requested schema
 }
 ```
 
-## Available Parsers
+## The four functions
 
-All parsers return a structured JavaScript object representing the `ParseResult<T>` wrapper. It contains a `data` object (which mirrors the ReBIT JSON schema) and a `validation` object (which contains the validation report).
-Each parser accepts an optional `format` parameter which can be `"xfina"` (default, includes our extended data fields) or `"rebit"` (strict AA schema).
+| Function | Purpose |
+|---|---|
+| `parse(bytes, options)` | Identify and parse a statement. Returns the envelope, or `{ error }`. |
+| `detect(bytes, options)` | Identify a statement without parsing it. |
+| `formats()` | Every format this build knows, with `id`, `category`, `institution`, `containers` and `enabled`. Build your UI from this rather than a hardcoded list. |
+| `version()` | The version of the parsers actually running. |
 
-| Category | Institution | Format | JS Function | Input Type |
-|---|---|---|---|---|
-| Bank Account | HDFC | `.xls` | `parse_hdfc_ba(bytes, ...)` | `Uint8Array` |
-| Bank Account | ICICI | `.xls` | `parse_icici_ba(bytes, ...)` | `Uint8Array` |
-| Bank Account | SBI | PDF | `parse_sbi_ba(bytes, ...)` | `Uint8Array` |
-| Bank Account | BOB | `.xls` | `parse_bob_ba(bytes, ...)` | `Uint8Array` |
-| Bank Account | Axis | `.xls` | `parse_axis_ba(bytes, ...)` | `Uint8Array` |
-| Credit Card | HDFC | CSV | `parse_hdfc_cc(bytes, ...)` | `Uint8Array` |
-| Credit Card | ICICI | `.xls` | `parse_icici_cc(bytes, ...)` | `Uint8Array` |
-| Mutual Funds | CAMS | PDF | `parse_cams(bytes, ...)` | `Uint8Array` |
-| Intl Stocks | IBKR | CSV | `parse_ibkr(bytes, ...)` | `Uint8Array` |
+**Error kinds:** `password_required`, `incorrect_password`, `unrecognized_format`,
+`invalid_format`, `parse_error`, `unsupported`, `format_not_enabled`, `io`.
 
-*Note: All WASM functions take the exact same 5 arguments: `(bytes, password, filename, modified_timestamp, format)`. Unused arguments can be passed as `null`.*

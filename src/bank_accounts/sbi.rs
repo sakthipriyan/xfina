@@ -11,15 +11,33 @@ use chrono::{NaiveDate, TimeZone, Utc};
 use regex::Regex;
 use rust_decimal::Decimal;
 
+use crate::decode::Decoded;
 use crate::models::request::ParseRequest;
 
-pub fn parse_sbi_bank_statement<'a>(
-    input: ParseRequest<'a>,
+pub fn parse_sbi_bank_statement(
+    input: ParseRequest<'_>,
 ) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
-    let bytes = input.content;
-    let password = input.password;
+    let decoded = Decoded::new(&input);
+    parse_decoded(&decoded, &input)
+}
+
+/// Parses from an already-decoded input, so detection can probe and
+/// parse against one read of the file.
+pub(crate) fn parse_decoded(
+    decoded: &Decoded<'_>,
+    input: &ParseRequest<'_>,
+) -> Result<ParseResult<DepositAccount>, crate::error::XfinaError> {
     let filename = input.filename;
-    let pages = pdf_parser::extract_spatial_pages(bytes, password)?;
+    let pages = decoded.pdf()?.pages()?;
+
+    // An SBI statement labels its header fields; a PDF carrying none of them is
+    // someone else's document, and reading on would produce an account with no
+    // number, no holder and no transactions.
+    if !has_sbi_header(pages) {
+        return Err(crate::error::XfinaError::InvalidFormat(
+            "Not a State Bank of India statement: no account header found".to_string(),
+        ));
+    }
 
     let mut statement = DepositAccount {
         r#type: FiType::Deposit,
@@ -46,6 +64,7 @@ pub fn parse_sbi_bank_statement<'a>(
     let mut in_address = false;
 
     let mut date_only_paths = Vec::new();
+    let mut filename_generated: Option<chrono::DateTime<Utc>> = None;
 
     if let Some(fname) = filename {
         // e.g. AccountStatement_05072026_211225.pdf
@@ -60,10 +79,11 @@ pub fn parse_sbi_bank_statement<'a>(
             if let Some(d) = NaiveDate::from_ymd_opt(year, month, day) {
                 let dt = d.and_hms_opt(0, 0, 0).unwrap();
                 let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
-                xfina_account.generated_date =
-                    chrono::TimeZone::from_local_datetime(&ist_offset, &dt)
-                        .single()
-                        .map(|dt| dt.with_timezone(&Utc));
+                // Held back rather than assigned: the statement's own printed
+                // date takes precedence, and this is the fallback.
+                filename_generated = chrono::TimeZone::from_local_datetime(&ist_offset, &dt)
+                    .single()
+                    .map(|dt| dt.with_timezone(&Utc));
                 if !date_only_paths.contains(&"xfina.generatedDate".to_string()) {
                     date_only_paths.push("xfina.generatedDate".to_string());
                 }
@@ -118,7 +138,7 @@ pub fn parse_sbi_bank_statement<'a>(
     }
 
     for page in pages {
-        let lines = layout::group_into_lines(&page, 2.0);
+        let lines = layout::group_into_lines(page, 2.0);
 
         // First, group lines into vertical blocks based on a y-gap threshold
         let mut blocks: Vec<Vec<&layout::Line>> = Vec::new();
@@ -488,6 +508,14 @@ pub fn parse_sbi_bank_statement<'a>(
     statement.profile = Some(profile);
     statement.summary = Some(summary);
     statement.transactions = Some(transactions_obj);
+    // The statement's own printed date wins; the filename is the fallback and
+    // is marked as an estimate when it is used.
+    if xfina_account.generated_date.is_none() {
+        if let Some(from_name) = filename_generated {
+            xfina_account.generated_date = Some(from_name);
+            xfina_account.generated_date_derived = Some(true);
+        }
+    }
     if !date_only_paths.is_empty() {
         xfina_account.date_only_paths = Some(date_only_paths);
     }
@@ -629,4 +657,49 @@ pub fn parse_sbi_bank_statement<'a>(
         data: statement,
         validation,
     })
+}
+
+/// Header labels SBI prints on every statement. Two must appear before this
+/// parser will claim a document.
+fn has_sbi_header(pages: &[Vec<pdf_parser::CharItem>]) -> bool {
+    const MARKERS: [&str; 6] = [
+        "Account Number",
+        "Account Name",
+        "IFSC Code",
+        "MICR Code",
+        "Branch Name",
+        "CIF Number",
+    ];
+    let text: String = pages
+        .iter()
+        .take(2)
+        .flat_map(|page| page.iter().map(|c| c.text.as_str()))
+        .collect();
+    MARKERS.iter().filter(|m| text.contains(*m)).count() >= 2
+}
+
+/// SBI's statement header, the same markers the parser itself requires.
+pub(crate) fn probe(dec: &crate::decode::Decoded<'_>) -> crate::detect::Claim {
+    use crate::detect::Claim;
+    let Ok(doc) = dec.pdf() else {
+        return Claim::NO;
+    };
+    let text = doc.page1_text().to_uppercase();
+    let hits = [
+        "ACCOUNT NUMBER",
+        "IFSC CODE",
+        "MICR CODE",
+        "CIF NUMBER",
+        "BRANCH NAME",
+    ]
+    .iter()
+    .filter(|m| text.contains(*m))
+    .count();
+    if hits >= 2 && text.contains("STATE BANK OF INDIA") {
+        return Claim::strong("sbi-statement-header");
+    }
+    if hits >= 3 {
+        return Claim::weak("sbi-header-fields");
+    }
+    Claim::NO
 }
