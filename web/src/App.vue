@@ -306,10 +306,28 @@ const groupedReady = computed(() =>
         .map(category => ({
             category,
             label: CATEGORY_LABELS[category],
-            entries: ready.value.filter(e => e.response?.category === category),
+            entries: ready.value
+                .filter(e => e.response?.category === category)
+                .sort(byPeriod),
         }))
         .filter(group => group.entries.length)
 );
+
+/** A period end as seconds, with a missing one sorting after every real date. */
+const periodSeconds = (ts) =>
+    ts === null || ts === undefined || ts === '' ? Infinity : Number(ts);
+
+/**
+ * Oldest period first, by start and then end, so a year of monthly statements
+ * reads in order however the folder happened to list them. Ties keep the order
+ * the files were dropped in.
+ */
+const byPeriod = (a, b) => {
+    const pa = a.response?.data?.transactions;
+    const pb = b.response?.data?.transactions;
+    return (periodSeconds(pa?.startDate) - periodSeconds(pb?.startDate) || 0)
+        || (periodSeconds(pa?.endDate) - periodSeconds(pb?.endDate) || 0);
+};
 
 /** Everything this build can read, under the same headings. */
 const groupedFormats = computed(() =>
@@ -341,6 +359,14 @@ const accountOf = (entry) => {
 
 const holderOf = (entry) =>
     entry.response?.data?.profile?.holders?.holder?.[0]?.name || '';
+
+/** "<from> – <to>", or whichever end of it the statement has. */
+const periodOf = (entry) => {
+    const txns = entry.response?.data?.transactions;
+    const from = txns?.startDate ? formatDate(txns.startDate) : '';
+    const to = txns?.endDate ? formatDate(txns.endDate) : '';
+    return from && to ? `${from} – ${to}` : from || to;
+};
 
 /**
  * What a locked file looks like, from its name alone.
@@ -972,6 +998,11 @@ const camsGroupedAssets = computed(() => {
                 class="truncate text-xs leading-tight text-muted-foreground"
                 :title="holderOf(entry)"
               >{{ holderOf(entry) }}</span>
+              <span
+                v-if="periodOf(entry)"
+                class="truncate text-xs leading-tight tabular-nums text-muted-foreground"
+                :title="periodOf(entry)"
+              >{{ periodOf(entry) }}</span>
             </button>
           </div>
         </div>
