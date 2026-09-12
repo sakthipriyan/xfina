@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Web:** imported statements are listed oldest first by period, and each card shows its period.
+
 ## [0.5.0] - 2026-09-11
 
 ### Added
