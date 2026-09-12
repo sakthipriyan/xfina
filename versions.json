@@ -1,6 +1,12 @@
 {
   "series": [
     {
+      "minor": "0.6",
+      "latestPatch": "0.6.0",
+      "path": "/0.6/",
+      "commit": "cede840745e39a1dd45f77187be999bed31b3e93"
+    },
+    {
       "minor": "0.5",
       "latestPatch": "0.5.0",
       "path": "/0.5/",
