@@ -7,8 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-12
+
 ### Changed
 
+- **Breaking — HDFC credit cards are read from the Excel export, not the CSV.**
+  Every other spreadsheet statement xfina reads is Excel, and HDFC hands out the
+  same billed statement in either format, so there is now one layout to follow
+  instead of two. A `~|~`-separated CSV is no longer recognised; download the
+  statement again with Format: Excel. Both workbook templates HDFC serves are
+  read: the current one, and the older one earlier statements come in, which
+  has no transaction times, reward points column or AAN. The masked card number
+  is reported as the workbook prints it.
 - **Web:** imported statements are listed oldest first by period, and each card shows its period.
 
 ## [0.5.0] - 2026-09-11

@@ -32,21 +32,19 @@ fn test_hdfc_credit_cards() {
         let entry = entry.expect("Failed to read directory entry");
         let path = entry.path();
 
-        if path.extension().and_then(|e| e.to_str()) == Some("csv") {
+        if path.extension().and_then(|e| e.to_str()) == Some("xls") {
             let file_name = path.file_stem().unwrap().to_str().unwrap();
 
-            // Read CSV content directly
-            let content = match fs::read_to_string(&path) {
-                Ok(text) => text,
+            let content = match fs::read(&path) {
+                Ok(bytes) => bytes,
                 Err(e) => {
-                    println!("Failed to read text from {:?}: {:?}", path, e);
+                    println!("Failed to read {:?}: {:?}", path, e);
                     continue;
                 }
             };
 
             let parsed_result = parse_hdfc_statement(
-                xfina::models::request::ParseRequest::new(content.as_bytes())
-                    .with_filename(Some(file_name)),
+                xfina::models::request::ParseRequest::new(&content).with_filename(Some(file_name)),
             );
 
             if let Ok(parsed_statement) = parsed_result {

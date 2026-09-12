@@ -5,7 +5,8 @@ use crate::models::credit_card::{
 };
 use crate::models::deposit::TransactionType;
 use crate::models::validation::{ParseResult, SummaryCheck, ValidationReport};
-use chrono::{DateTime, NaiveDate, Utc};
+use calamine::Data;
+use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use regex::Regex;
 use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::Decimal;
@@ -21,19 +22,25 @@ pub fn parse_hdfc_statement(
     parse_decoded(&decoded, &input)
 }
 
+/// A row's non-empty cells, each with the column it sits in.
+///
+/// HDFC lays the workbook out in merged cells, so the same row can carry two
+/// tables side by side: the Credit Limit row also holds the past dues figures.
+/// A value's column only means something against the header above it.
+type Cells = Vec<(usize, String)>;
+
 /// Parses from an already-decoded input, so detection can probe and
 /// parse against one read of the file.
 pub(crate) fn parse_decoded(
     decoded: &Decoded<'_>,
     input: &ParseRequest<'_>,
 ) -> Result<ParseResult<CreditCardAccount>, crate::error::XfinaError> {
-    let content = decoded.text()?;
-    // HDFC's card export separates every field with "~|~". Without it this is
-    // some other text file, and parsing on would yield an account with no card
+    let sheet = decoded.sheets()?.first()?;
+    // Some other workbook: parsing on would yield an account with no card
     // number and no transactions rather than an honest refusal.
-    if !content.contains("~|~") {
+    if !probe(decoded).is_match() {
         return Err(crate::error::XfinaError::InvalidFormat(
-            "Not an HDFC credit card statement: no '~|~' field separator".to_string(),
+            "Not an HDFC credit card statement: no HDFC card headings".to_string(),
         ));
     }
 
@@ -80,17 +87,15 @@ pub(crate) fn parse_decoded(
 
     let mut card_no = String::new();
 
-    let lines: Vec<&str> = content
-        .lines()
-        .map(|l| l.trim())
-        .filter(|l| !l.is_empty())
+    let rows: Vec<Cells> = sheet
+        .rows()
+        .map(cells_of)
+        .filter(|r| !r.is_empty())
         .collect();
-    let mut idx = 0;
 
     enum Section {
         Top,
         AccountCcSummary,
-        PastDues,
         CcTransactions,
         RewardCcSummary,
         RewardProgram,
@@ -98,176 +103,214 @@ pub(crate) fn parse_decoded(
     }
     let mut current_section = Section::Top;
 
-    while idx < lines.len() {
-        let line = lines[idx];
-        if line == "Account Summary" {
-            current_section = Section::AccountCcSummary;
-            idx += 1;
-            continue;
-        } else if line.starts_with("Past Dues") {
-            current_section = Section::PastDues;
-            idx += 1;
-            continue;
-        } else if line == "Domestic / International Transactions" {
-            current_section = Section::CcTransactions;
-            idx += 1;
-            continue;
-        } else if line == "Reward Points Summary" {
-            current_section = Section::RewardCcSummary;
-            idx += 1;
-            continue;
-        } else if line == "Rewards Program Points Summary" {
-            current_section = Section::RewardProgram;
-            idx += 1;
-            continue;
-        } else if line.starts_with("State account branch GSTN") {
-            current_section = Section::None;
-        } else if line.starts_with("Card No:") {
-            card_no = line.replace("Card No:", "").trim().to_string();
-            stmt.masked_acc_number = card_no.clone();
-            idx += 1;
-            continue;
-        } else if line.starts_with("AAN:") {
-            xfina_account.aan = Some(line.replace("AAN:", "").trim().to_string());
-            idx += 1;
-            continue;
+    // The column the header block's values sit in, learned from the Name row.
+    let mut value_col: Option<usize> = None;
+    let mut txn_cols: Option<TxnColumns> = None;
+
+    for (idx, row) in rows.iter().enumerate() {
+        // Section headings lead their row; which column that is differs
+        // between templates.
+        let first = row[0].1.as_str();
+        match first {
+            // The table's own header row opens it: some downloads print a
+            // "Domestic/ International Transactions" heading above it, and
+            // others go straight from the account summary to this row.
+            "Transaction type" => {
+                current_section = Section::CcTransactions;
+                txn_cols = TxnColumns::from_header(row);
+                continue;
+            }
+            "Account Summary" => {
+                current_section = Section::AccountCcSummary;
+                continue;
+            }
+            "Reward Points Summary" => {
+                current_section = Section::RewardCcSummary;
+                continue;
+            }
+            "Rewards Program Points Summary" => {
+                current_section = Section::RewardProgram;
+                continue;
+            }
+            "Cashback Summary" | "GST Summary" => {
+                current_section = Section::None;
+                continue;
+            }
+            _ if first.starts_with("State account branch GSTN") => {
+                current_section = Section::None;
+            }
+            _ => {}
         }
 
-        let parts: Vec<&str> = line.split("~|~").map(|p| p.trim()).collect();
         match current_section {
             Section::Top => {
-                if parts.len() >= 2 {
-                    let key = parts[0];
-                    let val = parts[1];
-                    match key {
-                        "Name" => holder.name = val.to_string(),
-                        "Address" => address_parts.push(val.to_string()),
-                        "Payment Due Date" => summary.due_date = parse_date(val),
-                        "Statement Date" => {
-                            let d = parse_date(val);
-                            summary.last_statement_date = d;
-                            if let Some(date) = d {
-                                let dt = date.and_hms_opt(0, 0, 0).unwrap();
-                                let ist_offset =
-                                    chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
-                                xfina_account.generated_date =
-                                    chrono::TimeZone::from_local_datetime(&ist_offset, &dt)
-                                        .single()
-                                        .map(|dt| dt.with_timezone(&Utc));
-                                // The statement printed its own date, so this
-                                // is no longer an estimate.
-                                xfina_account.generated_date_derived = None;
-                                if !date_only_paths.contains(&"xfina.generatedDate".to_string()) {
-                                    date_only_paths.push("xfina.generatedDate".to_string());
-                                }
+                // The right-hand side of the header block: card number and AAN
+                // as "Label: value" in a single cell, and the past dues table.
+                // Older templates label the card "Card No" and print no AAN.
+                for (_, text) in row {
+                    if let Some(v) =
+                        labelled(text, "Credit Card No.").or_else(|| labelled(text, "Card No"))
+                    {
+                        card_no = v.to_string();
+                        stmt.masked_acc_number = card_no.clone();
+                    } else if let Some(v) = labelled(text, "Alternate Account Number") {
+                        xfina_account.aan = Some(v.to_string());
+                    }
+                }
+                if let Some(&(overlimit_col, _)) = row.iter().find(|(_, t)| t == "Overlimit") {
+                    // The figures are in the next row reaching this column;
+                    // older templates put an Address row in between.
+                    if let Some(values) = rows[idx + 1..]
+                        .iter()
+                        .find(|r| r.iter().any(|(c, _)| *c == overlimit_col))
+                    {
+                        let due = |label: &str| {
+                            row.iter()
+                                .find(|(c, t)| *c >= overlimit_col && t.starts_with(label))
+                                .and_then(|(c, _)| parse_decimal(at(values, *c)))
+                        };
+                        xfina_summary.past_dues = Some(PastDues {
+                            overlimit: due("Overlimit").unwrap_or_default(),
+                            three_months: due("3 Months").unwrap_or_default(),
+                            two_months: due("2 Months").unwrap_or_default(),
+                            one_month: due("1 Month").unwrap_or_default(),
+                        });
+                        summary.current_due = due("Current Dues");
+                    }
+                }
+
+                if first == "Name" && value_col.is_none() {
+                    value_col = row.get(1).map(|(c, _)| *c);
+                }
+                let val = value_col.map(|c| at(row, c)).unwrap_or("");
+                // Label case varies between templates: "Credit limit" in
+                // older ones, "Credit Limit" in newer.
+                match first.to_ascii_lowercase().as_str() {
+                    "name" => holder.name = val.to_string(),
+                    "address" if !val.is_empty() => address_parts.push(val.to_string()),
+                    "payment due date" => summary.due_date = parse_date(val),
+                    "statement date" => {
+                        let d = parse_date(val);
+                        summary.last_statement_date = d;
+                        if let Some(date) = d {
+                            let dt = date.and_hms_opt(0, 0, 0).unwrap();
+                            let ist_offset =
+                                chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
+                            xfina_account.generated_date =
+                                chrono::TimeZone::from_local_datetime(&ist_offset, &dt)
+                                    .single()
+                                    .map(|dt| dt.with_timezone(&Utc));
+                            // The statement printed its own date, so this
+                            // is no longer an estimate.
+                            xfina_account.generated_date_derived = None;
+                            if !date_only_paths.contains(&"xfina.generatedDate".to_string()) {
+                                date_only_paths.push("xfina.generatedDate".to_string());
                             }
                         }
-                        "Total Amount Due" => summary.total_due_amount = parse_decimal(val),
-                        "Minimum Amount Due" => summary.min_due_amount = parse_decimal(val),
-                        "Credit Limit" => summary.credit_limit = parse_decimal(val),
-                        "Available Limit" => summary.available_credit = parse_decimal(val),
-                        "Available Cash limit" => summary.cash_limit = parse_decimal(val),
-                        _ => {}
                     }
+                    "total amount due" => summary.total_due_amount = parse_decimal(val),
+                    "minimum amount due" => summary.min_due_amount = parse_decimal(val),
+                    "credit limit" => summary.credit_limit = parse_decimal(val),
+                    "available limit" => summary.available_credit = parse_decimal(val),
+                    "available cash limit" => summary.cash_limit = parse_decimal(val),
+                    _ => {}
                 }
             }
             Section::AccountCcSummary => {
-                if parts[0] == "Opening Bal" && idx + 1 < lines.len() {
-                    let val_parts: Vec<&str> =
-                        lines[idx + 1].split("~|~").map(|p| p.trim()).collect();
-                    if val_parts.len() >= 9 {
-                        xfina_summary.opening_balance = parse_decimal(val_parts[0]);
-                        xfina_summary.payment_credit = parse_decimal(val_parts[2]);
-                        xfina_summary.purchases_debits = parse_decimal(val_parts[4]);
-                        summary.finance_charges = parse_decimal(val_parts[6]);
+                // Headings interleave "-", "+" and "=" between the figures;
+                // the row beneath carries only the figures, in heading order.
+                // ["12,345.67", "2,345.67", "3,456.78", "0.00", "13,456.78"]
+                if first == "Opening Bal" {
+                    if let Some(values) = rows.get(idx + 1) {
+                        if values.len() >= 5 {
+                            xfina_summary.opening_balance = parse_decimal(&values[0].1);
+                            xfina_summary.payment_credit = parse_decimal(&values[1].1);
+                            xfina_summary.purchases_debits = parse_decimal(&values[2].1);
+                            summary.finance_charges = parse_decimal(&values[3].1);
+                        }
                     }
-                    idx += 1;
-                }
-            }
-            Section::PastDues => {
-                if parts[0] == "Overlimit" && idx + 1 < lines.len() {
-                    let val_parts: Vec<&str> =
-                        lines[idx + 1].split("~|~").map(|p| p.trim()).collect();
-                    if val_parts.len() >= 6 {
-                        xfina_summary.past_dues = Some(PastDues {
-                            overlimit: parse_decimal(val_parts[0]).unwrap_or_default(),
-                            three_months: parse_decimal(val_parts[1]).unwrap_or_default(),
-                            two_months: parse_decimal(val_parts[2]).unwrap_or_default(),
-                            one_month: parse_decimal(val_parts[3]).unwrap_or_default(),
-                        });
-                        summary.current_due = parse_decimal(val_parts[4]);
-                    }
-                    idx += 1;
                 }
             }
             Section::CcTransactions => {
-                if parts.len() >= 5 && parts[0] != "Transaction type" {
-                    let owner = parts.get(1).unwrap_or(&"").trim().to_string();
-                    let txn_dt = parse_datetime(parts.get(2).unwrap_or(&""));
-                    let txn_date_naive = txn_dt.map(|dt| dt.with_timezone(&Utc).date_naive());
-                    let desc = parts.get(3).unwrap_or(&"").to_string();
-                    let amount = parse_decimal(parts.get(4).unwrap_or(&""))
-                        .unwrap_or_default()
-                        .abs();
-                    let ty = parts.get(5).unwrap_or(&"");
-                    let txn_type = if *ty == "Cr" {
-                        TransactionType::Credit
-                    } else {
-                        TransactionType::Debit
-                    };
-                    let rp_str = parts.get(6).unwrap_or(&"").replace("+", "");
-                    let reward_points = rp_str.trim().parse::<i32>().ok();
+                let Some(cols) = &txn_cols else { continue };
+                let Some(amount) = parse_decimal(at(row, cols.amount)) else {
+                    continue;
+                };
+                let amount = amount.abs();
+                // Add-on holders carry their CKYC ID after the name:
+                // "<ADDON HOLDER>       [CKYC ID : 00000000000000 ]"
+                let owner = at(row, cols.owner)
+                    .split('[')
+                    .next()
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
+                let txn_dt = parse_datetime(at(row, cols.date));
+                let txn_date_naive = txn_dt.map(|dt| dt.with_timezone(&Utc).date_naive());
+                let desc = at(row, cols.description).to_string();
+                let ty = cols.debit_credit.map(|c| at(row, c)).unwrap_or("");
+                let txn_type = if ty == "Cr" {
+                    TransactionType::Credit
+                } else {
+                    TransactionType::Debit
+                };
+                let rp_str = cols
+                    .rewards
+                    .map(|c| at(row, c))
+                    .unwrap_or("")
+                    .replace("+", "");
+                let reward_points = rp_str.trim().parse::<i32>().ok();
 
-                    let mut tx_xfina = CcXfinaTransaction {
-                        owner: Some(owner),
-                        ..Default::default()
-                    };
-                    tx_xfina.reward_points = reward_points;
+                let mut tx_xfina = CcXfinaTransaction {
+                    owner: Some(owner),
+                    ..Default::default()
+                };
+                tx_xfina.reward_points = reward_points;
 
-                    transactions_list.push(CcTransaction {
-                        txn_date: txn_dt,
-                        value_date: txn_date_naive,
-                        narration: desc,
-                        amount,
-                        txn_type,
-                        txn_id: None,
-                        statement_date: None,
-                        mcc: None,
-                        masked_card_number: None,
-                        xfina: Some(tx_xfina),
+                transactions_list.push(CcTransaction {
+                    txn_date: txn_dt,
+                    value_date: txn_date_naive,
+                    narration: desc,
+                    amount,
+                    txn_type,
+                    txn_id: None,
+                    statement_date: None,
+                    mcc: None,
+                    masked_card_number: None,
+                    xfina: Some(tx_xfina),
+                });
+            }
+            Section::RewardCcSummary => {
+                // The headings wrap over two rows and do not line up with the
+                // figures, so the figures are read in order from the one row
+                // that is entirely numbers.
+                let values: Vec<i32> = row.iter().filter_map(|(_, t)| parse_i32(t)).collect();
+                if values.len() == row.len()
+                    && values.len() >= 5
+                    && xfina_summary.reward_points_summary.is_none()
+                {
+                    xfina_summary.reward_points_summary = Some(RewardPointsSummary {
+                        opening_balance: values[0],
+                        earned: values[1],
+                        disbursed: values[2],
+                        adjusted_lapsed: values[3],
+                        closing_balance: values[4],
+                        expiring_in_30_days: values.get(5).copied(),
+                        expiring_in_60_days: values.get(6).copied(),
+                        default_rewards: 0,
                     });
                 }
             }
-            Section::RewardCcSummary => {
-                if parts[0] == "Opening Balance" && idx + 1 < lines.len() {
-                    let val_parts: Vec<&str> =
-                        lines[idx + 1].split("~|~").map(|p| p.trim()).collect();
-                    if val_parts.len() >= 5 {
-                        xfina_summary.reward_points_summary = Some(RewardPointsSummary {
-                            opening_balance: parse_i32(val_parts[0]).unwrap_or(0),
-                            earned: parse_i32(val_parts[1]).unwrap_or(0),
-                            disbursed: parse_i32(val_parts[2]).unwrap_or(0),
-                            adjusted_lapsed: parse_i32(val_parts[3]).unwrap_or(0),
-                            closing_balance: parse_i32(val_parts[4]).unwrap_or(0),
-                            expiring_in_30_days: val_parts.get(5).and_then(|v| parse_i32(v)),
-                            expiring_in_60_days: val_parts.get(6).and_then(|v| parse_i32(v)),
-                            default_rewards: 0,
-                        });
-                    }
-                    idx += 1;
-                }
-            }
             Section::RewardProgram => {
-                if parts.len() >= 2 && parts[0] != "Programs" {
+                if row.len() >= 2 && first != "Programs" && first != "Total" {
                     xfina_summary.reward_programs.push(RewardProgram {
-                        program: parts[0].to_string(),
-                        bonus_points: parse_i32(parts[1]).unwrap_or(0),
+                        program: first.to_string(),
+                        bonus_points: parse_i32(&row[1].1).unwrap_or(0),
                     });
                 }
             }
             Section::None => {}
         }
-        idx += 1;
     }
 
     if !address_parts.is_empty() {
@@ -503,6 +546,63 @@ pub(crate) fn parse_decoded(
     })
 }
 
+/// Where each field sits in the transaction table, read from its header row:
+/// ["Transaction type", "Primary / Addon Customer Name", "Date & Time",
+///  "Description", "REWARDS", "AMT", "Debit / Credit"]
+/// Older templates head the date column "DATE" and have no REWARDS column.
+struct TxnColumns {
+    owner: usize,
+    date: usize,
+    description: usize,
+    amount: usize,
+    rewards: Option<usize>,
+    debit_credit: Option<usize>,
+}
+
+impl TxnColumns {
+    fn from_header(header: &Cells) -> Option<Self> {
+        let col = |label: &str| {
+            header
+                .iter()
+                .find(|(_, t)| t.to_ascii_lowercase().starts_with(label))
+                .map(|(c, _)| *c)
+        };
+        Some(TxnColumns {
+            owner: col("primary / addon")?,
+            date: col("date")?,
+            description: col("description")?,
+            amount: col("amt")?,
+            rewards: col("rewards"),
+            debit_credit: col("debit"),
+        })
+    }
+}
+
+fn cells_of(row: &[Data]) -> Cells {
+    row.iter()
+        .enumerate()
+        .map(|(col, c)| (col, c.to_string().replace('\u{0}', "").trim().to_string()))
+        .filter(|(_, text)| !text.is_empty())
+        .collect()
+}
+
+/// The text in column `col`, or "" when that cell is empty.
+fn at(cells: &Cells, col: usize) -> &str {
+    cells
+        .iter()
+        .find(|(c, _)| *c == col)
+        .map(|(_, text)| text.as_str())
+        .unwrap_or("")
+}
+
+/// The value of a "Label: value" cell, if it carries this label.
+fn labelled<'a>(text: &'a str, label: &str) -> Option<&'a str> {
+    text.strip_prefix(label)?
+        .trim_start()
+        .strip_prefix(':')
+        .map(str::trim)
+}
+
 fn parse_decimal(val: &str) -> Option<Decimal> {
     let clean = val.replace(",", "");
     clean.parse::<Decimal>().ok()
@@ -513,36 +613,45 @@ fn parse_i32(val: &str) -> Option<i32> {
     clean.parse::<i32>().ok()
 }
 
+/// Header dates: "dd Mon, yyyy", or "dd/mm/yyyy" in older templates.
 fn parse_date(val: &str) -> Option<NaiveDate> {
-    let iso = crate::models::parse_indian_date(val);
-    let s = iso.split('T').next().unwrap_or(&iso);
-    NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()
+    let val = val.trim();
+    NaiveDate::parse_from_str(val, "%d %b, %Y")
+        .or_else(|_| NaiveDate::parse_from_str(val, "%d/%m/%Y"))
+        .ok()
 }
 
+/// Transaction times, in IST: "dd/mm/yyyy / hh:mm". Older templates print
+/// the date alone.
 fn parse_datetime(val: &str) -> Option<DateTime<Utc>> {
-    let iso = crate::models::parse_indian_date(val);
     let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
-    // Try parsing with time first
-    if let Ok(ndt) = chrono::NaiveDateTime::parse_from_str(&iso, "%Y-%m-%dT%H:%M:%S") {
-        return chrono::TimeZone::from_local_datetime(&ist_offset, &ndt)
-            .single()
-            .map(|dt| dt.with_timezone(&Utc));
-    }
-    // Fall back to date-only → midnight IST
-    let s = iso.split('T').next().unwrap_or(&iso);
-    NaiveDate::parse_from_str(s, "%Y-%m-%d").ok().and_then(|d| {
-        let ndt = d.and_hms_opt(0, 0, 0).unwrap();
-        chrono::TimeZone::from_local_datetime(&ist_offset, &ndt)
-            .single()
-            .map(|dt| dt.with_timezone(&Utc))
-    })
+    let val = val.trim();
+    let ndt = NaiveDateTime::parse_from_str(val, "%d/%m/%Y / %H:%M")
+        .ok()
+        // Fall back to date-only → midnight IST
+        .or_else(|| {
+            NaiveDate::parse_from_str(val, "%d/%m/%Y")
+                .ok()
+                .map(|d| d.and_hms_opt(0, 0, 0).unwrap())
+        })?;
+    chrono::TimeZone::from_local_datetime(&ist_offset, &ndt)
+        .single()
+        .map(|dt| dt.with_timezone(&Utc))
 }
 
-/// HDFC's card export separates every field with "~|~"; nothing else does.
+/// HDFC heads its transaction table with a primary / add-on holder column, and
+/// prints an alternate account number beside the card number.
 pub(crate) fn probe(dec: &crate::decode::Decoded<'_>) -> crate::detect::Claim {
-    use crate::detect::Claim;
-    if dec.probe_text().contains("~|~") {
-        return Claim::strong("hdfc-card-separator");
+    use crate::detect::{probe::any_marker, Claim};
+    let Ok(sheets) = dec.sheets() else {
+        return Claim::NO;
+    };
+    let head = sheets.head_text(60);
+    if any_marker(&head, &["PRIMARY / ADDON CUSTOMER NAME"]) {
+        return Claim::strong("hdfc-card-columns");
+    }
+    if any_marker(&head, &["ALTERNATE ACCOUNT NUMBER:"]) {
+        return Claim::weak("hdfc-card-aan");
     }
     Claim::NO
 }
