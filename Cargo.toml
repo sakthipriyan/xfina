@@ -20,7 +20,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/sakthipriyan/xfina"
@@ -85,7 +85,7 @@ ba-bob = ["_spreadsheet", "regex"]
 ba-axis = ["_spreadsheet", "regex"]
 
 # Credit Cards
-cc-hdfc = ["regex", "num-traits"]
+cc-hdfc = ["_spreadsheet", "regex", "num-traits"]
 cc-icici = ["_spreadsheet", "regex", "num-traits"]
 cc-axis = ["_spreadsheet", "regex", "num-traits"]
 

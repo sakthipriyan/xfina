@@ -167,7 +167,7 @@ fn every_statement_is_recognised_and_nothing_else_is() {
 fn supported_extension(f: Format) -> &'static [&'static str] {
     match f {
         Format::BankSbi | Format::MutualFundsCams => &["pdf"],
-        Format::CardHdfc | Format::EquityIbkr => &["csv"],
+        Format::EquityIbkr => &["csv"],
         Format::CardAxis => &["xlsx"],
         _ => &["xls", "xlsx"],
     }
