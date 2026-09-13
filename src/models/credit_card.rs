@@ -96,6 +96,12 @@ pub struct RewardPointsSummary {
     pub expiring_in_30_days: Option<i32>,
     pub expiring_in_60_days: Option<i32>,
     pub default_rewards: i32,
+    /// Earned that neither the transactions nor the bonus programs account
+    /// for: `earned - default_rewards - bonus points`. The statement does not
+    /// say what it is; a balance carried over from a replaced card is one case.
+    /// Absent when the statement prints no per-transaction points to compute it from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub earned_unaccounted: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

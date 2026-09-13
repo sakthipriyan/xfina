@@ -254,12 +254,7 @@ pub(crate) fn parse_decoded(
                 } else {
                     TransactionType::Debit
                 };
-                let rp_str = cols
-                    .rewards
-                    .map(|c| at(row, c))
-                    .unwrap_or("")
-                    .replace("+", "");
-                let reward_points = rp_str.trim().parse::<i32>().ok();
+                let reward_points = cols.rewards.and_then(|c| parse_reward_points(at(row, c)));
 
                 let mut tx_xfina = CcXfinaTransaction {
                     owner: Some(owner),
@@ -297,7 +292,9 @@ pub(crate) fn parse_decoded(
                         closing_balance: values[4],
                         expiring_in_30_days: values.get(5).copied(),
                         expiring_in_60_days: values.get(6).copied(),
+                        // Filled in once every transaction has been read.
                         default_rewards: 0,
+                        earned_unaccounted: None,
                     });
                 }
             }
@@ -335,13 +332,16 @@ pub(crate) fn parse_decoded(
     });
 
     // Compute aggregations
+    //
+    // Only earned points count: HDFC books a reversal under Adjusted/Lapsed,
+    // not against Earned, so netting it in here would stop Earned reconciling.
     let mut default_rewards = 0;
     let mut owner_credit_breakdown = HashMap::new();
     let mut owner_debit_breakdown = HashMap::new();
 
     for txn in &transactions_list {
         if let Some(ref xfina) = txn.xfina {
-            if let Some(pts) = xfina.reward_points {
+            if let Some(pts) = xfina.reward_points.filter(|p| *p > 0) {
                 default_rewards += pts;
             }
             let owner = if let Some(o) = &xfina.owner {
@@ -365,8 +365,20 @@ pub(crate) fn parse_decoded(
         }
     }
 
+    // Only the current template prints points per transaction. Without them
+    // there is nothing to account for Earned with, and a
+    // residual of the whole figure would claim a gap that is not there.
+    let has_rewards_column = txn_cols.as_ref().is_some_and(|c| c.rewards.is_some());
+    let bonus_points: i32 = xfina_summary
+        .reward_programs
+        .iter()
+        .map(|p| p.bonus_points)
+        .sum();
     if let Some(ref mut rs) = xfina_summary.reward_points_summary {
         rs.default_rewards = default_rewards;
+        if has_rewards_column {
+            rs.earned_unaccounted = Some(rs.earned - default_rewards - bonus_points);
+        }
     }
     xfina_summary.owner_credit_breakdown = owner_credit_breakdown;
     xfina_summary.owner_debit_breakdown = owner_debit_breakdown;
@@ -537,6 +549,36 @@ pub(crate) fn parse_decoded(
         }
     }
 
+    if let Some(rs) = stmt
+        .summary
+        .as_ref()
+        .and_then(|s| s.xfina.as_ref())
+        .and_then(|x| x.reward_points_summary.as_ref())
+    {
+        // 6. reward_points_closing_match: closing == opening + earned - disbursed - adjusted/lapsed
+        validation.summary_level.checks.push(SummaryCheck::declared(
+            "reward_points_closing_match",
+            Decimal::from(rs.closing_balance),
+            Decimal::from(rs.opening_balance + rs.earned - rs.disbursed - rs.adjusted_lapsed),
+            None,
+        ));
+
+        // 7. reward_points_earned_match: earned == transaction points + bonus points
+        //
+        // Derived rather than declared: a statement can credit points it does
+        // not itemise -- a balance carried over from a replaced card -- and
+        // still reconcile, so a gap is a warning. It is still raised, because
+        // points the parser failed to read would land in the same gap.
+        if let Some(unaccounted) = rs.earned_unaccounted {
+            validation.summary_level.checks.push(SummaryCheck::derived(
+                "reward_points_earned_match",
+                Decimal::from(rs.earned),
+                Decimal::from(rs.earned - unaccounted),
+                None,
+            ));
+        }
+    }
+
     validation.summary_level.passed = validation.summary_level.checks.iter().all(|c| c.passed);
     validation.finalize();
 
@@ -613,6 +655,18 @@ fn parse_i32(val: &str) -> Option<i32> {
     clean.parse::<i32>().ok()
 }
 
+/// A transaction's reward points: "+ 12" earned, "- 12" reversed.
+///
+/// HDFC sets the sign apart from the digits, so it has to be closed up before
+/// parsing; left in, "- 12" does not parse and the reversal silently vanishes.
+fn parse_reward_points(val: &str) -> Option<i32> {
+    let compact: String = val
+        .chars()
+        .filter(|c| !c.is_whitespace() && *c != '+' && *c != ',')
+        .collect();
+    compact.parse().ok()
+}
+
 /// Header dates: "dd Mon, yyyy", or "dd/mm/yyyy" in older templates.
 fn parse_date(val: &str) -> Option<NaiveDate> {
     let val = val.trim();
@@ -654,4 +708,28 @@ pub(crate) fn probe(dec: &crate::decode::Decoded<'_>) -> crate::detect::Claim {
         return Claim::weak("hdfc-card-aan");
     }
     Claim::NO
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_reward_points;
+
+    #[test]
+    fn a_reversal_keeps_its_sign() {
+        assert_eq!(parse_reward_points("- 12"), Some(-12));
+        assert_eq!(parse_reward_points("-12"), Some(-12));
+    }
+
+    #[test]
+    fn earned_points_parse_with_or_without_a_plus() {
+        assert_eq!(parse_reward_points("+ 12"), Some(12));
+        assert_eq!(parse_reward_points("12"), Some(12));
+        assert_eq!(parse_reward_points("+ 1,234"), Some(1234));
+    }
+
+    #[test]
+    fn an_empty_cell_has_no_points() {
+        assert_eq!(parse_reward_points(""), None);
+        assert_eq!(parse_reward_points("   "), None);
+    }
 }

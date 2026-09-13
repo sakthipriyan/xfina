@@ -488,6 +488,13 @@ const hasRewards = (stmt) => {
            s.defaultRewards !== 0;
 };
 
+/** Reward points taken back by reversed transactions, as a positive count. */
+const reversedPoints = (stmt) =>
+    (stmt?.transactions?.transaction || [])
+        .map(t => t.xfina?.rewardPoints)
+        .filter(p => p < 0)
+        .reduce((sum, p) => sum - p, 0);
+
 const getAssetTransactions = (holding) => {
     if (!equityStatement.value?.transactions?.transaction) return [];
     const txns = equityStatement.value.transactions.transaction.filter(txn => 
@@ -1041,9 +1048,12 @@ const camsGroupedAssets = computed(() => {
                   <TooltipTrigger class="cursor-help flex items-center gap-1.5 font-semibold text-sm w-fit"
                        :class="{
                          'text-emerald-500': validationReport.summary_level?.passed,
-                         'text-destructive': !validationReport.summary_level?.passed
+                         'text-amber-500': !validationReport.summary_level?.passed && validationReport.summary_level?.declared?.passed,
+                         'text-destructive': !validationReport.summary_level?.declared?.passed
                        }">
                     <CheckCircle2 v-if="validationReport.summary_level?.passed" class="w-4 h-4" />
+                    <!-- Only derived checks failed: a warning, not a failure. -->
+                    <AlertTriangle v-else-if="validationReport.summary_level?.declared?.passed" class="w-4 h-4" />
                     <XCircle v-else class="w-4 h-4" />
                     <span>Summary</span>
                   </TooltipTrigger>
@@ -1220,7 +1230,7 @@ const camsGroupedAssets = computed(() => {
                 
                 <div class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Earned</span><span class="font-medium font-mono text-emerald-500">+{{ formatNumber(ccStatement.summary.xfina.rewardPointsSummary.earned) }}</span></div>
                 
-                <div v-if="ccStatement.summary.xfina.rewardPrograms && ccStatement.summary.xfina.rewardPrograms.length > 0" class="pl-4 border-l-2 border-muted space-y-1 my-1">
+                <div v-if="(ccStatement.summary.xfina.rewardPrograms && ccStatement.summary.xfina.rewardPrograms.length > 0) || ccStatement.summary.xfina.rewardPointsSummary.earnedUnaccounted" class="pl-4 border-l-2 border-muted space-y-1 my-1">
                   <div class="flex justify-between items-center">
                     <span class="text-sm text-muted-foreground truncate mr-2">Rewards</span>
                     <span class="font-medium font-mono text-sm text-emerald-500">+{{ formatNumber(ccStatement.summary.xfina.rewardPointsSummary.defaultRewards) }}</span>
@@ -1229,10 +1239,23 @@ const camsGroupedAssets = computed(() => {
                     <span class="text-sm text-muted-foreground truncate mr-2" :title="prog.program">{{ prog.program }}</span>
                     <span class="font-medium font-mono text-sm text-emerald-500">+{{ formatNumber(prog.bonusPoints) }}</span>
                   </div>
+                  <!-- What the statement credits without itemising it, e.g. a
+                       balance carried over from a replaced card. -->
+                  <div v-if="ccStatement.summary.xfina.rewardPointsSummary.earnedUnaccounted" class="flex justify-between items-center" title="Earned that the transactions and bonus programs do not account for">
+                    <span class="text-sm text-muted-foreground truncate mr-2">Unaccounted<span class="ml-1 text-[10px] font-semibold text-muted-foreground/70 bg-muted/40 rounded px-1 py-0.5 align-middle">derived</span></span>
+                    <span class="font-medium font-mono text-sm text-amber-500">{{ ccStatement.summary.xfina.rewardPointsSummary.earnedUnaccounted > 0 ? '+' : '' }}{{ formatNumber(ccStatement.summary.xfina.rewardPointsSummary.earnedUnaccounted) }}</span>
+                  </div>
                 </div>
 
-                <div v-if="ccStatement.summary.xfina.rewardPointsSummary.disbursed > 0" class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Disbursed</span><span class="font-medium font-mono text-rose-500">-{{ formatNumber(ccStatement.summary.xfina.rewardPointsSummary.disbursed) }}</span></div>
+                <div v-if="ccStatement.summary.xfina.rewardPointsSummary.disbursed > 0" class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Disbursed</span><span class="font-medium font-mono text-foreground">{{ formatNumber(ccStatement.summary.xfina.rewardPointsSummary.disbursed) }}</span></div>
                 <div v-if="ccStatement.summary.xfina.rewardPointsSummary.adjustedLapsed > 0" class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Adjusted / Lapsed</span><span class="font-medium font-mono text-foreground">{{ formatNumber(ccStatement.summary.xfina.rewardPointsSummary.adjustedLapsed) }}</span></div>
+                <!-- The transaction reversals Adjusted / Lapsed includes. -->
+                <div v-if="ccStatement.summary.xfina.rewardPointsSummary.adjustedLapsed > 0 && reversedPoints(ccStatement)" class="pl-4 border-l-2 border-muted space-y-1 my-1">
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-muted-foreground truncate mr-2">Reversals</span>
+                    <span class="font-medium font-mono text-sm text-foreground">{{ formatNumber(reversedPoints(ccStatement)) }}</span>
+                  </div>
+                </div>
                 
                 <div v-if="ccStatement.summary.xfina.rewardPointsSummary.openingBalance !== 0 || ccStatement.summary.xfina.rewardPointsSummary.closingBalance !== 0" class="flex justify-between items-center mt-2 border-t pt-2"><span class="text-sm font-medium">Closing Balance</span><span class="font-bold font-mono text-lg text-primary">{{ formatNumber(ccStatement.summary.xfina.rewardPointsSummary.closingBalance) }}</span></div>
                 <div v-if="ccStatement.summary.xfina.rewardPointsSummary.expiringIn30Days" class="flex justify-between items-center text-rose-500"><span class="text-xs">Expiring (30d)</span><span class="font-medium font-mono text-xs">{{ formatNumber(ccStatement.summary.xfina.rewardPointsSummary.expiringIn30Days) }}</span></div>
