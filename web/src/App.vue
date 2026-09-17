@@ -399,6 +399,13 @@ const describeError = (err) => {
     }
 };
 
+// A statement that prints no totals runs no summary checks, and must not look
+// as though it passed them.
+const summaryChecksRun = computed(() => {
+    const summary = validationReport.value?.summary_level;
+    return (summary?.declared?.checks?.length || 0) + (summary?.derived?.checks?.length || 0) > 0;
+});
+
 const validationMetrics = (report) => {
     if (!report || report.overall === 'passed') return null;
     const metrics = {};
@@ -1047,11 +1054,14 @@ const camsGroupedAssets = computed(() => {
                 <Tooltip>
                   <TooltipTrigger class="cursor-help flex items-center gap-1.5 font-semibold text-sm w-fit"
                        :class="{
-                         'text-emerald-500': validationReport.summary_level?.passed,
-                         'text-amber-500': !validationReport.summary_level?.passed && validationReport.summary_level?.declared?.passed,
-                         'text-destructive': !validationReport.summary_level?.declared?.passed
+                         'text-muted-foreground': !summaryChecksRun,
+                         'text-emerald-500': summaryChecksRun && validationReport.summary_level?.passed,
+                         'text-amber-500': summaryChecksRun && !validationReport.summary_level?.passed && validationReport.summary_level?.declared?.passed,
+                         'text-destructive': summaryChecksRun && !validationReport.summary_level?.declared?.passed
                        }">
-                    <CheckCircle2 v-if="validationReport.summary_level?.passed" class="w-4 h-4" />
+                    <!-- Nothing to reconcile against is not a pass. -->
+                    <MinusCircle v-if="!summaryChecksRun" class="w-4 h-4 opacity-70" />
+                    <CheckCircle2 v-else-if="validationReport.summary_level?.passed" class="w-4 h-4" />
                     <!-- Only derived checks failed: a warning, not a failure. -->
                     <AlertTriangle v-else-if="validationReport.summary_level?.declared?.passed" class="w-4 h-4" />
                     <XCircle v-else class="w-4 h-4" />
@@ -1067,8 +1077,9 @@ const camsGroupedAssets = computed(() => {
                         <div class="font-semibold text-foreground mb-0.5">Derived Validations</div>
                         <div class="text-muted-foreground">{{ validationReport.summary_level.derived.checks.filter(c => c.passed).length }} / {{ validationReport.summary_level.derived.checks.length }} checks passed</div>
                       </div>
-                      <div v-if="!validationReport.summary_level?.declared?.checks?.length && !validationReport.summary_level?.derived?.checks?.length" class="text-muted-foreground">
-                        No summary checks available.
+                      <div v-if="!summaryChecksRun">
+                        <div class="font-semibold text-foreground mb-0.5">Statement Summary</div>
+                        <div class="text-muted-foreground">Totals not printed (nothing to reconcile)</div>
                       </div>
                     </div>
                   </TooltipContent>

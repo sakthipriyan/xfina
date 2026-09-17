@@ -268,7 +268,7 @@ formats! {
         locked: false,
         download_url: "https://www.icici.bank.in/",
         download_path: "Cards \u{2192} Credit Card \u{2192} Select Card \u{2192} Statements \u{2192} Select Past, XLS \u{2192} Download",
-        containers: [Zip, Ole2],
+        containers: [Zip, Ole2, Text],
         priority: 21,
         parse: crate::credit_cards::icici::parse_decoded,
         probe: crate::credit_cards::icici::probe,

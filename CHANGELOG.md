@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-18
+
+### Added
+
+- **ICICI credit cards:** the older monthly CSV export (`"Date","Sr.No.","Transaction Details",...`) is read alongside the workbook. It prints only the card holder, card number and transactions, so the statement period is derived from the transaction dates, the reference number becomes `txnId`, and there are no declared figures to validate against. The date-range CSV served from the same page is declined: it spans many billing cycles and overlaps the monthly files.
+- **Web:** the Summary validation badge is grey, with "Totals not printed" on hover, when a statement ran no summary checks, instead of green as if they had passed.
+
 ## [0.6.1] - 2026-09-13
 
 ### Added
