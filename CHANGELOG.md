@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-09-13
+
+### Added
+
+- **HDFC credit cards:** reward point checks — balance (declared) and earned vs. transaction + bonus points (derived) — and `rewardPointsSummary.earnedUnaccounted` for points the statement does not itemise.
+- **Web:** Rewards Summary shows unaccounted points under Earned and reversals under Adjusted / Lapsed.
+
+### Fixed
+
+- **HDFC credit cards:** reward reversals (`- 12`) parse as negative points instead of none.
+- **Web:** the validation Summary indicator is amber, not red, when only derived checks fail; Disbursed shows as a plain figure.
+
 ## [0.6.0] - 2026-09-12
 
 ### Changed

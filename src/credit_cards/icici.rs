@@ -249,6 +249,7 @@ pub(crate) fn parse_decoded(
         closing_balance: 0,
         expiring_in_30_days: None,
         expiring_in_60_days: None,
+        earned_unaccounted: None,
     });
 
     let stmt_date_opt = summary.last_statement_date;

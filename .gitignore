@@ -45,3 +45,6 @@ gh-pages-worktree/
 scratch/
 test_output.json
 *.txt
+
+# macOS Finder metadata
+.DS_Store
