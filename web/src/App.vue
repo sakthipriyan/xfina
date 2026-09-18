@@ -444,15 +444,19 @@ const formatNumber = (val) => {
     return Number(val).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 4 });
 };
 
+// Every timestamp the parsers emit is an instant in IST, dates included: a
+// date with no time is midnight IST. So this reads them all in Asia/Kolkata —
+// it used to read date-only fields in UTC, which only worked because those
+// were stamped at midnight UTC and the ones beside them at midnight IST.
 const formatDate = (ts) => {
     if (ts === null || ts === undefined || ts === '') return '-';
     const d = new Date(Number(ts) * 1000);
     if (isNaN(d)) return ts;
-    return new Intl.DateTimeFormat(undefined, { 
-        year: 'numeric', 
-        month: 'short', 
+    return new Intl.DateTimeFormat(undefined, {
+        year: 'numeric',
+        month: 'short',
         day: 'numeric',
-        timeZone: 'UTC'
+        timeZone: 'Asia/Kolkata'
     }).format(d);
 };
 

@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Dates are IST everywhere, including dates with no time.** A date-only value
+  was serialized at midnight UTC while the timestamps beside it were midnight
+  IST, so one document carried two conventions 5h30m apart. Now both are
+  midnight IST. Consequences, all corrected: the `rebit` export printed the
+  previous day for every date-only field (1,082 values across the test corpus),
+  because it formatted them in UTC; the HDFC and ICICI card parsers derived a
+  transaction's value date and the statement period from the UTC day, putting
+  anything before 05:30 IST a day early (222 values); and the ICICI and SBI
+  bank parsers stamped transactions at midnight UTC, i.e. 05:30 IST, where
+  every other parser used midnight IST.
+- **Web:** dates are formatted in `Asia/Kolkata` rather than UTC, which was
+  only correct while the two conventions existed.
+
+### Changed
+
+- **`xfina` schema:** every date-only epoch moves 19,800s earlier (midnight UTC
+  to midnight IST) — the same calendar day read in IST, but a different number.
+  Consumers comparing these epochs against timestamps no longer need to account
+  for the gap.
+
 ## [0.7.0] - 2026-09-18
 
 ### Added
