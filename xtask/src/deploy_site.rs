@@ -45,15 +45,55 @@ impl SeriesInfo {
     fn is_unreleased(&self) -> bool {
         self.minor == UNRELEASED
     }
+
+    /// `"0.10"` as `(0, 10)`, for ordering. Comparing the strings instead puts
+    /// 0.10 before 0.9, which would make the newest release sort second and
+    /// the cap below drop the wrong directory.
+    fn version_key(&self) -> (u32, u32) {
+        let mut parts = self.minor.split('.').map(|p| p.parse().unwrap_or(0));
+        (parts.next().unwrap_or(0), parts.next().unwrap_or(0))
+    }
 }
+
+/// How many released series stay published, newest first.
+///
+/// Every series is a complete build of the app -- several megabytes of WASM --
+/// committed to `gh-pages` and kept forever, while the reason to open an old
+/// one fades after a release or two. Three keeps the current release, the one
+/// before it, and the one before that, which is as far back as a "did this
+/// change in 0.6?" question realistically reaches.
+const MAX_RELEASED_SERIES: usize = 3;
 
 /// Released series newest first, the unreleased entry pinned last.
 fn sort_series(registry: &mut VersionRegistry) {
     registry.series.sort_by(|a, b| {
         a.is_unreleased()
             .cmp(&b.is_unreleased())
-            .then_with(|| b.minor.cmp(&a.minor))
+            .then_with(|| b.version_key().cmp(&a.version_key()))
     });
+}
+
+/// Drops released series past [`MAX_RELEASED_SERIES`], returning the ones
+/// removed so their directories can go with them.
+///
+/// The unreleased build never counts against the cap: it is not a release, and
+/// it is the one entry that is always rebuilt in place.
+fn prune_series(registry: &mut VersionRegistry) -> Vec<SeriesInfo> {
+    sort_series(registry);
+    let mut kept = 0;
+    let mut dropped = Vec::new();
+    registry.series.retain(|series| {
+        if series.is_unreleased() {
+            return true;
+        }
+        kept += 1;
+        if kept > MAX_RELEASED_SERIES {
+            dropped.push(series.clone());
+            return false;
+        }
+        true
+    });
+    dropped
 }
 
 pub fn run(args: &[String]) {
@@ -96,31 +136,33 @@ pub fn run(args: &[String]) {
         .args(["worktree", "prune"])
         .status();
 
-    // 2. Add worktree
+    // 2. Add worktree, always at what is actually published.
+    //
+    // A deploy publishes one commit with no parent (see below), so a local
+    // gh-pages left over from a previous run names a commit that no longer
+    // exists upstream. Starting from origin/gh-pages every time is what keeps
+    // a local deploy from resurrecting it.
     println!("Checking out gh-pages branch into gh-pages-worktree...");
+    let _ = Command::new("git")
+        .current_dir(&workspace_root)
+        .args(["fetch", "--quiet", "origin", "gh-pages"])
+        .status();
     let status = Command::new("git")
         .current_dir(&workspace_root)
-        .args(["worktree", "add", "gh-pages-worktree", "gh-pages"])
+        .args([
+            "worktree",
+            "add",
+            "-B",
+            "gh-pages",
+            "gh-pages-worktree",
+            "origin/gh-pages",
+        ])
         .status()
         .expect("Failed to run git worktree add");
 
     if !status.success() {
-        // If it fails, maybe gh-pages doesn't exist locally. Try to fetch or create orphan
-        let status2 = Command::new("git")
-            .current_dir(&workspace_root)
-            .args([
-                "worktree",
-                "add",
-                "-B",
-                "gh-pages",
-                "gh-pages-worktree",
-                "origin/gh-pages",
-            ])
-            .status();
-        if !status2.map(|s| s.success()).unwrap_or(false) {
-            eprintln!("Could not checkout gh-pages branch. Ensure it exists.");
-            exit(1);
-        }
+        eprintln!("Could not checkout gh-pages branch. Ensure it exists.");
+        exit(1);
     }
 
     // 3. Load versions.json
@@ -271,6 +313,19 @@ pub fn run(args: &[String]) {
         }
     }
 
+    // Retire whatever the cap pushes off the end, directory and entry together,
+    // so the dropdown never offers a version that is no longer published.
+    for retired in prune_series(&mut registry) {
+        let dir = worktree_dir.join(&retired.minor);
+        println!(
+            "Retiring {} (past the newest {})",
+            retired.minor, MAX_RELEASED_SERIES
+        );
+        if dir.exists() {
+            fs::remove_dir_all(&dir).unwrap();
+        }
+    }
+
     // Write versions.json
     let new_json = serde_json::to_string_pretty(&registry).unwrap();
     fs::write(versions_path, new_json).unwrap();
@@ -286,13 +341,31 @@ pub fn run(args: &[String]) {
     if diff_status.stdout.is_empty() {
         println!("No changes to publish.");
     } else {
-        run_cmd(&worktree_dir, "git", &["add", "."]);
+        // The branch is the published site, not a record of how it got there.
+        // Every deploy replaces it with a single parentless commit, so the
+        // history cannot accumulate builds nobody serves: each one is several
+        // megabytes of WASM, kept forever, of a site that is rebuilt from a tag
+        // whenever it is wanted. Without this the branch grew by about a
+        // hundred megabytes a year and had to be reset by hand.
+        println!("Publishing as a single commit...");
+        // Left behind by a previous local deploy; CI starts from a fresh clone
+        // and has none. `checkout --orphan` refuses an existing branch name.
+        let _ = Command::new("git")
+            .current_dir(&worktree_dir)
+            .args(["branch", "-D", "publish"])
+            .status();
+        run_cmd(&worktree_dir, "git", &["checkout", "--orphan", "publish"]);
+        run_cmd(&worktree_dir, "git", &["add", "-A"]);
         run_cmd(
             &worktree_dir,
             "git",
-            &["commit", "-m", "Deploy site update"],
+            &["commit", "-m", "Publish site", "--quiet"],
         );
-        run_cmd(&worktree_dir, "git", &["push", "origin", "gh-pages"]);
+        run_cmd(
+            &worktree_dir,
+            "git",
+            &["push", "--force", "origin", "publish:gh-pages"],
+        );
         println!("Successfully deployed to gh-pages.");
     }
 
@@ -393,6 +466,62 @@ mod tests {
 
         let order: Vec<&str> = registry.series.iter().map(|s| s.minor.as_str()).collect();
         assert_eq!(order, ["0.4", "0.3", "0.2", UNRELEASED]);
+    }
+
+    // Ordering is what the cap trusts to know which series is newest, and
+    // string comparison gets that wrong as soon as a minor reaches two digits.
+    #[test]
+    fn a_two_digit_minor_is_newer_than_a_one_digit_one() {
+        let mut registry = VersionRegistry {
+            series: vec![released("0.9", "0.9.0", "aaa"), unreleased("bbb")],
+        };
+        upsert_series(&mut registry, released("0.10", "0.10.0", "ccc"));
+
+        let order: Vec<&str> = registry.series.iter().map(|s| s.minor.as_str()).collect();
+        assert_eq!(order, ["0.10", "0.9", UNRELEASED]);
+    }
+
+    #[test]
+    fn only_the_newest_released_series_stay_published() {
+        let mut registry = VersionRegistry {
+            series: vec![unreleased("aaa")],
+        };
+        for minor in ["0.4", "0.5", "0.6", "0.7"] {
+            upsert_series(
+                &mut registry,
+                released(minor, &format!("{}.0", minor), "bbb"),
+            );
+        }
+
+        let retired = prune_series(&mut registry);
+
+        let retired: Vec<&str> = retired.iter().map(|s| s.minor.as_str()).collect();
+        assert_eq!(retired, ["0.4"], "the oldest series is the one that goes");
+        let kept: Vec<&str> = registry.series.iter().map(|s| s.minor.as_str()).collect();
+        assert_eq!(kept, ["0.7", "0.6", "0.5", UNRELEASED]);
+    }
+
+    // The unreleased build is not a release and must never be what the cap
+    // pushes off the end -- it is the only entry rebuilt on every merge.
+    #[test]
+    fn the_unreleased_build_does_not_count_against_the_cap() {
+        let mut registry = VersionRegistry {
+            series: vec![unreleased("aaa")],
+        };
+        for i in 0..MAX_RELEASED_SERIES {
+            let minor = format!("0.{}", i + 1);
+            upsert_series(
+                &mut registry,
+                released(&minor, &format!("{}.0", minor), "bbb"),
+            );
+        }
+
+        assert!(
+            prune_series(&mut registry).is_empty(),
+            "nothing to retire yet"
+        );
+        assert_eq!(registry.series.len(), MAX_RELEASED_SERIES + 1);
+        assert!(registry.series.last().unwrap().is_unreleased());
     }
 
     // A tag on an existing series replaces that entry rather than adding a
