@@ -139,6 +139,9 @@ fn every_statement_is_recognised_and_nothing_else_is() {
                 (true, Ok(f)) => {
                     misdetected.push(format!("  {dir}/*.{ext} detected as {f}, want {owner}"))
                 }
+                // A layout the parser knows and refuses, like ICICI's
+                // date-range CSV, shares an extension with the one it reads.
+                (true, Err(_)) if refused_by_owner(&bytes, name, *owner) => rejected += 1,
                 (true, Err(kind)) => {
                     misdetected.push(format!("  {dir}/*.{ext} not detected at all ({kind})"))
                 }
@@ -162,6 +165,17 @@ fn every_statement_is_recognised_and_nothing_else_is() {
     assert!(ok > 0, "corpus present but nothing was detected");
 }
 
+/// Whether the owning parser, asked directly, says it does not support the
+/// file -- as opposed to failing to recognise it.
+fn refused_by_owner(bytes: &[u8], name: &str, owner: Format) -> bool {
+    let forced = xfina::parse(
+        ParseRequest::new(bytes)
+            .with_filename(Some(name))
+            .with_format(Some(owner)),
+    );
+    matches!(forced, Err(e) if e.kind() == "unsupported")
+}
+
 /// Extensions each format is actually able to read today. Anything else in a
 /// format's raw directory is a variant we do not support yet.
 fn supported_extension(f: Format) -> &'static [&'static str] {
@@ -169,6 +183,7 @@ fn supported_extension(f: Format) -> &'static [&'static str] {
         Format::BankSbi | Format::MutualFundsCams => &["pdf"],
         Format::EquityIbkr => &["csv"],
         Format::CardAxis => &["xlsx"],
+        Format::CardIcici => &["xls", "xlsx", "csv"],
         _ => &["xls", "xlsx"],
     }
 }

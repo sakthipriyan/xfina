@@ -28,6 +28,18 @@ pub(crate) fn parse_decoded(
     decoded: &Decoded<'_>,
     input: &ParseRequest<'_>,
 ) -> Result<ParseResult<CreditCardAccount>, crate::error::XfinaError> {
+    if decoded.container() == crate::detect::Container::Text {
+        return parse_csv(decoded, input);
+    }
+    parse_workbook(decoded, input)
+}
+
+/// The current export: a workbook with the statement summary above the
+/// transaction table.
+fn parse_workbook(
+    decoded: &Decoded<'_>,
+    input: &ParseRequest<'_>,
+) -> Result<ParseResult<CreditCardAccount>, crate::error::XfinaError> {
     let filename = input.filename;
     let range = decoded.sheets()?.first()?;
 
@@ -453,7 +465,10 @@ fn parse_date(val: &str) -> Option<NaiveDate> {
 fn parse_datetime(val: &str) -> Option<DateTime<Utc>> {
     let iso = crate::models::parse_indian_date(val);
     let s = iso.split('T').next().unwrap_or(&iso);
-    let naive = NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()?;
+    ist_midnight(NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()?)
+}
+
+fn ist_midnight(naive: NaiveDate) -> Option<DateTime<Utc>> {
     let ist_offset = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
     let ndt = naive.and_hms_opt(0, 0, 0).unwrap();
     chrono::TimeZone::from_local_datetime(&ist_offset, &ndt)
@@ -497,9 +512,335 @@ fn parse_partial_date(val: &str, stmt_date: NaiveDate) -> Option<DateTime<Utc>> 
     None
 }
 
+/// Columns of the transaction table in ICICI's older CSV export.
+const CSV_HEADER: [&str; 7] = [
+    "Date",
+    "Sr.No.",
+    "Transaction Details",
+    "Reward Point Header",
+    "Intl.Amount",
+    "Amount(in Rs)",
+    "BillingAmountSign",
+];
+
+/// Reads a CSV export's records, tolerating their varying widths.
+fn csv_records(text: &str) -> Vec<Vec<String>> {
+    csv::ReaderBuilder::new()
+        .has_headers(false)
+        .flexible(true)
+        .from_reader(text.as_bytes())
+        .records()
+        .filter_map(Result::ok)
+        .map(|r| r.iter().map(|c| c.trim().to_string()).collect())
+        .collect()
+}
+
+fn is_csv_header(record: &[String]) -> bool {
+    record.len() == CSV_HEADER.len() && record.iter().zip(CSV_HEADER).all(|(c, h)| c == h)
+}
+
+/// A card number row, which opens that card's transactions:
+/// `"0000XXXXXXXX0000"`, or `"0000 XXXX XXXX 0000"` in the date-range export.
+fn csv_card_number(record: &[String]) -> Option<String> {
+    let [cell] = record else { return None };
+    let number: String = cell.split_whitespace().collect();
+    let plausible = number.len() >= 12
+        && number.contains('X')
+        && number.chars().all(|c| c.is_ascii_digit() || c == 'X');
+    plausible.then_some(number)
+}
+
+/// How a CSV export's transaction rows are written.
+#[derive(Debug, PartialEq, Eq)]
+enum CsvRows {
+    /// One billing cycle: `dd/mm/yyyy` dates, an unsigned amount and a
+    /// `CR`/blank sign column.
+    Monthly,
+    /// A date range spanning many cycles, from the same download page:
+    /// `dd-MON-yy` dates, a serial in place of the reference number and a
+    /// signed amount repeated where the sign should be. Nothing in it says
+    /// which statement a transaction was billed on, and its range overlaps the
+    /// monthly files, so it is not read.
+    DateRange,
+}
+
+fn csv_row_kind(record: &[String]) -> Option<CsvRows> {
+    if record.len() != CSV_HEADER.len() {
+        return None;
+    }
+    let date = record[0].as_str();
+    let sign = record[6].as_str();
+    if NaiveDate::parse_from_str(date, "%d/%m/%Y").is_ok() && matches!(sign, "" | "CR" | "DR") {
+        return Some(CsvRows::Monthly);
+    }
+    if NaiveDate::parse_from_str(date, "%d-%b-%y").is_ok() {
+        return Some(CsvRows::DateRange);
+    }
+    None
+}
+
+fn unsupported_date_range() -> crate::error::XfinaError {
+    crate::error::XfinaError::Unsupported(
+        "this ICICI card CSV covers a date range rather than one statement; \
+         download each monthly statement instead"
+            .to_string(),
+    )
+}
+
+/// ICICI's older card export: a CSV carrying the card holder and one billing
+/// cycle's transactions, and nothing else.
+///
+/// ```text
+/// "Accountno:","0000000000000000"
+/// "Customer Name:","<TITLE> <CARD HOLDER>"
+/// "Address:","<ADDRESS>"
+///
+/// "Transaction Details:"
+/// "Date","Sr.No.","Transaction Details","Reward Point Header","Intl.Amount","Amount(in Rs)","BillingAmountSign"
+/// "0000XXXXXXXX0000"
+/// "01/01/2026","10000000000","UPI Payment Received","0","0","1000.00","CR"
+/// "02/01/2026","10000000001","<MERCHANT>","20","0","400.00",""
+/// ```
+///
+/// No statement date, period, dues or totals are printed, so the period is
+/// derived from the transactions and there is nothing declared to reconcile
+/// against. The account number is not the card number and is not reported.
+fn parse_csv(
+    decoded: &Decoded<'_>,
+    _input: &ParseRequest<'_>,
+) -> Result<ParseResult<CreditCardAccount>, crate::error::XfinaError> {
+    use crate::models::credit_card::{CardType, CcCard, CcCards, TypeChoice};
+
+    let text = decoded.text()?;
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+    let records = csv_records(text);
+
+    if !records.iter().any(|r| is_csv_header(r)) {
+        return Err(crate::error::XfinaError::InvalidFormat(
+            "not an ICICI credit card CSV: no transaction table".to_string(),
+        ));
+    }
+
+    let mut holder = CcHolder::default();
+    let mut cards: Vec<String> = Vec::new();
+    let mut transactions_list = Vec::new();
+    let mut in_transactions = false;
+
+    for record in &records {
+        if record.iter().all(|c| c.is_empty()) {
+            continue;
+        }
+        if !in_transactions {
+            match record.first().map(String::as_str) {
+                Some("Customer Name:") => {
+                    let name = record.get(1).map(String::as_str).unwrap_or("");
+                    holder.name = crate::models::normalize_person_name(name);
+                }
+                Some("Address:") => {
+                    let address = record.get(1).map(String::as_str).unwrap_or("");
+                    let address = address.split_whitespace().collect::<Vec<_>>().join(" ");
+                    if !address.is_empty() {
+                        holder.address = Some(address);
+                    }
+                }
+                _ if is_csv_header(record) => in_transactions = true,
+                _ => {}
+            }
+            continue;
+        }
+
+        if let Some(card) = csv_card_number(record) {
+            if !cards.contains(&card) {
+                cards.push(card);
+            }
+            continue;
+        }
+        // The disclaimers that close the date-range export.
+        if record.len() < CSV_HEADER.len() {
+            break;
+        }
+        match csv_row_kind(record) {
+            Some(CsvRows::Monthly) => {}
+            Some(CsvRows::DateRange) => return Err(unsupported_date_range()),
+            None => {
+                return Err(crate::error::XfinaError::ParseError(
+                    "unreadable transaction row in ICICI card CSV".to_string(),
+                ))
+            }
+        }
+
+        let date =
+            NaiveDate::parse_from_str(&record[0], "%d/%m/%Y").expect("checked by csv_row_kind");
+        let amount = parse_decimal(&record[5])
+            .ok_or_else(|| {
+                crate::error::XfinaError::ParseError(
+                    "unreadable amount in ICICI card CSV".to_string(),
+                )
+            })?
+            .abs();
+        let txn_type = if record[6] == "CR" {
+            TransactionType::Credit
+        } else {
+            TransactionType::Debit
+        };
+        let reference = record[1].clone();
+
+        transactions_list.push(CcTransaction {
+            txn_date: ist_midnight(date),
+            value_date: Some(date),
+            narration: record[2].clone(),
+            amount,
+            txn_type,
+            txn_id: (!reference.is_empty()).then_some(reference),
+            statement_date: None,
+            mcc: None,
+            masked_card_number: cards.last().cloned(),
+            xfina: Some(CcXfinaTransaction {
+                owner: Some(holder.name.clone()),
+                reward_points: record[3].parse::<i32>().ok(),
+            }),
+        });
+    }
+
+    transactions_list.sort_by_key(|t| t.txn_date);
+
+    let mut payments = Decimal::ZERO;
+    let mut purchases = Decimal::ZERO;
+    let mut default_rewards = 0;
+    for txn in &transactions_list {
+        if txn.txn_type == TransactionType::Credit {
+            payments += txn.amount;
+        } else {
+            purchases += txn.amount;
+        }
+        default_rewards += txn
+            .xfina
+            .as_ref()
+            .and_then(|x| x.reward_points)
+            .unwrap_or(0);
+    }
+
+    // One holder is all the export names, so every row is theirs.
+    let mut owner_credit_breakdown = HashMap::new();
+    let mut owner_debit_breakdown = HashMap::new();
+    if !transactions_list.is_empty() {
+        owner_credit_breakdown.insert(holder.name.clone(), payments.to_f64().unwrap_or(0.0));
+        owner_debit_breakdown.insert(holder.name.clone(), purchases.to_f64().unwrap_or(0.0));
+    }
+
+    let xfina_summary = CcXfinaSummary {
+        payment_credit: Some(payments),
+        purchases_debits: Some(purchases),
+        owner_credit_breakdown,
+        owner_debit_breakdown,
+        reward_points_summary: Some(RewardPointsSummary {
+            default_rewards,
+            opening_balance: 0,
+            earned: default_rewards,
+            disbursed: 0,
+            adjusted_lapsed: 0,
+            closing_balance: 0,
+            expiring_in_30_days: None,
+            expiring_in_60_days: None,
+            earned_unaccounted: None,
+        }),
+        ..Default::default()
+    };
+
+    let mut stmt = CreditCardAccount {
+        r#type: "credit_card".to_string(),
+        version: 1.1,
+        ..Default::default()
+    };
+    if let Some(first) = cards.first() {
+        stmt.masked_acc_number = first.clone();
+        holder.cards = Some(CcCards {
+            card: cards
+                .iter()
+                .enumerate()
+                .map(|(i, number)| CcCard {
+                    card_type: match number.chars().next() {
+                        Some('4') => CardType::Visa,
+                        Some('5') => CardType::MasterCard,
+                        _ => CardType::Others,
+                    },
+                    primary: if i == 0 {
+                        TypeChoice::Yes
+                    } else {
+                        TypeChoice::No
+                    },
+                    masked_card_number: number.clone(),
+                    issued_date: None,
+                })
+                .collect(),
+        });
+    }
+
+    let xfina_txns = CcXfinaTransactions {
+        start_date_derived: Some(true),
+        end_date_derived: Some(true),
+    };
+    stmt.transactions = Some(CcTransactions {
+        start_date: transactions_list.first().and_then(|t| t.value_date),
+        end_date: transactions_list.last().and_then(|t| t.value_date),
+        transaction: transactions_list,
+        xfina: Some(xfina_txns),
+    });
+    stmt.summary = Some(CcSummary {
+        xfina: Some(xfina_summary),
+        ..Default::default()
+    });
+    stmt.profile = Some(CcProfile {
+        holders: CcHolders {
+            holder: vec![holder],
+        },
+    });
+    stmt.xfina = Some(XfinaCreditCardAccount {
+        institution_name: Some("ICICI Bank".to_string()),
+        date_only_paths: Some(vec![
+            "transactions.transaction.txnDate".to_string(),
+            "transactions.transaction.valueDate".to_string(),
+        ]),
+        ..Default::default()
+    });
+
+    // The export declares no figures, so there is nothing to reconcile.
+    let mut validation = ValidationReport::empty();
+    validation.finalize();
+
+    Ok(ParseResult {
+        data: stmt,
+        validation,
+    })
+}
+
+/// Claims the older CSV export by its header, but only in its monthly form:
+/// the date-range download shares the header and is declined, so detection
+/// reports it as unrecognised instead of reading a year as one statement.
+fn probe_csv(text: &str) -> crate::detect::Claim {
+    use crate::detect::Claim;
+    if !text.contains("\"Accountno:\"") {
+        return Claim::NO;
+    }
+    let records = csv_records(text);
+    let Some(header) = records.iter().position(|r| is_csv_header(r)) else {
+        return Claim::NO;
+    };
+    let first_row = records[header + 1..].iter().find_map(|r| csv_row_kind(r));
+    match first_row {
+        Some(CsvRows::Monthly) => Claim::strong("icici-card-csv"),
+        Some(CsvRows::DateRange) => Claim::NO,
+        // A cycle with no transactions still has the monthly layout.
+        None => Claim::weak("icici-card-csv-header"),
+    }
+}
+
 /// An ICICI card statement names the bank and its own summary fields.
 pub(crate) fn probe(dec: &crate::decode::Decoded<'_>) -> crate::detect::Claim {
     use crate::detect::{probe::any_marker, Claim};
+    if dec.container() == crate::detect::Container::Text {
+        return probe_csv(dec.probe_text());
+    }
     let Ok(sheets) = dec.sheets() else {
         return Claim::NO;
     };
@@ -516,4 +857,83 @@ pub(crate) fn probe(dec: &crate::decode::Decoded<'_>) -> crate::detect::Claim {
         return Claim::weak("icici-card-fields");
     }
     Claim::NO
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::detect::Strength;
+
+    // Invented values in the shape of the older CSV export.
+    const MONTHLY: &str = "\"Accountno:\",\"0000000000000000\"\r\n\
+        \"Customer Name:\",\"Mr  CARD  HOLDER\"\r\n\
+        \"Address:\",\"1 SOME STREET  SOME CITY\"\r\n\
+        \r\n\
+        \r\n\
+        \"Transaction Details:\"\r\n\
+        \"Date\",\"Sr.No.\",\"Transaction Details\",\"Reward Point Header\",\"Intl.Amount\",\"Amount(in Rs)\",\"BillingAmountSign\"\r\n\
+        \"4000XXXXXXXX0000\"\r\n\
+        \"03/01/2026\",\"10000000002\",\"UPI Payment Received\",\"0\",\"0\",\"1000.00\",\"CR\"\r\n\
+        \"02/01/2026\",\"10000000001\",\"SOME MERCHANT\",\"20\",\"0\",\"1,400.50\",\"\"\r\n\
+        \"04/01/2026\",\"10000000003\",\"SOME MERCHANT\",\"-5\",\"0\",\"100.00\",\"CR\"\r\n";
+
+    const DATE_RANGE: &str = "\"Accountno:\",\"0000000000000000\"\r\n\
+        \"Customer Name:\",\"Mr CARD HOLDER\"\r\n\
+        \"Transaction Details:\"\r\n\
+        \"Date\",\"Sr.No.\",\"Transaction Details\",\"Reward Point Header\",\"Intl.Amount\",\"Amount(in Rs)\",\"BillingAmountSign\"\r\n\
+        \"4000 XXXX XXXX 0000\"\r\n\
+        \"02-JAN-26\",\"1\",\"SOME MERCHANT\",\"20\",\"0.00\",\"1,400.50\",\"1,400.50\"\r\n\
+        \r\n\
+        \"MESSAGE Details:\"\r\n";
+
+    fn parse(text: &str) -> Result<ParseResult<CreditCardAccount>, crate::error::XfinaError> {
+        let req = ParseRequest::new(text.as_bytes());
+        parse_decoded(&Decoded::new(&req), &req)
+    }
+
+    #[test]
+    fn reads_a_monthly_csv() {
+        let result = parse(MONTHLY).expect("monthly CSV parses");
+        let stmt = result.data;
+        assert_eq!(stmt.masked_acc_number, "4000XXXXXXXX0000");
+
+        let holder = &stmt.profile.as_ref().unwrap().holders.holder[0];
+        assert_eq!(holder.name, "CARD HOLDER");
+        assert_eq!(holder.address.as_deref(), Some("1 SOME STREET SOME CITY"));
+
+        let txns = stmt.transactions.as_ref().unwrap();
+        assert_eq!(txns.start_date, NaiveDate::from_ymd_opt(2026, 1, 2));
+        assert_eq!(txns.end_date, NaiveDate::from_ymd_opt(2026, 1, 4));
+        let ids: Vec<_> = txns
+            .transaction
+            .iter()
+            .map(|t| t.txn_id.as_deref().unwrap())
+            .collect();
+        assert_eq!(ids, ["10000000001", "10000000002", "10000000003"]);
+        assert_eq!(txns.transaction[0].txn_type, TransactionType::Debit);
+        assert_eq!(txns.transaction[0].amount, Decimal::new(140050, 2));
+        assert_eq!(txns.transaction[2].txn_type, TransactionType::Credit);
+
+        let summary = stmt.summary.as_ref().unwrap().xfina.as_ref().unwrap();
+        assert_eq!(summary.payment_credit, Some(Decimal::new(1100, 0)));
+        assert_eq!(summary.purchases_debits, Some(Decimal::new(140050, 2)));
+        assert_eq!(summary.reward_points_summary.as_ref().unwrap().earned, 15);
+    }
+
+    #[test]
+    fn refuses_the_date_range_csv() {
+        let err = parse(DATE_RANGE).expect_err("a date-range export is not a statement");
+        assert_eq!(err.kind(), "unsupported");
+    }
+
+    #[test]
+    fn probes_only_the_monthly_csv() {
+        let probe_text = |text: &str| {
+            let req = ParseRequest::new(text.as_bytes());
+            probe(&Decoded::new(&req)).strength
+        };
+        assert_eq!(probe_text(MONTHLY), Strength::Strong);
+        assert_eq!(probe_text(DATE_RANGE), Strength::No);
+        assert_eq!(probe_text("\"Date\",\"Amount\"\r\n"), Strength::No);
+    }
 }

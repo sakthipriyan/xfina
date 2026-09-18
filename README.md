@@ -41,7 +41,7 @@ By building Xfina in **Rust**, we achieve:
 | 🏦 Bank Account | State Bank of India | PDF (password protected) | **Production Ready** | Full support |
 | 💳 Credit Card | Axis Bank | XLSX | **Production Ready** | Statement period derived from transactions; Axis prints no statement date |
 | 💳 Credit Card | HDFC Bank | XLS | **Production Ready** | Full support incl. add-on cardholders, reward points |
-| 💳 Credit Card | ICICI Bank | XLS | **Production Ready** | Tested card without any add-on cards |
+| 💳 Credit Card | ICICI Bank | XLS, CSV (older monthly export) | **Production Ready** | Tested card without any add-on cards; the CSV prints no statement date or totals, so its period is derived from transactions and nothing is reconciled |
 | 📈 Mutual Funds | CAMS | PDF (password protected) | **Production Ready** | Combined Account Statement (CAS) |
 | 📈 Mutual Funds | KFinTech | PDF (password protected) | **TODO** | Combined Account Statement (CAS) |
 | 🌍 Intl Brokers | Interactive Brokers (IBKR) | CSV | **Production Ready** | Activity statements |

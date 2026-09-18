@@ -32,8 +32,12 @@ fn test_icici_credit_cards() {
         let entry = entry.expect("Failed to read directory entry");
         let path = entry.path();
 
-        let ext = path.extension().and_then(|e| e.to_str());
-        if ext == Some("pdf") || ext == Some("xls") {
+        // The older export is named `.CSV`, in capitals.
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(str::to_lowercase);
+        if matches!(ext.as_deref(), Some("pdf" | "xls" | "csv")) {
             let file_name = path.file_stem().unwrap().to_str().unwrap();
             let bytes = fs::read(&path).expect("Failed to read file");
 
