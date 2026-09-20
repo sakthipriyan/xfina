@@ -1,3 +1,4 @@
+use chrono::NaiveDate;
 use pdf_extract::{Document, MediaBox, OutputDev, OutputError, Transform};
 use std::cell::OnceCell;
 
@@ -140,6 +141,37 @@ impl PdfDoc {
             })
             .as_deref()
             .map_err(Clone::clone)
+    }
+
+    /// The date the PDF's own metadata says it was produced.
+    ///
+    /// Document metadata, not the filesystem's -- a copied or re-downloaded
+    /// file keeps it. That makes it usable where the printed date is real but
+    /// ambiguous: a sheet that prints "7/3/2020" has told you the day and the
+    /// month without telling you which is which, and this says which.
+    ///
+    /// Only ever a tie-break. What a document prints about itself outranks
+    /// what its producer stamped into the file, and a parser that reached for
+    /// this first would be reading the generator rather than the statement.
+    pub fn creation_date(&self) -> Option<NaiveDate> {
+        let info = self.doc.trailer.get(b"Info").ok()?;
+        let dict = match info.as_reference() {
+            Ok(id) => self.doc.get_dictionary(id).ok()?,
+            Err(_) => info.as_dict().ok()?,
+        };
+        let raw = dict.get(b"CreationDate").ok()?.as_str().ok()?;
+        // "D:YYYYMMDDHHmmSSOHH'mm'" -- only the date half is wanted, and the
+        // prefix and everything after the day are optional in the wild.
+        let text = std::str::from_utf8(raw).ok()?;
+        let digits: String = text
+            .trim_start_matches("D:")
+            .chars()
+            .take_while(char::is_ascii_digit)
+            .collect();
+        if digits.len() < 8 {
+            return None;
+        }
+        NaiveDate::parse_from_str(&digits[..8], "%Y%m%d").ok()
     }
 
     /// Plain text of page 1, for probing.

@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **SBI forex card rates:** a new `rt-` family for published reference documents,
+  reading State Bank of India's daily forex card rate sheet (`rt-sbi-forex-card`).
+  Every currency the sheet quotes is carried, with every rate column named as the
+  sheet prints it — the same column has been headed `TC`, `FTC`, `FOREIGN TRAVEL
+  CARD` and `FOREX TRAVEL CARD` over the years, and which it was is part of what
+  that day quoted. Columns are located by their headings rather than by counting
+  along a row, because the column order has changed twice. A rate the sheet leaves
+  unquoted is printed as a zero and is reported as absent, never as a price of
+  zero. The sheet's own date is used, never the clock or the filename; where the
+  printed date is a real day read either way round, the file's creation stamp
+  settles it, and a sheet that nothing can date is refused. Sheets whose text
+  layer is damaged — adjacent figures run together, or two headings drawn over
+  each other — are refused rather than read into whichever column they appear
+  to fall under. A handful published with the table collapsed into a flow, where
+  the figures are all present and in order but no two rows begin at the same
+  place, are read by the order they are printed in and carry
+  `figuresMatchedByOrder` so a caller can tell them from the rest; that only
+  happens when every row accounts for every heading exactly once.
+- **Reference documents:** a `reference_rates` category and a `Parsed` enum, so a
+  format can produce something other than an account. The registry stays the one
+  table that defines what xfina can read.
+- **Web:** a rate sheet gets its own view — the day it was published, and a table
+  of every currency against the columns that day quoted, headed as the sheet
+  headed them. A column the sheet left unquoted reads as a dash rather than a
+  zero, a currency quoted per hundred units says so beside its name, and a sheet
+  read by the order its figures were printed in says that too. Without this a
+  rate sheet parsed and then belonged to no heading, so it disappeared from the
+  page instead of being shown.
+- **Test data:** fixtures for five layout eras in `../xfina-test-data/`, and two
+  parity checks over the whole published archive — one against the USD series a
+  previous implementation derived, one against every rate of every currency as
+  read by an unrelated implementation (`sahilgupta/sbi-fx-ratekeeper`). All skip
+  when their inputs are not checked out, as every other parser's tests do.
+
+### Changed
+
+- **Breaking — `Statement::to_json` and `to_json_string` return a `Result`, and
+  `Statement::account` is now `Statement::data`.** ReBIT describes accounts a
+  person holds and has no term for a price an institution published, so asking
+  for a rate sheet in `Schema::Rebit` is a named error (`schema_unsupported`)
+  rather than an envelope with an empty `data`. Callers reading `statement.account`
+  should use `statement.data.account()`, which returns `None` for a document that
+  is not an account.
+
 ## [0.7.0] - 2026-09-18
 
 ### Added

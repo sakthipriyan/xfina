@@ -126,6 +126,12 @@ fn collapse_whitespace(text: &str) -> String {
 pub mod account;
 pub use account::{Account, AccountModel};
 
+pub mod rates;
+pub use rates::{CurrencyRates, RateSheet};
+
+pub mod parsed;
+pub use parsed::Parsed;
+
 pub mod generated_date;
 pub use generated_date::HasGeneratedDate;
 

@@ -90,6 +90,7 @@ const bankStatement = statementOf('bank_account');
 const ccStatement = statementOf('credit_card');
 const mfStatement = statementOf('mutual_funds');
 const equityStatement = statementOf('intl_stocks');
+const rateSheet = statementOf('reference_rates');
 
 
 const versionsData = ref(null);
@@ -289,11 +290,12 @@ const CATEGORY_LABELS = {
     credit_card: 'Credit Card',
     mutual_funds: 'Mutual Fund',
     intl_stocks: 'Intl Stocks',
+    reference_rates: 'Reference Rates',
 };
 
 // A fixed order, not the order files happened to be dropped in: the same pile
 // should read the same way twice.
-const CATEGORY_ORDER = ['bank_account', 'credit_card', 'mutual_funds', 'intl_stocks'];
+const CATEGORY_ORDER = ['bank_account', 'credit_card', 'mutual_funds', 'intl_stocks', 'reference_rates'];
 
 /**
  * Imported statements, under the heading each belongs to.
@@ -362,6 +364,10 @@ const holderOf = (entry) =>
 
 /** "<from> – <to>", or whichever end of it the statement has. */
 const periodOf = (entry) => {
+    // A reference document covers a single day rather than a period.
+    if (entry.response?.category === 'reference_rates') {
+        return entry.response?.data?.date ? formatDate(entry.response.data.date) : '';
+    }
     const txns = entry.response?.data?.transactions;
     const from = txns?.startDate ? formatDate(txns.startDate) : '';
     const to = txns?.endDate ? formatDate(txns.endDate) : '';
@@ -443,6 +449,20 @@ const formatNumber = (val) => {
     if (val === null || val === undefined) return '-';
     return Number(val).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 4 });
 };
+
+/** "forex_travel_card_buy" as the sheet wrote it: "Forex Travel Card Buy". */
+const columnLabel = (key) => key
+    .split('_')
+    .map(word => (word.length <= 2 ? word.toUpperCase() : word[0].toUpperCase() + word.slice(1)))
+    .join(' ');
+
+/**
+ * A rate as the sheet quotes it, with the unit it is quoted in.
+ *
+ * Some currencies are priced per hundred, and showing 60.36 for the yen
+ * without saying so is off by two orders of magnitude.
+ */
+const rateUnit = (currency) => (currency.unit > 1 ? `per ${currency.unit}` : '');
 
 const formatDate = (ts) => {
     if (ts === null || ts === undefined || ts === '') return '-';
@@ -1687,6 +1707,99 @@ const camsGroupedAssets = computed(() => {
       </div>
       
       <!-- Equity Statement Results Table -->
+      <!-- A published rate card, which is not anybody's account: no holder, no
+           balance, no transactions. It gets its own pane rather than being bent
+           into the statement header the other four share. -->
+      <div v-if="rateSheet" class="space-y-6">
+        <Card class="bg-card text-card-foreground shadow-sm">
+          <CardHeader class="pb-2 border-b mb-3">
+            <CardTitle class="text-sm text-muted-foreground font-semibold uppercase tracking-wider">
+              {{ result?.institution }} &mdash; Forex Card Rates
+            </CardTitle>
+            <CardDescription class="text-xs">
+              Rates quoted against the rupee, for the reference band. Not an account statement.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+              <div class="flex flex-col">
+                <span class="text-xs text-muted-foreground mb-1">Date</span>
+                <span class="font-medium font-mono text-xl text-foreground">{{ formatDate(rateSheet.date) }}</span>
+              </div>
+              <div class="flex flex-col" v-if="rateSheet.publishedAt">
+                <span class="text-xs text-muted-foreground mb-1">Published</span>
+                <span class="font-medium font-mono text-xl">{{ formatDateTime(rateSheet.publishedAt) }}</span>
+              </div>
+              <div class="flex flex-col">
+                <span class="text-xs text-muted-foreground mb-1">Currencies</span>
+                <span class="font-medium font-mono text-xl">{{ rateSheet.currencies?.length || 0 }}</span>
+              </div>
+              <div class="flex flex-col">
+                <span class="text-xs text-muted-foreground mb-1">Rate Columns</span>
+                <span class="font-medium font-mono text-xl">{{ rateSheet.columns?.length || 0 }}</span>
+              </div>
+            </div>
+            <!-- Said out loud rather than left in the data: these rates were
+                 matched to their headings by order because the sheet was
+                 published with nothing lining up under them. -->
+            <div
+              v-if="rateSheet.figuresMatchedByOrder"
+              class="mt-4 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-muted-foreground"
+            >
+              <AlertTriangle class="h-4 w-4 shrink-0 text-amber-500" />
+              <span>
+                This sheet was published with its table collapsed, so no figure sat under a
+                heading. Each rate was matched to the heading in the same position, which was
+                only possible because every row accounted for every heading exactly once.
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card class="bg-card text-card-foreground shadow-sm">
+          <CardHeader class="pb-2 border-b mb-3">
+            <CardTitle class="text-sm text-muted-foreground font-semibold uppercase tracking-wider">
+              Rates ({{ getCurrencySymbol() }} per unit)
+            </CardTitle>
+          </CardHeader>
+          <CardContent class="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead class="whitespace-nowrap">Currency</TableHead>
+                  <TableHead
+                    v-for="column in rateSheet.columns"
+                    :key="column"
+                    class="text-right whitespace-nowrap"
+                  >{{ columnLabel(column) }}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow v-for="currency in rateSheet.currencies" :key="currency.currency">
+                  <TableCell class="whitespace-nowrap">
+                    <span class="font-mono font-semibold">{{ currency.currency }}</span>
+                    <span class="ml-2 text-xs text-muted-foreground">{{ currency.name }}</span>
+                    <span
+                      v-if="rateUnit(currency)"
+                      class="ml-2 rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground"
+                      title="This currency is quoted for this many units, not for one."
+                    >{{ rateUnit(currency) }}</span>
+                  </TableCell>
+                  <!-- A column the sheet left unquoted is blank, not zero. A
+                       rate of zero is not a price anything traded at. -->
+                  <TableCell
+                    v-for="column in rateSheet.columns"
+                    :key="column"
+                    class="text-right font-mono tabular-nums"
+                    :class="currency.rates?.[column] === undefined ? 'text-muted-foreground' : ''"
+                  >{{ currency.rates?.[column] === undefined ? '—' : currency.rates[column] }}</TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+
       <div v-if="equityStatement" class="space-y-6">
         
         <!-- Standardized Header -->
