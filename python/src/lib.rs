@@ -71,8 +71,9 @@ fn parse(
         .with_modified_timestamp(modified_timestamp)
         .with_format(format_of(r#as)?);
 
-    match ::xfina::parse(request) {
-        Ok(statement) => to_py(py, statement.to_json(Schema::from_name(schema))),
+    match ::xfina::parse(request).and_then(|statement| statement.to_json(Schema::from_name(schema)))
+    {
+        Ok(json) => to_py(py, json),
         Err(e) => Err(raise(py, &e, filename)),
     }
 }

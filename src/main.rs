@@ -243,6 +243,7 @@ fn main() -> Result<()> {
 
             let statement = xfina::parse(request)?;
             let json = statement.to_json_string(schema.into(), true)?;
+
             fs::write(&output_path, json)?;
             println!(
                 "Parsed {} ({}) to {:?}",

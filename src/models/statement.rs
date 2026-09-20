@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 
 use crate::detect::registry::{Category, Format};
 use crate::detect::{Container, Strength};
-use crate::models::account::Account;
+use crate::models::parsed::Parsed;
 use crate::models::request::ParseRequest;
 use crate::models::schema::Schema;
 use crate::models::validation::ValidationReport;
@@ -66,11 +66,13 @@ pub struct Detection {
     pub file: FileInfo,
 }
 
-/// A parsed statement: what it is, what it says, and how we know.
+/// A parsed document: what it is, what it says, and how we know.
 #[derive(Debug, Clone)]
 pub struct Statement {
     pub format: Format,
-    pub account: Account,
+    /// What the parser produced -- an account for most formats, a rate sheet
+    /// for a published reference document.
+    pub data: Parsed,
     pub validation: ValidationReport,
     pub detection: Detection,
 }
@@ -90,28 +92,35 @@ impl Statement {
     /// have always produced, so this is additive for anything already reading
     /// them; `format`, `category`, `institution` and `detection` are what a
     /// caller no longer has to work out for itself.
-    pub fn to_json(&self, schema: Schema) -> Value {
-        json!({
+    /// # Errors
+    ///
+    /// [`crate::error::XfinaError::SchemaUnsupported`] when the schema cannot
+    /// express this kind of document. The envelope is either the document or
+    /// an error, never a shell with the parts the schema had no word for
+    /// quietly missing.
+    pub fn to_json(&self, schema: Schema) -> Result<Value, crate::error::XfinaError> {
+        Ok(json!({
             "schema": schema.as_str(),
             "format": self.format.id(),
             "category": self.format.category().as_str(),
             "institution": self.format.institution(),
             "detection": self.detection,
             "validation": self.validation,
-            "data": self.account.to_json(schema),
-        })
+            "data": self.data.to_json(schema)?,
+        }))
     }
 
     pub fn to_json_string(
         &self,
         schema: Schema,
         pretty: bool,
-    ) -> Result<String, serde_json::Error> {
-        let value = self.to_json(schema);
-        if pretty {
+    ) -> Result<String, crate::error::XfinaError> {
+        let value = self.to_json(schema)?;
+        let rendered = if pretty {
             serde_json::to_string_pretty(&value)
         } else {
             serde_json::to_string(&value)
-        }
+        };
+        rendered.map_err(|e| crate::error::XfinaError::ParseError(e.to_string()))
     }
 }

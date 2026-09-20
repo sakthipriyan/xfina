@@ -108,7 +108,7 @@ fn fixtures() -> Vec<(&'static str, Vec<u8>)> {
 
 type Parser = fn(ParseRequest<'_>) -> Result<(), XfinaError>;
 
-/// Erases each parser's account type so all ten can be driven from one table.
+/// Erases what each parser returns so they can all be driven from one table.
 // Every use sits behind a feature gate, so a build with no parsers has none.
 #[allow(unused_macros)]
 macro_rules! erased {
@@ -163,6 +163,11 @@ fn parsers() -> Vec<(&'static str, Parser)> {
         ),
         #[cfg(feature = "is-ibkr")]
         ("is-ibkr", erased!(xfina::intl_stocks::ibkr::parse_ibkr_csv)),
+        #[cfg(feature = "rt-sbi-forex-card")]
+        (
+            "rt-sbi-forex-card",
+            erased!(xfina::reference_rates::sbi_forex_card::parse_sbi_forex_card_rates),
+        ),
     ]
 }
 

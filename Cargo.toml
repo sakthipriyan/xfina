@@ -20,7 +20,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.7.0"
+version = "0.8.0"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/sakthipriyan/xfina"
@@ -68,7 +68,7 @@ thiserror = "2.0.19"
 
 [features]
 default = ["all"]
-all = ["ba-hdfc", "ba-icici", "ba-sbi", "ba-bob", "ba-axis", "cc-hdfc", "cc-icici", "cc-axis", "mf-cams", "is-ibkr"]
+all = ["ba-hdfc", "ba-icici", "ba-sbi", "ba-bob", "ba-axis", "cc-hdfc", "cc-icici", "cc-axis", "mf-cams", "is-ibkr", "rt-sbi-forex-card"]
 cli = ["clap", "anyhow", "all"]
 
 # Decoding capabilities, shared by the parsers that need them. A parser
@@ -92,6 +92,9 @@ cc-axis = ["_spreadsheet", "regex", "num-traits"]
 # Mutual Funds & International Stocks
 mf-cams = ["_pdf", "regex"]
 is-ibkr = ["csv", "chrono-tz"]
+
+# Reference Rates
+rt-sbi-forex-card = ["_pdf", "regex"]
 
 [dev-dependencies]
 serde_json = { workspace = true }

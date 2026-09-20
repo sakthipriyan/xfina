@@ -33,6 +33,18 @@ pub enum XfinaError {
     /// A known format whose Cargo feature is not enabled in this build.
     #[error("Format '{0}' is not enabled in this build")]
     FormatNotEnabled(&'static str),
+
+    /// The document parsed, but the requested schema has no way to say it.
+    ///
+    /// ReBIT describes accounts a person holds; it has no term for a price an
+    /// institution published. Asking for one is a question with no answer, and
+    /// answering it with an empty envelope would look like a document that had
+    /// nothing in it.
+    #[error("The {schema} schema cannot represent a {document}")]
+    SchemaUnsupported {
+        schema: &'static str,
+        document: &'static str,
+    },
 }
 
 impl XfinaError {
@@ -51,6 +63,7 @@ impl XfinaError {
             XfinaError::Unsupported(_) => "unsupported",
             XfinaError::UnrecognizedFormat { .. } => "unrecognized_format",
             XfinaError::FormatNotEnabled(_) => "format_not_enabled",
+            XfinaError::SchemaUnsupported { .. } => "schema_unsupported",
         }
     }
 

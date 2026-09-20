@@ -17,7 +17,7 @@
 //! let statement = parse(ParseRequest::new(&bytes).with_filename(Some("statement.xls")))?;
 //!
 //! println!("{} statement from {}", statement.format, statement.institution());
-//! let json = statement.to_json(Schema::Xfina);
+//! let json = statement.to_json(Schema::Xfina)?;
 //! # Ok(())
 //! # }
 //! ```
@@ -36,6 +36,12 @@
 //! - [`credit_cards`]: Parsers for credit card statements (HDFC, ICICI, Axis)
 //! - [`mutual_funds`]: Parsers for mutual fund statements (CAMS CAS)
 //! - [`intl_stocks`]: Parsers for international broker statements (IBKR)
+//! - [`reference_rates`]: Parsers for published rate sheets (SBI forex card rates)
+//!
+//! Most formats describe an account somebody holds, and those render into
+//! either schema. A reference document does not, so [`Statement::to_json`]
+//! returns a `Result`: [`Schema::Rebit`] has no term for a price an
+//! institution published and says so rather than returning an empty envelope.
 
 pub mod mutual_funds {
     #[cfg(feature = "mf-cams")]
@@ -49,6 +55,11 @@ pub mod mutual_funds {
 pub mod intl_stocks {
     #[cfg(feature = "is-ibkr")]
     pub mod ibkr;
+}
+
+pub mod reference_rates {
+    #[cfg(feature = "rt-sbi-forex-card")]
+    pub mod sbi_forex_card;
 }
 
 pub mod credit_cards {
@@ -84,7 +95,7 @@ pub mod error;
 pub mod models;
 
 pub use detect::{detect, detect_format, formats, Category, Format, FormatInfo};
-pub use models::{ParseRequest, Schema, Statement};
+pub use models::{ParseRequest, Parsed, Schema, Statement};
 
 /// This crate's version, so a caller can report which parsers it is running.
 pub const fn version() -> &'static str {
@@ -129,7 +140,7 @@ pub const fn version() -> &'static str {
 /// let statement = parse(ParseRequest::new(&bytes).with_filename(Some("statement.xls")))?;
 ///
 /// println!("{} ({})", statement.institution(), statement.format);
-/// let json = statement.to_json(Schema::Xfina);
+/// let json = statement.to_json(Schema::Xfina)?;
 /// # Ok::<(), xfina::error::XfinaError>(())
 /// ```
 pub fn parse(input: ParseRequest<'_>) -> Result<Statement, error::XfinaError> {
@@ -138,14 +149,19 @@ pub fn parse(input: ParseRequest<'_>) -> Result<Statement, error::XfinaError> {
     let format = detection.format;
 
     // The decode is warm from probing, so the parser re-reads nothing.
-    let (mut account, validation) = detect::registry::dispatch_parse(format, &decoded, &input)?;
+    let (mut data, validation) = detect::registry::dispatch_parse(format, &decoded, &input)?;
 
     // Last rung of the generated-date chain, after the parser has had its say.
-    models::generated_date::apply_modified_timestamp_fallback(&mut account, &input);
+    // Only accounts have one: a rate sheet prints the day it belongs to, and
+    // falling back to when the file reached the disk would file a morning's
+    // rates under whatever day someone happened to download them.
+    if let models::Parsed::Account(account) = &mut data {
+        models::generated_date::apply_modified_timestamp_fallback(account, &input);
+    }
 
     Ok(Statement {
         format,
-        account,
+        data,
         validation,
         detection,
     })

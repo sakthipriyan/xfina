@@ -13,7 +13,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::decode::Decoded;
 use crate::detect::{Claim, Container};
 use crate::error::XfinaError;
-use crate::models::account::Account;
+use crate::models::parsed::Parsed;
 use crate::models::request::ParseRequest;
 use crate::models::validation::ValidationReport;
 
@@ -25,6 +25,9 @@ pub enum Category {
     CreditCard,
     MutualFunds,
     IntlStocks,
+    /// A published reference document rather than anybody's holding: rates an
+    /// institution quotes, with no holder, balance or transaction in it.
+    ReferenceRates,
 }
 
 impl Category {
@@ -34,6 +37,7 @@ impl Category {
             Category::CreditCard => "credit_card",
             Category::MutualFunds => "mutual_funds",
             Category::IntlStocks => "intl_stocks",
+            Category::ReferenceRates => "reference_rates",
         }
     }
 }
@@ -146,20 +150,20 @@ macro_rules! formats {
             }
         }
 
-        /// Runs the format's parser and erases its account type.
+        /// Runs the format's parser and erases the type of what it produced.
         #[allow(unused_variables)]
         pub(crate) fn dispatch_parse(
             format: Format,
             decoded: &Decoded<'_>,
             input: &ParseRequest<'_>,
-        ) -> Result<(Account, ValidationReport), XfinaError> {
+        ) -> Result<(Parsed, ValidationReport), XfinaError> {
             #[allow(unreachable_patterns)]
             match format {
                 $(
                     #[cfg(feature = $id)]
                     Format::$variant => {
                         let result = $parse(decoded, input)?;
-                        Ok((Account::from(result.data), result.validation))
+                        Ok((Parsed::from(result.data), result.validation))
                     }
                 )+
                 other => Err(XfinaError::FormatNotEnabled(other.id())),
@@ -311,6 +315,19 @@ formats! {
         priority: 40,
         parse: crate::intl_stocks::ibkr::parse_decoded,
         probe: crate::intl_stocks::ibkr::probe,
+    }
+    RatesSbiForexCard {
+        id: "rt-sbi-forex-card",
+        category: ReferenceRates,
+        institution: "State Bank of India",
+        extension: "pdf",
+        locked: false,
+        download_url: "https://sbi.bank.in/documents/16012/1400784/FOREX_CARD_RATES.pdf",
+        download_path: "Published openly, no sign-in: the link is the sheet for the current banking day and is replaced each morning",
+        containers: [Pdf],
+        priority: 50,
+        parse: crate::reference_rates::sbi_forex_card::parse_decoded,
+        probe: crate::reference_rates::sbi_forex_card::probe,
     }
 }
 

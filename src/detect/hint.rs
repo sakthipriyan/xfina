@@ -29,6 +29,7 @@ const PATTERNS: &[(&str, Format)] = &[
     ("cas_", Format::MutualFundsCams),
     ("cams", Format::MutualFundsCams),
     ("axis bank statement", Format::BankAxis),
+    ("forex_card_rates", Format::RatesSbiForexCard),
 ];
 
 /// IBKR names its activity statements after the account and the period:

@@ -45,6 +45,7 @@ By building Xfina in **Rust**, we achieve:
 | 📈 Mutual Funds | CAMS | PDF (password protected) | **Production Ready** | Combined Account Statement (CAS) |
 | 📈 Mutual Funds | KFinTech | PDF (password protected) | **TODO** | Combined Account Statement (CAS) |
 | 🌍 Intl Brokers | Interactive Brokers (IBKR) | CSV | **Production Ready** | Activity statements |
+| 💱 Reference Rates | State Bank of India | PDF | **Production Ready** | Daily forex card rate sheet — every currency and every rate column the sheet prints. A reference document, not an account, so it has no ReBIT form |
 
 *Note: Bank Account parsers have not been tested with Joint Accounts.*
 

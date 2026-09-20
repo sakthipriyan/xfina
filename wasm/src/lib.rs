@@ -91,8 +91,8 @@ pub fn parse(bytes: &[u8], options: JsValue) -> Result<JsValue, JsValue> {
         .with_modified_timestamp(options.modified_timestamp)
         .with_format(format);
 
-    match xfina::parse(request) {
-        Ok(statement) => to_js(&statement.to_json(schema)),
+    match xfina::parse(request).and_then(|statement| statement.to_json(schema)) {
+        Ok(json) => to_js(&json),
         Err(e) => to_js(&error_envelope(&e, options.filename.as_deref())),
     }
 }
