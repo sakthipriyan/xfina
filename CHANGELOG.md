@@ -55,6 +55,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   should use `statement.data.account()`, which returns `None` for a document that
   is not an account.
 
+- The repository moved to the `xfina-dev` GitHub organisation. The crate, Python and npm
+  metadata, the docs and the web app's GitHub links now point there.
+
 ## [0.7.0] - 2026-09-18
 
 ### Added
@@ -180,7 +183,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPython 3.11, so only that exact combination could `pip install xfina`
   without a Rust toolchain — 0.2.4 shipped nothing but a
   `manylinux_2_34_x86_64` CPython 3.11 wheel. Fixed on three fronts, mirroring
-  [sakthipriyan/xfingine](https://github.com/sakthipriyan/xfingine):
+  [xfina-dev/xfingine](https://github.com/xfina-dev/xfingine):
   - The extension now builds against the **stable ABI** (`pyo3/abi3-py38`), so
     one wheel per OS/arch covers CPython 3.8+ instead of needing one per
     version — turning a ~25-build matrix into 5.

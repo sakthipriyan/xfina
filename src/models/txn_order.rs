@@ -160,7 +160,7 @@ mod tests {
 
     #[test]
     fn reorders_a_shuffled_day() {
-        // The rows from sakthipriyan/xfina#53. Only one walk uses them all:
+        // The rows from xfina-dev/xfina#53. Only one walk uses them all:
         // 10,000 is the only balance no row prints, so it is the day's opening,
         // and from there each row's start balance picks out the next.
         let mut txns = vec![
