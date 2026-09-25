@@ -194,7 +194,7 @@ pub(crate) fn parse_decoded(
 
     // ICICI shuffles a day's rows relative to the balance column, so put each
     // day back into the order its printed balances describe before anything
-    // downstream derives a balance from row order. See sakthipriyan/xfina#53.
+    // downstream derives a balance from row order. See xfina-dev/xfina#53.
     let reordered = reorder_same_day_transactions(&mut parsed_transactions);
 
     let mut summary = Summary::default();

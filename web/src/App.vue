@@ -635,7 +635,7 @@ const camsGroupedAssets = computed(() => {
                   </SelectContent>
                 </Select>
                 <a v-if="shortCommitHash" 
-                   :href="`https://github.com/sakthipriyan/xfina/commit/${cleanCommitHash}`" 
+                   :href="`https://github.com/xfina-dev/xfina/commit/${cleanCommitHash}`" 
                    target="_blank" 
                    rel="noopener noreferrer" 
                    class="no-underline relative z-0">
@@ -656,7 +656,7 @@ const camsGroupedAssets = computed(() => {
           <a href="https://sakthipriyan.com/building-wealth" target="_blank" rel="noopener noreferrer" class="no-underline">
             <Button variant="outline" class="h-9 px-3 font-medium text-foreground">sakthipriyan.com</Button>
           </a>
-          <a href="https://github.com/sakthipriyan/xfina" target="_blank" rel="noopener noreferrer" class="no-underline" title="GitHub Repository">
+          <a href="https://github.com/xfina-dev/xfina" target="_blank" rel="noopener noreferrer" class="no-underline" title="GitHub Repository">
             <Button variant="outline" size="icon">
               <Github class="h-[1.2rem] w-[1.2rem] text-foreground" />
               <span class="sr-only">GitHub Repository</span>
